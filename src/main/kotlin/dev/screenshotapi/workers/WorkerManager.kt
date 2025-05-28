@@ -1,0 +1,388 @@
+package dev.screenshotapi.workers
+
+import dev.screenshotapi.core.domain.repositories.QueueRepository
+import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
+import dev.screenshotapi.core.domain.repositories.UserRepository
+import dev.screenshotapi.core.services.ScreenshotService
+import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
+import dev.screenshotapi.infrastructure.config.AppConfig
+import dev.screenshotapi.infrastructure.services.MetricsService
+import dev.screenshotapi.infrastructure.services.NotificationService
+import kotlinx.coroutines.*
+import kotlinx.datetime.Instant
+import org.slf4j.LoggerFactory
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+
+class WorkerManager(
+    private val queueRepository: QueueRepository,
+    private val screenshotRepository: ScreenshotRepository,
+    private val userRepository: UserRepository,
+    private val screenshotService: ScreenshotService,
+    private val deductCreditsUseCase: DeductCreditsUseCase,
+    private val notificationService: NotificationService,
+    private val metricsService: MetricsService,
+    private val config: AppConfig
+) {
+    private val logger = LoggerFactory.getLogger(this::class.java)
+    private val workers = ConcurrentHashMap<String, ScreenshotWorker>()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val isRunning = AtomicBoolean(false)
+
+    private val maxWorkers = if (config.environment.isLocal) 2 else config.screenshot.concurrentScreenshots
+    private val minWorkers = if (config.environment.isLocal) 1 else 2
+    private val scalingEnabled = !config.environment.isLocal
+
+    fun start() {
+        if (isRunning.compareAndSet(false, true)) {
+            logger.info("Starting WorkerManager with min=$minWorkers, max=$maxWorkers workers")
+
+            // Iniciar workers mínimos
+            repeat(minWorkers) {
+                startWorker()
+            }
+
+            // Iniciar monitor de auto-scaling (solo en producción)
+            if (scalingEnabled) {
+                scope.launch {
+                    monitorAndScale()
+                }
+            }
+
+            // Iniciar monitor de salud de workers
+            scope.launch {
+                healthMonitor()
+            }
+
+            logger.info("WorkerManager started with ${workers.size} workers")
+        } else {
+            logger.warn("WorkerManager is already running")
+        }
+    }
+
+    fun shutdown() {
+        if (isRunning.compareAndSet(true, false)) {
+            logger.info("Shutting down WorkerManager...")
+
+            // Cancelar todas las corrutinas
+            scope.cancel()
+
+            // Detener todos los workers gracefully
+            val shutdownJobs = workers.values.map { worker ->
+                scope.launch {
+                    try {
+                        worker.shutdown()
+                    } catch (e: Exception) {
+                        logger.error("Error shutting down worker ${worker.id}", e)
+                    }
+                }
+            }
+
+            // Esperar a que todos los workers terminen (con timeout)
+            runBlocking {
+                try {
+                    withTimeout(30_000) { // 30 segundos timeout
+                        shutdownJobs.joinAll()
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    logger.warn("Shutdown timeout reached, forcing worker termination")
+                }
+            }
+
+            workers.clear()
+            logger.info("WorkerManager shutdown completed")
+        }
+    }
+
+    private fun startWorker(): String {
+        val workerId = UUID.randomUUID().toString()
+
+        val worker = ScreenshotWorker(
+            id = workerId,
+            queueRepository = queueRepository,
+            screenshotRepository = screenshotRepository,
+            userRepository = userRepository,
+            screenshotService = screenshotService,
+            deductCreditsUseCase = deductCreditsUseCase,
+            notificationService = notificationService,
+            metricsService = metricsService,
+            config = config.screenshot
+        )
+
+        workers[workerId] = worker
+
+        // Iniciar worker en un coroutine separado
+        scope.launch {
+            try {
+                worker.start()
+            } catch (e: Exception) {
+                logger.error("Worker $workerId failed", e)
+            } finally {
+                workers.remove(workerId)
+                logger.info("Worker $workerId removed from pool")
+
+                // Si estamos por debajo del mínimo y el manager sigue corriendo, iniciar un nuevo worker
+                if (isRunning.get() && workers.size < minWorkers) {
+                    logger.info("Worker count below minimum, starting replacement worker")
+                    delay(5000) // Esperar antes de reiniciar
+                    if (isRunning.get()) {
+                        startWorker()
+                    }
+                }
+            }
+        }
+
+        logger.info("Started worker $workerId, total workers: ${workers.size}")
+        return workerId
+    }
+
+    private fun stopWorker(): Boolean {
+        val worker = workers.values.firstOrNull()
+        return if (worker != null) {
+            scope.launch {
+                worker.stop()
+            }
+            logger.info("Requested stop for worker ${worker.id}, remaining workers: ${workers.size - 1}")
+            true
+        } else {
+            false
+        }
+    }
+
+    private suspend fun monitorAndScale() {
+        logger.info("Starting auto-scaling monitor")
+
+        while (isRunning.get() && currentCoroutineContext().isActive) {
+            try {
+                val queueSize = queueRepository.size()
+                val activeWorkers = workers.size
+                val queueMetrics = getQueueMetrics()
+
+                val scalingDecision = calculateScalingDecision(queueSize, activeWorkers, queueMetrics)
+
+                when (scalingDecision.action) {
+                    ScalingAction.SCALE_UP -> {
+                        if (activeWorkers < maxWorkers) {
+                            startWorker()
+                            logger.info("Scaled up: queue=$queueSize, workers=${workers.size}, reason=${scalingDecision.reason}")
+                            metricsService.recordScaling("up", workers.size)
+                        }
+                    }
+
+                    ScalingAction.SCALE_DOWN -> {
+                        if (activeWorkers > minWorkers) {
+                            stopWorker()
+                            logger.info("Scaled down: queue=$queueSize, workers=${workers.size}, reason=${scalingDecision.reason}")
+                            metricsService.recordScaling("down", workers.size)
+                        }
+                    }
+
+                    ScalingAction.NO_ACTION -> {
+                        // No hacer nada
+                    }
+                }
+
+                // Actualizar métricas
+                metricsService.updateWorkerMetrics(workers.size, queueSize)
+
+                delay(30_000) // Check every 30 seconds
+
+            } catch (e: Exception) {
+                logger.error("Error in auto-scaling monitor", e)
+                delay(60_000) // Wait longer on error
+            }
+        }
+
+        logger.info("Auto-scaling monitor stopped")
+    }
+
+    private suspend fun healthMonitor() {
+        logger.info("Starting worker health monitor")
+
+        while (isRunning.get() && currentCoroutineContext().isActive) {
+            try {
+                val unhealthyWorkers = workers.values.filter { !it.isHealthy() }
+
+                unhealthyWorkers.forEach { worker ->
+                    logger.warn("Unhealthy worker detected: ${worker.id}, restarting...")
+
+                    // Remover worker no saludable
+                    workers.remove(worker.id)
+                    worker.stop()
+
+                    // Iniciar reemplazo
+                    startWorker()
+
+                    metricsService.recordWorkerRestart(worker.id, "unhealthy")
+                }
+
+                delay(60_000) // Check every minute
+
+            } catch (e: Exception) {
+                logger.error("Error in health monitor", e)
+                delay(120_000) // Wait longer on error
+            }
+        }
+
+        logger.info("Worker health monitor stopped")
+    }
+
+    private suspend fun getQueueMetrics(): QueueMetrics {
+        return QueueMetrics(
+            size = queueRepository.size(),
+            averageWaitTime = calculateAverageWaitTime(),
+            oldestJobAge = calculateOldestJobAge()
+        )
+    }
+
+    private suspend fun calculateAverageWaitTime(): Long {
+        // En una implementación real, esto calcularía el tiempo promedio de espera
+        // basado en trabajos completados recientemente
+        return 30_000L // 30 segundos por defecto
+    }
+
+    private suspend fun calculateOldestJobAge(): Long {
+        // En una implementación real, esto encontraría el trabajo más antiguo en la cola
+        return 0L
+    }
+
+    private fun calculateScalingDecision(
+        queueSize: Long,
+        activeWorkers: Int,
+        metrics: QueueMetrics
+    ): ScalingDecision {
+
+        val jobsPerWorker = if (activeWorkers > 0) queueSize.toDouble() / activeWorkers else queueSize.toDouble()
+
+        return when {
+            // Scale up conditions
+            queueSize > activeWorkers * 5 && activeWorkers < maxWorkers -> {
+                ScalingDecision(ScalingAction.SCALE_UP, "High queue size: $queueSize jobs for $activeWorkers workers")
+            }
+
+            jobsPerWorker > 10 && activeWorkers < maxWorkers -> {
+                ScalingDecision(ScalingAction.SCALE_UP, "High jobs per worker: $jobsPerWorker")
+            }
+
+            metrics.averageWaitTime > 60_000 && activeWorkers < maxWorkers -> {
+                ScalingDecision(ScalingAction.SCALE_UP, "High average wait time: ${metrics.averageWaitTime}ms")
+            }
+
+            // Scale down conditions
+            queueSize == 0L && activeWorkers > minWorkers -> {
+                ScalingDecision(ScalingAction.SCALE_DOWN, "Empty queue")
+            }
+
+            jobsPerWorker < 1 && activeWorkers > minWorkers && metrics.averageWaitTime < 10_000 -> {
+                ScalingDecision(ScalingAction.SCALE_DOWN, "Low jobs per worker: $jobsPerWorker")
+            }
+
+            else -> {
+                ScalingDecision(ScalingAction.NO_ACTION, "Stable")
+            }
+        }
+    }
+
+    fun getStatus(): WorkerStatus {
+        return WorkerStatus(
+            activeWorkers = workers.size,
+            minWorkers = minWorkers,
+            maxWorkers = maxWorkers,
+            workerIds = workers.keys.toList(),
+            isRunning = isRunning.get(),
+            scalingEnabled = scalingEnabled
+        )
+    }
+
+    fun getDetailedStatus(): DetailedWorkerStatus {
+        val workerStatuses = workers.values.map { worker ->
+            WorkerInfo(
+                id = worker.id,
+                isHealthy = worker.isHealthy(),
+                jobsProcessed = worker.getJobsProcessed(),
+                lastActivity = worker.getLastActivity(),
+                status = worker.getStatus()
+            )
+        }
+
+        return DetailedWorkerStatus(
+            overview = getStatus(),
+            workers = workerStatuses,
+            queueSize = runBlocking { queueRepository.size() },
+            totalJobsProcessed = workerStatuses.sumOf { it.jobsProcessed }
+        )
+    }
+
+    // Método para forzar scaling manual (útil para testing)
+    fun forceScale(targetWorkers: Int): Boolean {
+        if (targetWorkers < minWorkers || targetWorkers > maxWorkers) {
+            logger.warn("Cannot force scale to $targetWorkers (min: $minWorkers, max: $maxWorkers)")
+            return false
+        }
+
+        val currentWorkers = workers.size
+
+        when {
+            targetWorkers > currentWorkers -> {
+                repeat(targetWorkers - currentWorkers) {
+                    startWorker()
+                }
+            }
+
+            targetWorkers < currentWorkers -> {
+                repeat(currentWorkers - targetWorkers) {
+                    stopWorker()
+                }
+            }
+        }
+
+        logger.info("Forced scaling from $currentWorkers to $targetWorkers workers")
+        return true
+    }
+}
+
+// === DATA CLASSES ===
+
+data class WorkerStatus(
+    val activeWorkers: Int,
+    val minWorkers: Int,
+    val maxWorkers: Int,
+    val workerIds: List<String>,
+    val isRunning: Boolean = true,
+    val scalingEnabled: Boolean = true
+)
+
+data class DetailedWorkerStatus(
+    val overview: WorkerStatus,
+    val workers: List<WorkerInfo>,
+    val queueSize: Long,
+    val totalJobsProcessed: Long
+)
+
+data class WorkerInfo(
+    val id: String,
+    val isHealthy: Boolean,
+    val jobsProcessed: Long,
+    val lastActivity: Instant?,
+    val status: WorkerState
+)
+
+data class QueueMetrics(
+    val size: Long,
+    val averageWaitTime: Long,
+    val oldestJobAge: Long
+)
+
+data class ScalingDecision(
+    val action: ScalingAction,
+    val reason: String
+)
+
+enum class ScalingAction {
+    SCALE_UP, SCALE_DOWN, NO_ACTION
+}
+
+enum class WorkerState {
+    IDLE, PROCESSING, STOPPING, STOPPED, ERROR
+}

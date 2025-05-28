@@ -1,0 +1,52 @@
+# Build artifacts
+build/
+.gradle/
+*.jar
+*.war
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Local development
+.env
+.env.local
+screenshots/
+logs/
+
+# Test files
+.http/
+**/test/**
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Node modules (if any)
+node_modules/
+
+# Python cache (if any)
+__pycache__/
+*.pyc

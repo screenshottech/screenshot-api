@@ -1,0 +1,118 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: screenshot-postgres
+    environment:
+      POSTGRES_DB: screenshotapi
+      POSTGRES_USER: screenshotuser
+      POSTGRES_PASSWORD: screenshotpass
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - screenshot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U screenshotuser -d screenshotapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache/Queue
+  redis:
+    image: redis:7-alpine
+    container_name: screenshot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - screenshot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # Screenshot API Service
+  screenshot-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: screenshot-api
+    environment:
+      # Database configuration
+      DATABASE_USE_IN_MEMORY: "false"
+      DATABASE_URL: "jdbc:postgresql://postgres:5432/screenshotapi"
+      DATABASE_USERNAME: "screenshotuser"
+      DATABASE_PASSWORD: "screenshotpass"
+      
+      # Redis configuration
+      REDIS_USE_IN_MEMORY: "false"
+      REDIS_URL: "redis://redis:6379"
+      
+      # JWT configuration
+      JWT_SECRET: "your-super-secret-jwt-key-for-production-change-this"
+      JWT_ISSUER: "screenshotapi"
+      JWT_AUDIENCE: "screenshotapi-users"
+      JWT_EXPIRATION_HOURS: "24"
+      
+      # Storage configuration
+      STORAGE_TYPE: "local"
+      STORAGE_LOCAL_PATH: "/app/screenshots"
+      
+      # Screenshot service configuration
+      ENABLE_PDF_GENERATION: "true"
+      BROWSER_POOL_SIZE: "2"
+      MAX_BROWSER_INSTANCES: "5"
+      SCREENSHOT_MAX_WIDTH: "1920"
+      SCREENSHOT_MAX_HEIGHT: "1080"
+      SCREENSHOT_DEFAULT_TIMEOUT: "30000"
+      SCREENSHOT_MAX_TIMEOUT: "60000"
+      
+      # Rate limiting
+      RATE_LIMIT_CAPACITY: "100"
+      RATE_LIMIT_RATE_SECONDS: "60"
+      
+      # Logging
+      LOG_LEVEL: "INFO"
+      
+      # Environment
+      ENVIRONMENT: "docker"
+    ports:
+      - "8080:8080"
+    volumes:
+      - screenshot_files:/app/screenshots
+      - app_logs:/app/logs
+    networks:
+      - screenshot-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  screenshot_files:
+    driver: local
+  app_logs:
+    driver: local
+
+networks:
+  screenshot-network:
+    driver: bridge
