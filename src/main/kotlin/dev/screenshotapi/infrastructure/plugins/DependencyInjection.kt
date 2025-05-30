@@ -89,11 +89,13 @@ fun repositoryModule(config: AppConfig) = module {
     single<UserRepository> { createUserRepository(config, get()) }
     single<ApiKeyRepository> { createApiKeyRepository(config, get()) }
     single<ScreenshotRepository> { createScreenshotRepository(config, get()) }
-    single<QueueRepository> { createQueueRepository(config, get()) }
+    single<QueueRepository> { createQueueRepository(config, getOrNull<StatefulRedisConnection<String, String>>()) }
     single<ActivityRepository> { createActivityRepository(config, get()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<Database> { createDatabase(config) }
-    single<StatefulRedisConnection<String, String>> { createRedisConnection(config) }
+    if (!config.redis.useInMemory) {
+        single<StatefulRedisConnection<String, String>> { createRedisConnection(config) }
+    }
 }
 
 private fun createUserRepository(config: AppConfig, database: Database): UserRepository =
@@ -105,8 +107,8 @@ private fun createApiKeyRepository(config: AppConfig, database: Database): ApiKe
 private fun createScreenshotRepository(config: AppConfig, database: Database): ScreenshotRepository =
     if (config.database.useInMemory) InMemoryScreenshotRepository() else PostgreSQLScreenshotRepository(database)
 
-private fun createQueueRepository(config: AppConfig, redisConnection: StatefulRedisConnection<String, String>): QueueRepository =
-    if (config.redis.useInMemory) InMemoryQueueAdapter() else RedisQueueAdapter(redisConnection)
+private fun createQueueRepository(config: AppConfig, redisConnection: StatefulRedisConnection<String, String>?): QueueRepository =
+    if (config.redis.useInMemory) InMemoryQueueAdapter() else RedisQueueAdapter(redisConnection!!)
 
 private fun createActivityRepository(config: AppConfig, database: Database): ActivityRepository =
     if (config.database.useInMemory) InMemoryActivityRepository() else PostgreSQLActivityRepository(database)
