@@ -59,7 +59,7 @@ data class PlanDetailDto(
     val id: String,
     val name: String,
     val creditsPerMonth: Int,
-    val priceInCents: Int
+    val priceCents: Int
 )
 
 @Serializable
@@ -214,7 +214,7 @@ fun GetUserDetailsResponse.toDto() = UserDetailsResponseDto(
             id = user.plan.id,
             name = user.plan.name,
             creditsPerMonth = user.plan.creditsPerMonth,
-            priceInCents = user.plan.priceInCents
+            priceCents = user.plan.priceCents
         ),
         creditsRemaining = user.creditsRemaining,
         totalScreenshots = user.totalScreenshots,

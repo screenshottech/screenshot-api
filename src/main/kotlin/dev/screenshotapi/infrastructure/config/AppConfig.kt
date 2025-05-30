@@ -61,16 +61,20 @@ data class StorageConfig(
     val s3Bucket: String?,
     val s3Region: String?,
     val awsAccessKey: String?,
-    val awsSecretKey: String?
+    val awsSecretKey: String?,
+    val awsEndpointUrl: String?,
+    val awsPublicEndpointUrl: String?
 ) {
     companion object {
         fun load(environment: Environment) = StorageConfig(
-            useLocal = environment.isLocal,
-            localPath = "./screenshots",
-            s3Bucket = if (environment.isLocal) null else System.getenv("S3_BUCKET"),
-            s3Region = if (environment.isLocal) null else System.getenv("S3_REGION"),
-            awsAccessKey = if (environment.isLocal) null else System.getenv("AWS_ACCESS_KEY_ID"),
-            awsSecretKey = if (environment.isLocal) null else System.getenv("AWS_SECRET_ACCESS_KEY")
+            useLocal = System.getenv("STORAGE_USE_LOCAL")?.toBoolean() ?: environment.isLocal,
+            localPath = System.getenv("STORAGE_LOCAL_PATH") ?: "./screenshots",
+            s3Bucket = System.getenv("S3_BUCKET"),
+            s3Region = System.getenv("S3_REGION"),
+            awsAccessKey = System.getenv("AWS_ACCESS_KEY_ID"),
+            awsSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY"),
+            awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL"),
+            awsPublicEndpointUrl = System.getenv("AWS_PUBLIC_ENDPOINT_URL")
         )
     }
 }

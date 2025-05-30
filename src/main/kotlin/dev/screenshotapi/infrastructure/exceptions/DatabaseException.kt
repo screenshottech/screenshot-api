@@ -12,4 +12,7 @@ sealed class DatabaseException(message: String, cause: Throwable? = null) : Exce
 
     class ConstraintViolationException(val constraint: String, cause: Throwable? = null) :
         DatabaseException("Constraint violation: $constraint", cause)
+        
+    class OperationFailed(message: String, cause: Throwable? = null) :
+        DatabaseException(message, cause)
 }

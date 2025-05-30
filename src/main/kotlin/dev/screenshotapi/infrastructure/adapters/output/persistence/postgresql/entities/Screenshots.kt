@@ -1,9 +1,14 @@
 package dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities
 
-import org.jetbrains.exposed.dao.id.UUIDTable
+import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.dao.id.IdTable
+import org.jetbrains.exposed.sql.Column
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
 
-object Screenshots : UUIDTable("screenshots") {
+object Screenshots : IdTable<String>("screenshots") {
+    override val id: Column<EntityID<String>> = varchar("id", 255).entityId()
+    override val primaryKey = PrimaryKey(id)
+    
     val userId = reference("user_id", Users)
     val apiKeyId = reference("api_key_id", ApiKeys)
     val url = text("url")

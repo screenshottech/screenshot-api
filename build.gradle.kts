@@ -61,6 +61,14 @@ dependencies {
     // Screenshot
     implementation("com.microsoft.playwright:playwright:$microsoft_playwright_version")
 
+    // AWS S3
+    implementation("aws.sdk.kotlin:s3:1.0.30")
+
+    // HTTP Client
+    implementation("io.ktor:ktor-client-core")
+    implementation("io.ktor:ktor-client-cio")
+    implementation("io.ktor:ktor-client-content-negotiation")
+    implementation("io.ktor:ktor-client-serialization")
 
     // Monitoring
     implementation("io.ktor:ktor-server-metrics")

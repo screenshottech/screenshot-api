@@ -6,14 +6,16 @@ import kotlinx.datetime.Instant
 data class ApiKey(
     val id: String,
     val userId: String,
-    val keyHash: String,
     val name: String,
+    val keyHash: String,
+    val keyPrefix: String,
     val permissions: Set<Permission>,
     val rateLimit: Int,
-    val lastUsed: Instant?,
+    val usageCount: Long = 0,
     val isActive: Boolean,
-    val createdAt: Instant,
-    val usageCount: Long = 0
+    val lastUsed: Instant?,
+    val expiresAt: Instant? = null,
+    val createdAt: Instant
 ) {
     fun updateLastUsed(): ApiKey = copy(lastUsed = Clock.System.now())
 

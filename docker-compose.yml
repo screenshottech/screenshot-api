@@ -38,6 +38,30 @@ services:
       retries: 5
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
 
+  # LocalStack for S3 testing
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: screenshot-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - PERSISTENCE=1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./docker/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
+    networks:
+      - screenshot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Screenshot API Service
   screenshot-api:
     build:
@@ -61,9 +85,15 @@ services:
       JWT_AUDIENCE: "screenshotapi-users"
       JWT_EXPIRATION_HOURS: "24"
       
-      # Storage configuration
-      STORAGE_TYPE: "local"
+      # Storage configuration (LocalStack S3)
+      STORAGE_USE_LOCAL: "false"
       STORAGE_LOCAL_PATH: "/app/screenshots"
+      S3_BUCKET: "screenshot-api-bucket"
+      S3_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+      AWS_ENDPOINT_URL: "http://localstack:4566"
+      AWS_PUBLIC_ENDPOINT_URL: "http://localhost:4566"
       
       # Screenshot service configuration
       ENABLE_PDF_GENERATION: "true"
@@ -95,6 +125,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      localstack:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -107,6 +139,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  localstack_data:
     driver: local
   screenshot_files:
     driver: local

@@ -23,7 +23,7 @@ Options:
     --no-rebuild           Skip rebuilding images
     --foreground           Run in foreground instead of background
     --no-logs              Don't show logs after startup
-    --services SERVICE     Start specific services (postgres,redis,screenshot-api,all)
+    --services "SERVICE(S)" Start specific services (postgres redis, localstack, screenshot-api, all)
     --help                 Show this help message
 
 Examples:
@@ -31,7 +31,9 @@ Examples:
     $0 --cache             # Use build cache
     $0 --no-rebuild        # Skip rebuilding, just start services
     $0 --foreground        # Run in foreground
-    $0 --services postgres # Only start PostgreSQL
+    $0 --services postgres              # Only start PostgreSQL
+    $0 --services "postgres redis"       # Start PostgreSQL and Redis
+    $0 --services "localstack postgres"  # Start LocalStack and PostgreSQL
     $0 --cache --no-logs   # Use cache and don't show logs
 
 EOF
@@ -110,35 +112,11 @@ fi
 # Start services based on selection
 start_services() {
     case $SERVICES in
-        "postgres")
-            echo "🗄️ Starting PostgreSQL..."
-            if [ "$BACKGROUND" = "true" ]; then
-                docker-compose up -d postgres
-            else
-                docker-compose up postgres
-            fi
-            ;;
-        "redis")
-            echo "🗄️ Starting Redis..."
-            if [ "$BACKGROUND" = "true" ]; then
-                docker-compose up -d redis
-            else
-                docker-compose up redis
-            fi
-            ;;
-        "screenshot-api")
-            echo "🚀 Starting Screenshot API service..."
-            if [ "$BACKGROUND" = "true" ]; then
-                docker-compose up -d screenshot-api
-            else
-                docker-compose up screenshot-api
-            fi
-            ;;
         "all")
-            echo "🗄️ Starting PostgreSQL and Redis..."
-            docker-compose up -d postgres redis
+            echo "🗄️ Starting all infrastructure services..."
+            docker-compose up -d postgres redis localstack
             
-            echo "⏳ Waiting for database to be ready..."
+            echo "⏳ Waiting for services to be ready..."
             sleep 10
             
             # Check if PostgreSQL is ready
@@ -161,9 +139,42 @@ start_services() {
             fi
             ;;
         *)
-            echo "❌ Unknown service: $SERVICES"
-            echo "Available services: postgres, redis, screenshot-api, all"
-            exit 1
+            # Handle single service or multiple services
+            echo "🚀 Starting services: $SERVICES"
+            
+            # Check if any dependency services need to wait
+            needs_postgres_wait=false
+            needs_redis_wait=false
+            
+            if [[ $SERVICES == *"screenshot-api"* ]]; then
+                needs_postgres_wait=true
+                needs_redis_wait=true
+            fi
+            
+            # Start the specified services
+            if [ "$BACKGROUND" = "true" ]; then
+                docker-compose up -d $SERVICES
+            else
+                docker-compose up $SERVICES
+            fi
+            
+            # Wait for dependencies if needed
+            if [ "$needs_postgres_wait" = "true" ] && [[ $SERVICES == *"postgres"* ]]; then
+                echo "⏳ Waiting for PostgreSQL to be ready..."
+                sleep 5
+                until docker-compose exec postgres pg_isready -U screenshotuser -d screenshotapi; do
+                    echo "Waiting for PostgreSQL to be ready..."
+                    sleep 2
+                done
+            fi
+            
+            if [ "$needs_redis_wait" = "true" ] && [[ $SERVICES == *"redis"* ]]; then
+                echo "⏳ Waiting for Redis to be ready..."
+                until docker-compose exec redis redis-cli ping; do
+                    echo "Waiting for Redis to be ready..."
+                    sleep 2
+                done
+            fi
             ;;
     esac
 }
@@ -177,20 +188,17 @@ if [ "$BACKGROUND" = "true" ] && [ "$SHOW_LOGS" = "true" ]; then
     sleep 15
     
     echo "📋 Recent logs:"
-    case $SERVICES in
-        "postgres")
-            docker-compose logs --tail=20 postgres
-            ;;
-        "redis")
-            docker-compose logs --tail=20 redis
-            ;;
-        "screenshot-api")
-            docker-compose logs --tail=20 screenshot-api
-            ;;
-        "all")
-            docker-compose logs --tail=20 screenshot-api
-            ;;
-    esac
+    if [ "$SERVICES" = "all" ]; then
+        docker-compose logs --tail=20 screenshot-api
+    else
+        # Show logs for all specified services
+        for service in $SERVICES; do
+            if docker-compose ps | grep -q "$service"; then
+                echo "--- Logs for $service ---"
+                docker-compose logs --tail=10 $service
+            fi
+        done
+    fi
 fi
 
 # Show useful information only if running in background
@@ -199,15 +207,18 @@ if [ "$BACKGROUND" = "true" ]; then
     echo "✅ Services are starting up!"
     echo ""
     echo "🌐 Services available at:"
-    if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "screenshot-api" ]; then
+    if [ "$SERVICES" = "all" ] || [[ $SERVICES == *"screenshot-api"* ]]; then
         echo "  - API: http://localhost:8080"
         echo "  - Health Check: http://localhost:8080/health"
     fi
-    if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "postgres" ]; then
+    if [ "$SERVICES" = "all" ] || [[ $SERVICES == *"postgres"* ]]; then
         echo "  - PostgreSQL: localhost:5434"
     fi
-    if [ "$SERVICES" = "all" ] || [ "$SERVICES" = "redis" ]; then
+    if [ "$SERVICES" = "all" ] || [[ $SERVICES == *"redis"* ]]; then
         echo "  - Redis: localhost:6379"
+    fi
+    if [ "$SERVICES" = "all" ] || [[ $SERVICES == *"localstack"* ]]; then
+        echo "  - LocalStack S3: http://localhost:4566"
     fi
     echo ""
     echo "📋 Useful commands:"

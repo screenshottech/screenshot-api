@@ -20,11 +20,10 @@ data class DatabaseConfig(
 ) {
     companion object {
         fun load(environment: Environment): DatabaseConfig = DatabaseConfig(
-            useInMemory = environment.isLocal ||
-                    System.getenv("USE_IN_MEMORY_DB")?.toBoolean() == true,
+            useInMemory = System.getenv("DATABASE_USE_IN_MEMORY")?.toBoolean() ?: environment.isLocal,
             url = System.getenv("DATABASE_URL"),
-            username = System.getenv("DB_USERNAME"),
-            password = System.getenv("DB_PASSWORD"),
+            username = System.getenv("DATABASE_USERNAME"),
+            password = System.getenv("DATABASE_PASSWORD"),
             maxPoolSize = System.getenv("DB_POOL_SIZE")?.toInt() ?: 20,
             driver = System.getenv("DB_DRIVER") ?: "org.postgresql.Driver"
         )
@@ -36,10 +35,10 @@ data class DatabaseConfig(
                 throw ConfigurationException.missingRequired("DATABASE_URL")
             }
             if (username.isNullOrBlank()) {
-                throw ConfigurationException.missingRequired("DB_USERNAME")
+                throw ConfigurationException.missingRequired("DATABASE_USERNAME")
             }
             if (password.isNullOrBlank()) {
-                throw ConfigurationException.missingRequired("DB_PASSWORD")
+                throw ConfigurationException.missingRequired("DATABASE_PASSWORD")
             }
         }
     }
@@ -76,6 +75,7 @@ fun Application.initializeDatabase() {
                     Users,
                     ApiKeys,
                     Screenshots,
+                    Activities,
                     Plans,
                     UsageLogs,
                     StripeCustomers

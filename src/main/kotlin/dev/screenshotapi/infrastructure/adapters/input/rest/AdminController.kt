@@ -328,7 +328,7 @@ class AdminController : KoinComponent {
                     id = response.user.plan.id,
                     name = response.user.plan.name,
                     creditsPerMonth = response.user.plan.creditsPerMonth,
-                    priceInCents = response.user.plan.priceInCents
+                    priceCents = response.user.plan.priceCents
                 ),
                 creditsRemaining = response.user.creditsRemaining,
                 totalScreenshots = response.user.totalScreenshots,

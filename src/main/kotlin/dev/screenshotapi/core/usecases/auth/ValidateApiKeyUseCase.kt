@@ -7,7 +7,7 @@ class ValidateApiKeyUseCase {
             ApiKeyValidationResult(
                 isValid = true,
                 userId = "user_123",
-                keyId = "key_456"
+                keyId = "key_123"
             )
         } else {
             ApiKeyValidationResult(

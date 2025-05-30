@@ -2,7 +2,6 @@ package dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.
 
 import org.jetbrains.exposed.sql.Index
 
-// Índices adicionales para mejorar performance
 val userEmailIndex = Index(listOf(Users.email), unique = true)
 val apiKeyHashIndex = Index(listOf(ApiKeys.keyHash), unique = true)
 val screenshotUserIdIndex = Index(listOf(Screenshots.userId), unique = false)

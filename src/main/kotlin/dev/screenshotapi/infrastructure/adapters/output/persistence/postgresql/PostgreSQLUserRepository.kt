@@ -13,22 +13,22 @@ import kotlinx.datetime.Clock
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.util.*
-import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
 
 class PostgreSQLUserRepository(private val database: Database) : UserRepository {
 
     override suspend fun save(user: User): User = dbQuery(database) {
         val existingUser = if (user.id.isNotBlank()) {
-            Users.select { Users.id eq UUID.fromString(user.id) }.singleOrNull()
+            Users.select { Users.id eq user.id }.singleOrNull()
         } else null
 
         if (existingUser != null) {
             // Update existing user
-            Users.update({ Users.id eq UUID.fromString(user.id) }) {
+            Users.update({ Users.id eq user.id }) {
                 it[email] = user.email
                 it[name] = user.name
                 it[passwordHash] = user.passwordHash
-                it[planId] = UUID.fromString(user.planId)
+                it[planId] = user.planId
                 it[creditsRemaining] = user.creditsRemaining
                 it[status] = user.status.name
                 it[stripeCustomerId] = user.stripeCustomerId
@@ -36,12 +36,12 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[updatedAt] = Clock.System.now()
             }
 
-            Users.select { Users.id eq UUID.fromString(user.id) }
+            Users.select { Users.id eq user.id }
                 .single()
                 .toUser()
         } else {
             // Insert new user
-            val id = user.id.takeIf { it.isNotBlank() }?.let { UUID.fromString(it) } ?: UUID.randomUUID()
+            val id = user.id.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
             val now = Clock.System.now()
 
             Users.insert {
@@ -49,7 +49,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[email] = user.email
                 it[name] = user.name
                 it[passwordHash] = user.passwordHash
-                it[planId] = UUID.fromString(user.planId)
+                it[planId] = user.planId
                 it[creditsRemaining] = user.creditsRemaining
                 it[status] = user.status.name
                 it[stripeCustomerId] = user.stripeCustomerId
@@ -65,7 +65,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
     }
 
     override suspend fun findById(id: String): User? = dbQuery(database) {
-        Users.select { Users.id eq UUID.fromString(id) }
+        Users.select { Users.id eq id }
             .singleOrNull()
             ?.toUser()
     }
@@ -77,11 +77,11 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
     }
 
     override suspend fun update(user: User): User = dbQuery(database) {
-        Users.update({ Users.id eq UUID.fromString(user.id) }) {
+        Users.update({ Users.id eq user.id }) {
             it[email] = user.email
             it[name] = user.name
             it[passwordHash] = user.passwordHash
-            it[planId] = UUID.fromString(user.planId)
+            it[planId] = user.planId
             it[creditsRemaining] = user.creditsRemaining
             it[status] = user.status.name
             it[stripeCustomerId] = user.stripeCustomerId
@@ -89,13 +89,13 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
             it[updatedAt] = Clock.System.now()
         }
 
-        Users.select { Users.id eq UUID.fromString(user.id) }
+        Users.select { Users.id eq user.id }
             .single()
             .toUser()
     }
 
     override suspend fun delete(id: String): Boolean = dbQuery(database) {
-        Users.deleteWhere { Users.id eq UUID.fromString(id) } > 0
+        Users.deleteWhere { Users.id eq id } > 0
     }
 
     override suspend fun findByStripeCustomerId(customerId: String): User? = dbQuery(database) {
@@ -160,7 +160,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
 
         // Get screenshotapi stats
         val screenshotStats = Screenshots
-            .select { Screenshots.userId eq UUID.fromString(userId) }
+            .select { Screenshots.userId eq userId }
             .let { rows ->
                 UserScreenshotStats(
                     total = rows.count().toLong(),
@@ -172,13 +172,15 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
 
         // Get plan
         val plan = Plans
-            .select { Plans.id eq UUID.fromString(user.planId) }
+            .select { Plans.id eq user.planId }
             .singleOrNull()
             ?.toPlan() ?: Plan(
             id = user.planId,
             name = user.planName,
             creditsPerMonth = 1000,
-            priceInCents = 0
+            priceCents = 0,
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now()
         )
 
         UserWithDetails(
@@ -215,7 +217,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
     }
 
     override suspend fun getNewUsersCount(days: Int): Long = dbQuery(database) {
-        val cutoffDate = Clock.System.now().minus(Duration.parse("${days}d"))
+        val cutoffDate = Clock.System.now().minus(days.days)
 
         Users.select { Users.createdAt greaterEq cutoffDate }
             .count()

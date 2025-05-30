@@ -1,5 +1,8 @@
 package dev.screenshotapi.core.domain.entities
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class ScreenshotRequest(
     val url: String,
     val width: Int = 1920,
@@ -26,4 +29,5 @@ data class ScreenshotRequest(
     }
 }
 
+@Serializable
 enum class ScreenshotFormat { PNG, JPEG, PDF }

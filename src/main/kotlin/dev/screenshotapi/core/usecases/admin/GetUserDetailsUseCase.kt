@@ -14,7 +14,7 @@ class GetUserDetailsUseCase {
                     id = "plan_1",
                     name = "Basic",
                     creditsPerMonth = 1000,
-                    priceInCents = 999
+                    priceCents = 999
                 ),
                 creditsRemaining = 100,
                 totalScreenshots = 0,

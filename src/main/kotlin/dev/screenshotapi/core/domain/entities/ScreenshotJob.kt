@@ -2,8 +2,10 @@ package dev.screenshotapi.core.domain.entities
 
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.Serializable
 
 
+@Serializable
 data class ScreenshotJob(
     val id: String,
     val userId: String,
@@ -36,6 +38,7 @@ data class ScreenshotJob(
     )
 }
 
+@Serializable
 enum class ScreenshotStatus {
     QUEUED, PROCESSING, COMPLETED, FAILED
 }

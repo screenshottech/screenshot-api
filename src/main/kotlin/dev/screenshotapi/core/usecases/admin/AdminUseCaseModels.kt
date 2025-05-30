@@ -64,7 +64,7 @@ data class PlanInfo(
     val id: String,
     val name: String,
     val creditsPerMonth: Int,
-    val priceInCents: Int
+    val priceCents: Int
 )
 
 data class ApiKeyDetail(

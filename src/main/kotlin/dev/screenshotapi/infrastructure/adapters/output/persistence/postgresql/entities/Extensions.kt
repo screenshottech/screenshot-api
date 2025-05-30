@@ -35,13 +35,16 @@ fun ResultRow.toApiKey(): ApiKey {
     return ApiKey(
         id = this[ApiKeys.id].toString(),
         userId = this[ApiKeys.userId].toString(),
-        keyHash = this[ApiKeys.keyHash],
         name = this[ApiKeys.name],
+        keyHash = this[ApiKeys.keyHash],
+        keyPrefix = this[ApiKeys.keyPrefix],
         permissions = permissions,
         rateLimit = this[ApiKeys.rateLimit],
+        usageCount = this[ApiKeys.usageCount],
         isActive = this[ApiKeys.isActive],
-        lastUsed = this[ApiKeys.lastUsed],      // Ya es kotlinx.datetime.Instant?
-        createdAt = this[ApiKeys.createdAt]     // Ya es kotlinx.datetime.Instant
+        lastUsed = this[ApiKeys.lastUsed],
+        expiresAt = this[ApiKeys.expiresAt],
+        createdAt = this[ApiKeys.createdAt]
     )
 }
 
@@ -82,7 +85,11 @@ fun ResultRow.toScreenshotJob(): ScreenshotJob {
 fun ResultRow.toPlan(): Plan {
     val featuresJson = this[Plans.features]
     val features = try {
-        Json.decodeFromString<List<String>>(featuresJson)
+        if (featuresJson != null) {
+            Json.decodeFromString<List<String>>(featuresJson)
+        } else {
+            emptyList<String>()
+        }
     } catch (e: Exception) {
         emptyList<String>()
     }
@@ -90,10 +97,14 @@ fun ResultRow.toPlan(): Plan {
     return Plan(
         id = this[Plans.id].toString(),
         name = this[Plans.name],
+        description = this[Plans.description],
         creditsPerMonth = this[Plans.creditsPerMonth],
-        priceInCents = this[Plans.priceInCents],
+        priceCents = this[Plans.priceCents],
+        currency = this[Plans.currency],
         features = features,
-        isActive = this[Plans.isActive]
+        isActive = this[Plans.isActive],
+        createdAt = this[Plans.createdAt],
+        updatedAt = this[Plans.updatedAt]
     )
 }
 
