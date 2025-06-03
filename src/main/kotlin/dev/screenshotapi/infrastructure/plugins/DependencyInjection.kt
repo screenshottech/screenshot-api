@@ -153,10 +153,10 @@ private fun createRedisConnection(config: AppConfig): StatefulRedisConnection<St
     }
 
 fun useCaseModule() = module {
-    // Screenshot use cases - using KoinComponent injection
-    single { TakeScreenshotUseCase() }
-    single { GetScreenshotStatusUseCase() }
-    single { ListScreenshotsUseCase() }
+    // Screenshot use cases - constructor injection
+    single { TakeScreenshotUseCase(get(), get()) }
+    single { GetScreenshotStatusUseCase(get()) }
+    single { ListScreenshotsUseCase(get()) }
 
     // Auth use cases - mixed injection patterns
     single { ValidateApiKeyUseCase() }

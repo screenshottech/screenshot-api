@@ -82,27 +82,20 @@ class UsageTrackingServiceImpl(
         return usageRepository.getUserMonthlyStats(userId, year)
     }
 
-    /**
-     * Get daily usage for rate limiting
-     */
-    suspend fun getDailyUsage(userId: String): DailyUsage {
+    override suspend fun getDailyUsage(userId: String): DailyUsage {
         val today = getCurrentDate()
         val cacheKey = "$DAILY_PREFIX$userId:$today"
 
         // Try cache first
         shortTermCache.get<DailyUsage>(cacheKey)?.let { return it }
 
-        // Calculate daily limit based on user's plan
-        val user = userRepository.findById(userId)
-        val dailyLimit = calculateDailyLimit(user?.planId)
-
         // Create new daily usage record
         val now = Clock.System.now()
         val dailyUsage = DailyUsage(
             userId = userId,
-            date = today,
+            date = getCurrentDate(),
             requestsUsed = 0,
-            dailyLimit = dailyLimit,
+            dailyLimit = 1000, // Default daily limit
             lastRequestAt = now,
             createdAt = now,
             updatedAt = now
@@ -115,10 +108,7 @@ class UsageTrackingServiceImpl(
         return dailyUsage
     }
 
-    /**
-     * Track daily usage
-     */
-    suspend fun trackDailyUsage(userId: String, amount: Int = 1): DailyUsage {
+    override suspend fun trackDailyUsage(userId: String, amount: Int): DailyUsage {
         val today = getCurrentDate()
         val cacheKey = "$DAILY_PREFIX$userId:$today"
         val now = Clock.System.now()
@@ -137,18 +127,12 @@ class UsageTrackingServiceImpl(
         return updated
     }
 
-    /**
-     * Check if user has remaining daily quota
-     */
-    suspend fun hasRemainingDailyQuota(userId: String): Boolean {
+    override suspend fun hasRemainingDailyQuota(userId: String): Boolean {
         val dailyUsage = getDailyUsage(userId)
         return dailyUsage.hasRemainingRequests
     }
 
-    /**
-     * Get short-term usage for rate limiting (scalable version)
-     */
-    fun getShortTermUsage(userId: String): ShortTermUsage {
+    override fun getShortTermUsage(userId: String): ShortTermUsage {
         val now = Clock.System.now()
         val cacheKey = "$SHORT_TERM_PREFIX$userId"
 
@@ -163,14 +147,11 @@ class UsageTrackingServiceImpl(
             hourlyTimestamp = now,
             minutelyRequests = 0,
             minutelyTimestamp = now,
-            concurrentRequests = 0
+            concurrentRequests = getConcurrentRequestsCount(userId)
         )
     }
 
-    /**
-     * Update short-term usage counters with distributed cache
-     */
-    private suspend fun updateShortTermUsage(userId: String, now: Instant) {
+    override suspend fun updateShortTermUsage(userId: String, now: Instant) {
         val cacheKey = "$SHORT_TERM_PREFIX$userId"
         val current = shortTermCache.get<ShortTermUsage>(cacheKey) ?: ShortTermUsage(
             userId = userId,
@@ -178,7 +159,7 @@ class UsageTrackingServiceImpl(
             hourlyTimestamp = now,
             minutelyRequests = 0,
             minutelyTimestamp = now,
-            concurrentRequests = 0
+            concurrentRequests = getConcurrentRequestsCount(userId)
         )
 
         // Reset counters if time windows have passed
@@ -210,8 +191,28 @@ class UsageTrackingServiceImpl(
             )
         }
 
-        // Cache for 1 hour (will auto-expire)
+        // Cache for 1 hour
         shortTermCache.put(cacheKey, updated, 1.hours)
+    }
+
+    override fun getCurrentMonth(): String {
+        val now = Clock.System.now()
+        val local = now.toLocalDateTime(TimeZone.UTC)
+        return "${local.year}-${local.monthNumber.toString().padStart(2, '0')}"
+    }
+
+    private fun getCurrentDate(): String {
+        val now = Clock.System.now()
+        val local = now.toLocalDateTime(TimeZone.UTC)
+        return "${local.year}-${local.monthNumber.toString().padStart(2, '0')}-${local.dayOfMonth.toString().padStart(2, '0')}"
+    }
+
+    private fun getSecondsUntilMidnight(): Long {
+        val now = Clock.System.now()
+        val local = now.toLocalDateTime(TimeZone.UTC)
+        val tomorrow = LocalDate(local.year, local.monthNumber, local.dayOfMonth).plus(DatePeriod(days = 1))
+        val midnight = LocalDateTime(tomorrow.year, tomorrow.month, tomorrow.dayOfMonth, 0, 0)
+        return (midnight.toInstant(TimeZone.UTC).toEpochMilliseconds() - now.toEpochMilliseconds()) / 1000
     }
 
     /**
@@ -258,17 +259,23 @@ class UsageTrackingServiceImpl(
     }
 
     /**
-     * Create new monthly usage record
+     * Clear all caches (useful for testing)
      */
-    private suspend fun createNewMonthlyUsage(userId: String, month: String): UserUsage {
-        val now = Clock.System.now()
-        val user = userRepository.findById(userId)
-        val planCredits = user?.let {
-            // Get plan credits from user's plan
-            // This would need to be implemented based on your plan structure
-            1000 // Default for now
-        } ?: 300 // Free plan default
+    fun clearCaches() {
+        runCatching {
+            kotlinx.coroutines.runBlocking {
+                shortTermCache.clear()
+                monthlyCache.clear()
+            }
+        }
+    }
 
+    private suspend fun createNewMonthlyUsage(userId: String, month: String): UserUsage {
+        val user = userRepository.findById(userId)
+        val userWithDetails = user?.let { userRepository.findWithDetails(userId) }
+        val planCredits = userWithDetails?.plan?.creditsPerMonth ?: 100 // Default to 100 credits for free plan
+        val now = Clock.System.now()
+        
         return UserUsage(
             userId = userId,
             month = month,
@@ -279,60 +286,5 @@ class UsageTrackingServiceImpl(
             createdAt = now,
             updatedAt = now
         )
-    }
-
-    /**
-     * Get current month in YYYY-MM format
-     */
-    private fun getCurrentMonth(): String {
-        val now = Clock.System.now()
-        val localDateTime = now.toLocalDateTime(TimeZone.UTC)
-        return "${localDateTime.year}-${localDateTime.monthNumber.toString().padStart(2, '0')}"
-    }
-
-    /**
-     * Get current date in YYYY-MM-DD format
-     */
-    private fun getCurrentDate(): String {
-        val now = Clock.System.now()
-        val localDateTime = now.toLocalDateTime(TimeZone.UTC)
-        return "${localDateTime.year}-${localDateTime.monthNumber.toString().padStart(2, '0')}-${localDateTime.dayOfMonth.toString().padStart(2, '0')}"
-    }
-
-    /**
-     * Calculate daily limit based on plan
-     */
-    private fun calculateDailyLimit(planId: String?): Int {
-        // Daily limits based on plan tier from analysis document
-        return when (planId) {
-            "plan_free" -> 50
-            "plan_starter_monthly", "plan_starter_annual" -> 400
-            "plan_pro_monthly", "plan_pro_annual" -> 2000
-            "plan_enterprise_monthly", "plan_enterprise_annual" -> 10000
-            else -> 50 // Default to free plan
-        }
-    }
-
-    /**
-     * Get seconds until midnight UTC
-     */
-    private fun getSecondsUntilMidnight(): Long {
-        val now = Clock.System.now()
-        val localDateTime = now.toLocalDateTime(TimeZone.UTC)
-        val tomorrow = LocalDateTime(localDateTime.year, localDateTime.month, localDateTime.dayOfMonth + 1, 0, 0, 0)
-        val tomorrowInstant = tomorrow.toInstant(TimeZone.UTC)
-        return (tomorrowInstant.epochSeconds - now.epochSeconds).coerceAtLeast(0)
-    }
-
-    /**
-     * Clear all caches (useful for testing)
-     */
-    fun clearCaches() {
-        runCatching {
-            kotlinx.coroutines.runBlocking {
-                shortTermCache.clear()
-                monthlyCache.clear()
-            }
-        }
     }
 }

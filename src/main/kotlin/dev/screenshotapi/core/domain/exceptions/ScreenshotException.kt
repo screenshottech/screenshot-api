@@ -14,5 +14,5 @@ sealed class ScreenshotException(message: String, cause: Throwable? = null) : Bu
     class UnsupportedFormat(val format: String) : ScreenshotException("Unsupported screenshotapi format: $format")
     class FileTooLarge(val sizeBytes: Long, val maxSizeBytes: Long) :
         ScreenshotException("Screenshot file too large: ${sizeBytes}bytes (max: ${maxSizeBytes}bytes)")
+    class ProcessingError(message: String, cause: Throwable? = null) : ScreenshotException(message, cause)
 }
-

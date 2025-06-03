@@ -2,10 +2,11 @@ package dev.screenshotapi.core.domain.entities
 
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlinx.serialization.Serializable
 
+enum class ScreenshotStatus {
+    QUEUED, PROCESSING, COMPLETED, FAILED
+}
 
-@Serializable
 data class ScreenshotJob(
     val id: String,
     val userId: String,
@@ -21,24 +22,29 @@ data class ScreenshotJob(
     val updatedAt: Instant = createdAt,
     val completedAt: Instant? = null
 ) {
-    fun markAsProcessing(): ScreenshotJob = copy(status = ScreenshotStatus.PROCESSING)
+    fun markAsProcessing(): ScreenshotJob = copy(
+        status = ScreenshotStatus.PROCESSING,
+        updatedAt = Clock.System.now()
+    )
 
     fun markAsCompleted(url: String, processingTime: Long): ScreenshotJob = copy(
         status = ScreenshotStatus.COMPLETED,
         resultUrl = url,
         processingTimeMs = processingTime,
         completedAt = Clock.System.now(),
+        updatedAt = Clock.System.now()
     )
 
     fun markAsFailed(error: String, processingTime: Long): ScreenshotJob = copy(
         status = ScreenshotStatus.FAILED,
         errorMessage = error,
         processingTimeMs = processingTime,
-        completedAt = Clock.System.now()
+        completedAt = Clock.System.now(),
+        updatedAt = Clock.System.now()
     )
-}
 
-@Serializable
-enum class ScreenshotStatus {
-    QUEUED, PROCESSING, COMPLETED, FAILED
+    fun markWebhookSent(): ScreenshotJob = copy(
+        webhookSent = true,
+        updatedAt = Clock.System.now()
+    )
 }

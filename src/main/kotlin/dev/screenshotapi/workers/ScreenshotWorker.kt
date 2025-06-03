@@ -81,11 +81,8 @@ class ScreenshotWorker(
 
     suspend fun shutdown() {
         logger.info("Worker $id shutting down gracefully...")
-
-        // Marcar para parar
         stop()
 
-        // Esperar a que termine el trabajo actual (con timeout)
         val currentJob = currentJob.get()
         if (currentJob != null) {
             logger.info("Worker $id waiting for current job ${currentJob.id} to complete...")
@@ -118,7 +115,7 @@ class ScreenshotWorker(
                     processJob(job)
                     consecutiveErrors.set(0) // Reset error counter on successful processing
                 } else {
-                    // No hay trabajos, entrar en modo idle
+                    // No jobs available, enter idle mode
                     currentState.set(WorkerState.IDLE)
                     delay(config.retryDelay.inWholeMilliseconds)
                 }
@@ -134,11 +131,11 @@ class ScreenshotWorker(
 
     private suspend fun dequeueWithTimeout(): ScreenshotJob? {
         return try {
-            withTimeout(5000) { // 5 segundos timeout para dequeue
+            withTimeout(5000) { // 5 seconds timeout for dequeue
                 queueRepository.dequeue()
             }
         } catch (e: TimeoutCancellationException) {
-            null // No hay trabajos disponibles
+            null // No jobs available
         }
     }
 
@@ -151,32 +148,28 @@ class ScreenshotWorker(
         logger.info("Processing job ${job.id} for user ${job.userId}")
 
         try {
-            // 1. Actualizar estado a "processing"
-            updateJobStatus(job, ScreenshotStatus.PROCESSING)
+            // 1. Update status to "processing"
+            val processingJob = job.markAsProcessing()
+            screenshotRepository.update(processingJob)
 
-            // 2. Validar usuario y créditos
+            // 2. Validate user and credits
             validateUserAndCredits(job)
 
-            // 3. Tomar screenshotapi con reintentos
+            // 3. Take screenshot with retries
             val resultUrl = takeScreenshotWithRetry(job)
             val processingTime = System.currentTimeMillis() - startTime
 
-            // 4. Actualizar estado a "completed"
-            val completedJob = job.copy(
-                status = ScreenshotStatus.COMPLETED,
-                resultUrl = resultUrl,
-                processingTimeMs = processingTime,
-                completedAt = Clock.System.now()
-            )
+            // 4. Update status to "completed"
+            val completedJob = job.markAsCompleted(resultUrl, processingTime)
             screenshotRepository.update(completedJob)
 
-            // 5. Deducir créditos
+            // 5. Deduct credits
             deductCreditsUseCase(DeductCreditsRequest(job.userId, 1))
 
-            // 6. Enviar webhook si está configurado
+            // 6. Send webhook if configured
             sendWebhookIfConfigured(completedJob)
 
-            // 7. Actualizar métricas
+            // 7. Update metrics
             recordSuccessMetrics(processingTime)
 
             logger.info("Job ${job.id} completed successfully in ${processingTime}ms")
@@ -213,7 +206,7 @@ class ScreenshotWorker(
                     logger.warn("Screenshot attempt ${attempt + 1} failed for job ${job.id}, retrying in ${config.retryDelay}: ${e.message}")
                     delay(config.retryDelay.inWholeMilliseconds)
                 } else {
-                    logger.error("All screenshotapi attempts failed for job ${job.id}", e)
+                    logger.error("All screenshot attempts failed for job ${job.id}", e)
                 }
             }
         }
@@ -223,14 +216,13 @@ class ScreenshotWorker(
 
     private suspend fun updateJobStatus(job: ScreenshotJob, status: ScreenshotStatus) {
         try {
-            val updatedJob = job.copy(
-                status = status,
-                updatedAt = Clock.System.now()
-            )
+            val updatedJob = when (status) {
+                ScreenshotStatus.PROCESSING -> job.markAsProcessing()
+                else -> job.copy(status = status, updatedAt = Clock.System.now())
+            }
             screenshotRepository.update(updatedJob)
         } catch (e: Exception) {
             logger.error("Failed to update job status for ${job.id}", e)
-            // No re-lanzar la excepción para no interrumpir el procesamiento
         }
     }
 
@@ -238,32 +230,20 @@ class ScreenshotWorker(
         job.webhookUrl?.let { webhookUrl ->
             try {
                 notificationService.sendWebhook(webhookUrl, job)
-
-                // Marcar webhook como enviado
-                val updatedJob = job.copy(webhookSent = true)
+                val updatedJob = job.markWebhookSent()
                 screenshotRepository.update(updatedJob)
-
             } catch (e: Exception) {
                 logger.error("Failed to send webhook for job ${job.id}", e)
-                // No fallar el trabajo por un webhook fallido
             }
         }
     }
 
     private suspend fun handleJobFailure(job: ScreenshotJob, error: Exception, processingTime: Long) {
         try {
-            val failedJob = job.copy(
-                status = ScreenshotStatus.FAILED,
-                errorMessage = error.message ?: "Unknown error",
-                processingTimeMs = processingTime,
-                completedAt = Clock.System.now()
-            )
-
+            val failedJob = job.markAsFailed(error.message ?: "Unknown error", processingTime)
             screenshotRepository.update(failedJob)
             recordFailureMetrics(processingTime, error)
-
             logger.error("Job ${job.id} failed after ${processingTime}ms: ${error.message}", error)
-
         } catch (e: Exception) {
             logger.error("Failed to handle job failure for ${job.id}", e)
         }
@@ -278,7 +258,6 @@ class ScreenshotWorker(
             currentState.set(WorkerState.ERROR)
             stop()
         } else {
-            // Esperar más tiempo antes del siguiente intento
             runBlocking {
                 delay(config.retryDelay.inWholeMilliseconds * errorCount)
             }
@@ -303,85 +282,63 @@ class ScreenshotWorker(
         lastActivity.set(Clock.System.now())
     }
 
-    // === PUBLIC STATUS METHODS ===
-
     fun isHealthy(): Boolean {
-        val now = Clock.System.now()
         val lastBeat = lastHeartbeat.get()
-        val timeSinceHeartbeat = now - lastBeat
+        val now = Clock.System.now()
+        val timeSinceLastHeartbeat = now - lastBeat
 
-        return when {
-            !isRunning.get() -> false
-            currentState.get() == WorkerState.ERROR -> false
-            consecutiveErrors.get() >= maxConsecutiveErrors -> false
-            timeSinceHeartbeat.inWholeSeconds > 120 -> false // 2 minutos sin heartbeat
-            else -> true
-        }
+        return isRunning.get() &&
+                currentState.get() != WorkerState.ERROR &&
+                timeSinceLastHeartbeat.inWholeSeconds < 60 &&
+                consecutiveErrors.get() < maxConsecutiveErrors
     }
 
     fun getJobsProcessed(): Long = jobsProcessed.get()
-
     fun getLastActivity(): Instant? = lastActivity.get()
-
     fun getStatus(): WorkerState = currentState.get()
-
     fun getCurrentJob(): ScreenshotJob? = currentJob.get()
 
-    fun getStatistics(): WorkerStatistics {
-        val now = Clock.System.now()
-        val uptime = now - startTime
-        val processed = jobsProcessed.get()
-        val successful = jobsSuccessful.get()
-        val failed = jobsFailed.get()
+    fun getStatistics(): WorkerStatistics = WorkerStatistics(
+        id = id,
+        status = currentState.get(),
+        jobsProcessed = jobsProcessed.get(),
+        jobsSuccessful = jobsSuccessful.get(),
+        jobsFailed = jobsFailed.get(),
+        currentJob = currentJob.get()?.id,
+        lastActivity = lastActivity.get(),
+        uptime = Clock.System.now() - startTime,
+        isHealthy = isHealthy(),
+        consecutiveErrors = consecutiveErrors.get()
+    )
 
-        return WorkerStatistics(
-            id = id,
-            state = currentState.get(),
-            isHealthy = isHealthy(),
-            uptime = uptime,
-            jobsProcessed = processed,
-            jobsSuccessful = successful,
-            jobsFailed = failed,
-            successRate = if (processed > 0) (successful.toDouble() / processed.toDouble()) else 0.0,
-            consecutiveErrors = consecutiveErrors.get(),
-            currentJob = currentJob.get()?.id,
-            lastActivity = lastActivity.get(),
-            lastHeartbeat = lastHeartbeat.get()
+    fun getDetailedInfo(): WorkerDetailedInfo = WorkerDetailedInfo(
+        statistics = getStatistics(),
+        config = WorkerConfigInfo(
+            retryAttempts = config.retryAttempts,
+            retryDelay = config.retryDelay,
+            maxConsecutiveErrors = maxConsecutiveErrors
+        ),
+        runtime = WorkerRuntimeInfo(
+            startTime = startTime,
+            lastHeartbeat = lastHeartbeat.get(),
+            isRunning = isRunning.get()
         )
-    }
-
-    fun getDetailedInfo(): WorkerDetailedInfo {
-        return WorkerDetailedInfo(
-            statistics = getStatistics(),
-            config = WorkerConfigInfo(
-                retryAttempts = config.retryAttempts,
-                retryDelay = config.retryDelay.inWholeMilliseconds,
-                maxTimeout = config.maxTimeoutDuration.inWholeMilliseconds
-            ),
-            runtime = WorkerRuntimeInfo(
-                threadName = Thread.currentThread().name,
-                isRunning = isRunning.get(),
-                startTime = startTime
-            )
-        )
-    }
+    )
 }
 
 // === DATA CLASSES ===
 
 data class WorkerStatistics(
     val id: String,
-    val state: WorkerState,
-    val isHealthy: Boolean,
-    val uptime: Duration,
+    val status: WorkerState,
     val jobsProcessed: Long,
     val jobsSuccessful: Long,
     val jobsFailed: Long,
-    val successRate: Double,
-    val consecutiveErrors: Long,
     val currentJob: String?,
     val lastActivity: Instant?,
-    val lastHeartbeat: Instant
+    val uptime: Duration,
+    val isHealthy: Boolean,
+    val consecutiveErrors: Long
 )
 
 data class WorkerDetailedInfo(
@@ -392,12 +349,12 @@ data class WorkerDetailedInfo(
 
 data class WorkerConfigInfo(
     val retryAttempts: Int,
-    val retryDelay: Long,
-    val maxTimeout: Long
+    val retryDelay: Duration,
+    val maxConsecutiveErrors: Int
 )
 
 data class WorkerRuntimeInfo(
-    val threadName: String,
-    val isRunning: Boolean,
-    val startTime: Instant
+    val startTime: Instant,
+    val lastHeartbeat: Instant,
+    val isRunning: Boolean
 )

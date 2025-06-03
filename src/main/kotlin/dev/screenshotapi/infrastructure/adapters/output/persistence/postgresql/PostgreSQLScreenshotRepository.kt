@@ -4,6 +4,8 @@ import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.domain.repositories.ScreenshotOverallStats
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.usecases.admin.ScreenshotStatItem
+import dev.screenshotapi.infrastructure.adapters.output.persistence.dto.ScreenshotFormatDto
+import dev.screenshotapi.infrastructure.adapters.output.persistence.dto.ScreenshotRequestDto
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.Screenshots
 import dev.screenshotapi.infrastructure.exceptions.DatabaseException
 import kotlinx.datetime.*
@@ -27,6 +29,8 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     UUID.randomUUID().toString()
                 }
 
+                val requestDto = ScreenshotRequestDto.fromDomain(job.request)
+
                 val insertedId = Screenshots.insertAndGetId {
                     it[id] = entityId
                     it[userId] = job.userId
@@ -34,7 +38,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     it[url] = job.request.url
                     it[status] = job.status.name
                     it[resultUrl] = job.resultUrl
-                    it[options] = json.encodeToString(job.request)
+                    it[options] = json.encodeToString(ScreenshotRequestDto.serializer(), requestDto)
                     it[processingTimeMs] = job.processingTimeMs
                     it[errorMessage] = job.errorMessage
                     it[webhookUrl] = job.webhookUrl
@@ -181,8 +185,8 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                         StatsGroupBy.FORMAT -> {
                             // Try to extract format from options JSON, fallback to "unknown"
                             try {
-                                val request = json.decodeFromString<ScreenshotRequest>(row[Screenshots.options])
-                                request.format.name
+                                val requestDto = json.decodeFromString(ScreenshotRequestDto.serializer(), row[Screenshots.options])
+                                requestDto.format.name
                             } catch (e: Exception) {
                                 "unknown"
                             }
@@ -281,8 +285,8 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
                 Screenshots.selectAll().forEach { row ->
                     try {
-                        val request = json.decodeFromString<ScreenshotRequest>(row[Screenshots.options])
-                        val format = request.format.name
+                        val requestDto = json.decodeFromString(ScreenshotRequestDto.serializer(), row[Screenshots.options])
+                        val format = requestDto.format.name
                         results[format] = results.getOrDefault(format, 0) + 1
                     } catch (e: Exception) {
                         logger.warn("Failed to parse screenshot options: ${row[Screenshots.options]}", e)
@@ -358,18 +362,18 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
     }
 
     private fun mapRowToScreenshotJob(row: ResultRow): ScreenshotJob {
-        val request = try {
-            json.decodeFromString<ScreenshotRequest>(row[Screenshots.options])
+        val requestDto = try {
+            json.decodeFromString(ScreenshotRequestDto.serializer(), row[Screenshots.options])
         } catch (e: Exception) {
             logger.warn("Failed to parse screenshot request: ${row[Screenshots.options]}", e)
-            ScreenshotRequest("", 1920, 1080, format = ScreenshotFormat.PNG)
+            ScreenshotRequestDto("", 1920, 1080, format = ScreenshotFormatDto.PNG)
         }
 
         return ScreenshotJob(
             id = row[Screenshots.id].value.toString(),
             userId = row[Screenshots.userId].value.toString(),
             apiKeyId = row[Screenshots.apiKeyId].value.toString(),
-            request = request,
+            request = requestDto.toDomain(),
             status = ScreenshotStatus.valueOf(row[Screenshots.status]),
             resultUrl = row[Screenshots.resultUrl],
             errorMessage = row[Screenshots.errorMessage],

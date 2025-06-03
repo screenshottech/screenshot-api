@@ -8,6 +8,9 @@ val hikari_version : String by project
 val microsoft_playwright_version : String by project
 val aws_sdk_kotlin_version: String by project
 val lettuce_version: String by project
+val skiko_version: String by project
+val cohort_ktor_version: String by project
+val ktor_rate_limiting_version: String by project
 
 plugins {
     kotlin("jvm") version "2.1.10"
@@ -25,6 +28,7 @@ application {
 repositories {
     mavenCentral()
     maven { url = uri("https://packages.confluent.io/maven/") }
+    maven { url = uri("https://maven.pkg.jetbrains.space/public/p/compose/dev") }
 }
 
 dependencies {
@@ -45,8 +49,8 @@ dependencies {
     implementation("io.ktor:ktor-server-config-yaml")
     implementation("io.insert-koin:koin-ktor:$koin_version")
     implementation("io.insert-koin:koin-logger-slf4j:$koin_version")
-    implementation("io.github.flaxoos:ktor-server-rate-limiting:2.2.1")
-    implementation("com.sksamuel.cohort:cohort-ktor:2.7.2")
+    implementation("io.github.flaxoos:ktor-server-rate-limiting:$ktor_rate_limiting_version")
+    implementation("com.sksamuel.cohort:cohort-ktor:$cohort_ktor_version")
     testImplementation("io.ktor:ktor-server-test-host")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
 
@@ -63,6 +67,11 @@ dependencies {
 
     // Screenshot
     implementation("com.microsoft.playwright:playwright:$microsoft_playwright_version")
+
+    // Image processing (Skia for multiplatform WebP support)
+    implementation("org.jetbrains.skiko:skiko-awt-runtime-macos-arm64:$skiko_version") // Mac ARM64 (local development)
+    implementation("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:$skiko_version") // Linux x64 (Docker/production)
+    implementation("org.jetbrains.skiko:skiko:$skiko_version") // Core multiplatform
 
     // AWS S3
     implementation("aws.sdk.kotlin:s3:$aws_sdk_kotlin_version")

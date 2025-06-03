@@ -1,8 +1,20 @@
 package dev.screenshotapi.core.domain.entities
 
-import kotlinx.serialization.Serializable
+import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 
-@Serializable
+enum class ScreenshotFormat {
+    PNG, JPEG, WEBP, PDF;
+
+    companion object {
+        fun getSupportedFormats(): List<String> = values().map { it.name }
+        fun fromString(format: String): ScreenshotFormat = try {
+            valueOf(format.uppercase())
+        } catch (e: IllegalArgumentException) {
+            throw ScreenshotException.UnsupportedFormat(format)
+        }
+    }
+}
+
 data class ScreenshotRequest(
     val url: String,
     val width: Int = 1920,
@@ -28,6 +40,3 @@ data class ScreenshotRequest(
         false
     }
 }
-
-@Serializable
-enum class ScreenshotFormat { PNG, JPEG, PDF }

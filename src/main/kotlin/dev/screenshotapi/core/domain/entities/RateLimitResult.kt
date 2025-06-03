@@ -17,5 +17,5 @@ data class RateLimitResult(
     val remainingMinutely: Int,
     val resetTimeHourly: Instant,
     val resetTimeMinutely: Instant,
-    val retryAfterSeconds: Long? = null
+    val retryAfterSeconds: Int
 )

@@ -6,11 +6,13 @@ import com.microsoft.playwright.options.ScreenshotType
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest
 import dev.screenshotapi.core.domain.exceptions.ScreenshotException
-import dev.screenshotapi.core.ports.output.StorageOutputPort
 import dev.screenshotapi.core.domain.services.ScreenshotService
+import dev.screenshotapi.core.ports.output.StorageOutputPort
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
+import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.Image
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -24,6 +26,7 @@ class ScreenshotServiceImpl(
     private val browserPool = ConcurrentLinkedQueue<Browser>()
 
     init {
+        // Initialize browser pool
         repeat(config.browserPoolSize) {
             try {
                 val browser = createBrowser()
@@ -66,11 +69,8 @@ class ScreenshotServiceImpl(
         val page = browser.newPage()
 
         try {
-
             configurePage(page, request)
-
             navigateToUrl(page, request.url)
-
             waitForPageReady(page, request)
 
             val screenshotOptions = Page.ScreenshotOptions()
@@ -79,30 +79,51 @@ class ScreenshotServiceImpl(
                     when (request.format) {
                         ScreenshotFormat.PNG -> ScreenshotType.PNG
                         ScreenshotFormat.JPEG -> ScreenshotType.JPEG
-                        else -> ScreenshotType.PNG
+                        ScreenshotFormat.WEBP -> ScreenshotType.PNG // Take PNG and convert to WEBP
+                        else -> throw ScreenshotException.UnsupportedFormat(request.format.name)
                     }
                 )
-
-            // Solo agregar quality para JPEG
-            if (request.format == ScreenshotFormat.JPEG) {
-                screenshotOptions.setQuality(request.quality)
-            }
+                .apply {
+                    // Only apply quality for formats that support it
+                    if (request.format == ScreenshotFormat.JPEG) {
+                        setQuality(request.quality)
+                    }
+                }
 
             val screenshotBytes = page.screenshot(screenshotOptions)
 
-            // Validar tamaño del archivo
-            if (screenshotBytes.size > config.maxFileSize) {
+            // Convert to WEBP if needed
+            val finalBytes = if (request.format == ScreenshotFormat.WEBP) {
+                try {
+                    // Convert PNG to WebP using Skia
+                    val image = Image.makeFromEncoded(screenshotBytes)
+                    val quality = (request.quality * 100).toInt()
+
+                    // Encode to WebP with specified quality
+                    image.encodeToData(EncodedImageFormat.WEBP, quality)?.bytes
+                        ?: throw ScreenshotException.ProcessingError("Failed to encode image to WebP format")
+                } catch (e: Exception) {
+                    logger.error("Error converting to WebP: ${e.message}", e)
+                    // Fallback to PNG if WebP conversion fails
+                    screenshotBytes
+                }
+            } else {
+                screenshotBytes
+            }
+
+            // Validate file size
+            if (finalBytes.size > config.maxFileSize) {
                 throw ScreenshotException.FileTooLarge(
-                    screenshotBytes.size.toLong(),
+                    finalBytes.size.toLong(),
                     config.maxFileSize
                 )
             }
 
-            // Generar nombre de archivo y subir
+            // Generate filename and upload
             val filename = generateFilename(request)
             val contentType = getContentType(request.format)
 
-            return storagePort.upload(screenshotBytes, filename, contentType)
+            return storagePort.upload(finalBytes, filename, contentType)
 
         } finally {
             page.close()
@@ -135,7 +156,7 @@ class ScreenshotServiceImpl(
                 )
             }
 
-            // Generar nombre de archivo y subir
+            // Generate filename and upload
             val filename = generateFilename(request, "pdf")
 
             return storagePort.upload(pdfBytes, filename, "application/pdf")
@@ -146,20 +167,20 @@ class ScreenshotServiceImpl(
     }
 
     private fun configurePage(page: Page, request: ScreenshotRequest) {
-        // Configurar viewport
+        // Set viewport
         page.setViewportSize(request.width, request.height)
 
-        // Configurar timeouts
+        // Set timeouts
         page.setDefaultTimeout(config.pageLoadTimeoutDuration.inWholeMilliseconds.toDouble())
 
-        // Configurar user agent
+        // Set user agent
         page.setExtraHTTPHeaders(
             mapOf(
                 "User-Agent" to config.userAgent
             )
         )
 
-        // Configurar características del navegador
+        // Configure browser features
         if (!config.enableJavaScript) {
             page.addInitScript("() => { window.navigator.javaEnabled = () => false; }")
         }
@@ -278,6 +299,7 @@ class ScreenshotServiceImpl(
         return when (format) {
             ScreenshotFormat.PNG -> "image/png"
             ScreenshotFormat.JPEG -> "image/jpeg"
+            ScreenshotFormat.WEBP -> "image/webp"
             ScreenshotFormat.PDF -> "application/pdf"
         }
     }

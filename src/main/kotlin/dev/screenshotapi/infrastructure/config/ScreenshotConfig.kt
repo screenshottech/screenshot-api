@@ -1,5 +1,6 @@
 package dev.screenshotapi.infrastructure.config
 
+import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import java.net.URI
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -78,9 +79,9 @@ data class ScreenshotConfig(
             blockedDomains = System.getenv("BLOCKED_DOMAINS")?.split(",")?.map { it.trim() }
                 ?: listOf("localhost", "127.0.0.1", "0.0.0.0", "internal", "private"),
             supportedFormats = System.getenv("SUPPORTED_FORMATS")?.split(",")?.map { it.trim() }
-                ?: listOf("PNG", "JPEG", "PDF"),
-            defaultFormat = System.getenv("DEFAULT_FORMAT")
-                ?: "PNG",
+                ?: ScreenshotFormat.getSupportedFormats(),
+            defaultFormat = System.getenv("DEFAULT_FORMAT")?.uppercase()
+                ?: ScreenshotFormat.PNG.name,
             maxQuality = System.getenv("SCREENSHOT_MAX_QUALITY")?.toInt()
                 ?: 100,
             minQuality = System.getenv("SCREENSHOT_MIN_QUALITY")?.toInt()
