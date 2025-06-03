@@ -130,7 +130,7 @@ private fun createPlanRepository(config: AppConfig, database: Database?): PlanRe
     if (config.database.useInMemory) InMemoryPlanRepository() else PostgreSQLPlanRepository(database!!)
 
 private fun createUsageRepository(config: AppConfig, database: Database): UsageRepository =
-    if (config.database.useInMemory) InMemoryUsageRepository() else PostgreSQLUsageRepository()
+    if (config.database.useInMemory) InMemoryUsageRepository() else PostgreSQLUsageRepository(database)
 
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
@@ -205,6 +205,7 @@ fun serviceModule() = module {
             userRepository = get(),
             screenshotService = get(),
             deductCreditsUseCase = get(),
+            usageTrackingService = get(),
             notificationService = get(),
             metricsService = get(),
             config = get()

@@ -1,11 +1,16 @@
 package dev.screenshotapi.infrastructure.adapters.output.cache
 
+import dev.screenshotapi.core.domain.entities.DailyUsage
+import dev.screenshotapi.core.domain.entities.ShortTermUsage
+import dev.screenshotapi.core.domain.entities.UserUsage
 import dev.screenshotapi.core.ports.output.CachePort
+import dev.screenshotapi.infrastructure.adapters.output.cache.dto.DailyUsageCacheDto
+import dev.screenshotapi.infrastructure.adapters.output.cache.dto.ShortTermUsageCacheDto
+import dev.screenshotapi.infrastructure.adapters.output.cache.dto.UserUsageCacheDto
 import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.future.await
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import org.slf4j.LoggerFactory
 import kotlin.time.Duration
 
 /**
@@ -15,7 +20,7 @@ class RedisCacheAdapter(
     private val connection: StatefulRedisConnection<String, String>,
     private val keyPrefix: String = "screenshot_api:"
 ) : CachePort {
-
+    private val logger = LoggerFactory.getLogger(this::class.java)
     private val commands = connection.async()
     private val json = Json {
         ignoreUnknownKeys = true
@@ -28,6 +33,7 @@ class RedisCacheAdapter(
             val value = commands.get(prefixKey(key)).await() ?: return null
             deserializeValue(value, type)
         } catch (e: Exception) {
+            logger.error("Error getting value from cache for key: $key", e)
             null
         }
     }
@@ -41,7 +47,7 @@ class RedisCacheAdapter(
                 commands.setex(prefixKey(key), ttl.inWholeSeconds, serializedValue).await()
             }
         } catch (e: Exception) {
-            // Log error but don't throw - fail gracefully
+            logger.error("Error putting value in cache for key: $key", e)
         }
     }
 
@@ -53,7 +59,7 @@ class RedisCacheAdapter(
         try {
             commands.del(prefixKey(key)).await()
         } catch (e: Exception) {
-            // Log error but don't throw
+            logger.error("Error removing key from cache: $key", e)
         }
     }
 
@@ -61,19 +67,19 @@ class RedisCacheAdapter(
         return try {
             commands.exists(prefixKey(key)).await() > 0
         } catch (e: Exception) {
+            logger.error("Error checking key existence in cache: $key", e)
             false
         }
     }
 
     override suspend fun clear() {
         try {
-            // Get all keys with our prefix
             val keys = commands.keys("$keyPrefix*").await()
             if (keys.isNotEmpty()) {
                 commands.del(*keys.toTypedArray()).await()
             }
         } catch (e: Exception) {
-            // Log error but don't throw
+            logger.error("Error clearing cache", e)
         }
     }
 
@@ -81,6 +87,7 @@ class RedisCacheAdapter(
         return try {
             commands.incrby(prefixKey(key), delta).await()
         } catch (e: Exception) {
+            logger.error("Error incrementing value in cache for key: $key", e)
             0L
         }
     }
@@ -89,46 +96,44 @@ class RedisCacheAdapter(
         return try {
             commands.expire(prefixKey(key), ttl.inWholeSeconds).await()
         } catch (e: Exception) {
+            logger.error("Error setting expiration for key: $key", e)
             false
         }
     }
 
-    /**
-     * Add prefix to key to avoid conflicts
-     */
     private fun prefixKey(key: String): String = "$keyPrefix$key"
 
-    /**
-     * Serialize value to JSON string
-     */
-    private fun serializeValue(value: Any?): String {
+    private fun <T> serializeValue(value: T): String {
         return when (value) {
             is String -> value
             is Number -> value.toString()
             is Boolean -> value.toString()
+            is UserUsage -> {
+                val dto = UserUsageCacheDto.fromDomain(value)
+                json.encodeToString(UserUsageCacheDto.serializer(), dto)
+            }
+            is ShortTermUsage -> {
+                val dto = ShortTermUsageCacheDto.fromDomain(value)
+                json.encodeToString(ShortTermUsageCacheDto.serializer(), dto)
+            }
+            is DailyUsage -> {
+                val dto = DailyUsageCacheDto.fromDomain(value)
+                json.encodeToString(DailyUsageCacheDto.serializer(), dto)
+            }
             null -> ""
             else -> {
-                // For complex objects, wrap into a JsonObject with type info
                 try {
-                    // First try to convert using toString (reliable for simple objects)
-                    val stringRepresentation = value.toString()
-                    // Create a JsonObject with type information and value
-                    val jsonObject = mapOf(
-                        "_type" to JsonPrimitive(value.javaClass.name),
-                        "_value" to JsonPrimitive(stringRepresentation)
-                    )
-                    json.encodeToString(JsonObject.serializer(), JsonObject(jsonObject))
-                } catch (e: Exception) {
-                    // Fallback to simple toString if serialization fails
+                    // Fallback to toString for non-serializable objects
+                    logger.debug("Serializing non-serializable object to string: ${value::class.java.name}")
                     value.toString()
+                } catch (e: Exception) {
+                    logger.warn("Failed to serialize object, using empty string: ${value::class.java.name}", e)
+                    ""
                 }
             }
         }
     }
 
-    /**
-     * Deserialize value from JSON string
-     */
     @Suppress("UNCHECKED_CAST")
     private fun <T> deserializeValue(value: String, type: Class<T>): T? {
         return try {
@@ -138,28 +143,25 @@ class RedisCacheAdapter(
                 Long::class.java -> value.toLong() as T
                 Double::class.java -> value.toDouble() as T
                 Boolean::class.java -> value.toBoolean() as T
+                UserUsage::class.java -> {
+                    val dto = json.decodeFromString(UserUsageCacheDto.serializer(), value)
+                    dto.toDomain() as T
+                }
+                ShortTermUsage::class.java -> {
+                    val dto = json.decodeFromString(ShortTermUsageCacheDto.serializer(), value)
+                    dto.toDomain() as T
+                }
+                DailyUsage::class.java -> {
+                    val dto = json.decodeFromString(DailyUsageCacheDto.serializer(), value)
+                    dto.toDomain() as T
+                }
                 else -> {
-                    // For complex objects, check if it's a JsonObject with our type/value structure
-                    try {
-                        val jsonObject = json.decodeFromString(JsonObject.serializer(), value)
-                        val typeName = (jsonObject["_type"] as? JsonPrimitive)?.content
-                        val objectValue = (jsonObject["_value"] as? JsonPrimitive)?.content
-                        
-                        if (typeName != null && objectValue != null && Class.forName(typeName).isAssignableFrom(type)) {
-                            // Try to create an instance from string representation
-                            // This is simplified; in practice would need factory methods for complex objects
-                            objectValue as T
-                        } else {
-                            // Try direct cast if types match
-                            value as? T
-                        }
-                    } catch (e: Exception) {
-                        // Fallback to direct cast
-                        value as? T
-                    }
+                    logger.warn("Cannot deserialize unknown type: ${type.name}, returning null")
+                    null
                 }
             }
         } catch (e: Exception) {
+            logger.error("Error deserializing value for type: ${type.name}", e)
             null
         }
     }

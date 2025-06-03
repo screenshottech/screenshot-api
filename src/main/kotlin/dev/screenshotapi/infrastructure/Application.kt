@@ -15,6 +15,7 @@ fun Application.module() {
     configureHTTP()
     configureMonitoring()
     configureRateLimit()
+    configureOpenAPI()
     configureRouting()
     configureExceptionHandling()
     initializeApplication()

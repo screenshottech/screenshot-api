@@ -6,6 +6,7 @@ import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.ScreenshotService
+import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.usecases.billing.DeductCreditsRequest
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
@@ -27,6 +28,7 @@ class ScreenshotWorker(
     private val userRepository: UserRepository,
     private val screenshotService: ScreenshotService,
     private val deductCreditsUseCase: DeductCreditsUseCase,
+    private val usageTrackingService: UsageTrackingPort,
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
     private val config: ScreenshotConfig
@@ -88,7 +90,7 @@ class ScreenshotWorker(
             logger.info("Worker $id waiting for current job ${currentJob.id} to complete...")
 
             var waitTime = 0L
-            val maxWaitTime = 30_000L // 30 segundos
+            val maxWaitTime = 30_000L
 
             while (this.currentJob.get() != null && waitTime < maxWaitTime) {
                 delay(1000)
@@ -163,13 +165,16 @@ class ScreenshotWorker(
             val completedJob = job.markAsCompleted(resultUrl, processingTime)
             screenshotRepository.update(completedJob)
 
-            // 5. Deduct credits
+            // 5. Track usage in monthly tracking
+            usageTrackingService.trackUsage(job.userId, 1)
+
+            // 6. Deduct credits
             deductCreditsUseCase(DeductCreditsRequest(job.userId, 1))
 
-            // 6. Send webhook if configured
+            // 7. Send webhook if configured
             sendWebhookIfConfigured(completedJob)
 
-            // 7. Update metrics
+            // 8. Update metrics
             recordSuccessMetrics(processingTime)
 
             logger.info("Job ${job.id} completed successfully in ${processingTime}ms")

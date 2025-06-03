@@ -76,6 +76,10 @@ dependencies {
     // AWS S3
     implementation("aws.sdk.kotlin:s3:$aws_sdk_kotlin_version")
 
+    // OpenAPI & Documentation
+    implementation("io.ktor:ktor-server-swagger")
+    implementation("io.ktor:ktor-server-openapi")
+
     // HTTP Client
     implementation("io.ktor:ktor-client-core")
     implementation("io.ktor:ktor-client-cio")

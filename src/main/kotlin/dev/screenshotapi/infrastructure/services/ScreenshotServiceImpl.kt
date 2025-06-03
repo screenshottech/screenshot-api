@@ -94,19 +94,7 @@ class ScreenshotServiceImpl(
 
             // Convert to WEBP if needed
             val finalBytes = if (request.format == ScreenshotFormat.WEBP) {
-                try {
-                    // Convert PNG to WebP using Skia
-                    val image = Image.makeFromEncoded(screenshotBytes)
-                    val quality = (request.quality * 100).toInt()
-
-                    // Encode to WebP with specified quality
-                    image.encodeToData(EncodedImageFormat.WEBP, quality)?.bytes
-                        ?: throw ScreenshotException.ProcessingError("Failed to encode image to WebP format")
-                } catch (e: Exception) {
-                    logger.error("Error converting to WebP: ${e.message}", e)
-                    // Fallback to PNG if WebP conversion fails
-                    screenshotBytes
-                }
+                convertToWebP(screenshotBytes, request.quality)
             } else {
                 screenshotBytes
             }
@@ -301,6 +289,49 @@ class ScreenshotServiceImpl(
             ScreenshotFormat.JPEG -> "image/jpeg"
             ScreenshotFormat.WEBP -> "image/webp"
             ScreenshotFormat.PDF -> "application/pdf"
+        }
+    }
+
+    private fun convertToWebP(pngBytes: ByteArray, quality: Int): ByteArray {
+        return try {
+            // Validate input
+            if (pngBytes.isEmpty()) {
+                logger.warn("Empty PNG bytes provided for WebP conversion, returning original")
+                return pngBytes
+            }
+
+            // Convert PNG to WebP using Skia
+            val image = Image.makeFromEncoded(pngBytes)
+            if (image == null) {
+                logger.warn("Failed to decode PNG image, returning original bytes")
+                return pngBytes
+            }
+
+            // Validate quality (should be 0-100 for Skia)
+            val qualityInt = quality.coerceIn(0, 100)
+            
+            logger.debug("Converting PNG to WebP with quality: $qualityInt")
+
+            // Try WebP encoding with error handling
+            val webpData = image.encodeToData(EncodedImageFormat.WEBP, qualityInt)
+            
+            if (webpData == null) {
+                logger.warn("Skia WebP encoding returned null, falling back to PNG")
+                return pngBytes
+            }
+
+            val webpBytes = webpData.bytes
+            if (webpBytes == null || webpBytes.isEmpty()) {
+                logger.warn("Skia WebP encoding returned empty bytes, falling back to PNG")
+                return pngBytes
+            }
+
+            logger.debug("Successfully converted PNG (${pngBytes.size} bytes) to WebP (${webpBytes.size} bytes)")
+            return webpBytes
+
+        } catch (e: Exception) {
+            logger.error("Error converting PNG to WebP: ${e.message}, falling back to PNG", e)
+            return pngBytes
         }
     }
 
