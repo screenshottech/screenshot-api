@@ -29,7 +29,7 @@ Content-Type: application/json
 
 
 ###
-POST http://localhost:8080/api/v1/screenshot
+POST http://localhost:8080/api/v1/screenshots
 Authorization: Bearer sk_development_test_key_123456789
 Content-Type: application/json
 
@@ -45,19 +45,19 @@ Content-Type: application/json
 }
 
 ###
-POST http://localhost:8080/api/v1/screenshot
+POST http://localhost:8080/api/v1/screenshots
 Authorization: Bearer sk_development_test_key_123456789
 Content-Type: application/json
 
 {
-  "url": "https://carboit.com",
+  "url": "https://screenshotone.com/pricing",
   "fullPage": true,
-  "format": "PDF"
+  "format": "PNG"
 }
 
 ###
 # Get screenshot status - replace JOB_ID with the actual jobId from above
-GET http://localhost:8080/api/v1/screenshot/job_1748616554636_7f1d40d5
+GET http://localhost:8080/api/v1/screenshots/job_1748919530612_6c8d8488
 Authorization: Bearer sk_development_test_key_123456789
 
 ###

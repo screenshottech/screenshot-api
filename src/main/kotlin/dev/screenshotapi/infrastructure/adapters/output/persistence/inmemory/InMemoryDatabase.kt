@@ -2,6 +2,8 @@ package dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory
 
 import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.usecases.admin.ScreenshotStats
+import kotlinx.datetime.*
+import kotlinx.datetime.Clock
 
 object InMemoryDatabase {
     private val users = mutableMapOf<String, User>()
@@ -10,20 +12,90 @@ object InMemoryDatabase {
     private val queue = mutableListOf<ScreenshotJob>()
 
     init {
-        val devUser = User(
-            id = "user_123",
-            email = "dev@example.com",
-            name = "Development User",
-            passwordHash = "dev_password_hash",
-            status = UserStatus.ACTIVE,
-            planId = "plan_free",
-            planName = "Free Plan",
-            creditsRemaining = 1000,
-            stripeCustomerId = null,
-            createdAt = kotlinx.datetime.Clock.System.now(),
-            updatedAt = kotlinx.datetime.Clock.System.now()
+        // Create initial plans
+        val freePlan = Plan(
+            id = "plan_free",
+            name = "Free Plan",
+            description = "Free plan with basic limits",
+            creditsPerMonth = 300,
+            priceCentsMonthly = 0,
+            priceCentsAnnual = 0,
+            billingCycle = "monthly",
+            currency = "USD",
+            features = listOf("Basic screenshots", "PNG/JPEG formats"),
+            isActive = true,
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now()
         )
-        users[devUser.id] = devUser
+
+        val starterPlan = freePlan.copy(
+            id = "plan_starter",
+            name = "Starter Plan",
+            description = "Developer plan",
+            creditsPerMonth = 2000,
+            priceCentsMonthly = 1499
+        )
+
+        // Create initial users
+        val freeUser = User(
+            id = "user_free_1",
+            email = "free@test.com",
+            name = "Free User",
+            passwordHash = "hash123",
+            status = UserStatus.ACTIVE,
+            planId = freePlan.id,
+            planName = freePlan.name,
+            creditsRemaining = freePlan.creditsPerMonth,
+            stripeCustomerId = null,
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now()
+        )
+
+        val starterUser = freeUser.copy(
+            id = "user_starter_1",
+            email = "starter@test.com",
+            name = "Starter User",
+            planId = starterPlan.id,
+            planName = starterPlan.name,
+            creditsRemaining = starterPlan.creditsPerMonth
+        )
+
+        // Create initial API keys
+        val freeApiKey = ApiKey(
+            id = "key_free_1",
+            userId = freeUser.id,
+            name = "Test Free Key",
+            keyHash = "sk_test_free_123".hashCode().toString(),
+            keyPrefix = "sk_test",
+            permissions = setOf(Permission.SCREENSHOT_CREATE),
+            rateLimit = 10,
+            usageCount = 0,
+            isActive = true,
+            lastUsed = null,
+            expiresAt = Clock.System.now().plus(365, DateTimeUnit.DAY, TimeZone.UTC),
+            createdAt = Clock.System.now()
+        )
+
+        val starterApiKey = ApiKey(
+            id = "key_starter_1",
+            userId = starterUser.id,
+            name = "Test Starter Key",
+            keyHash = "sk_test_starter_123".hashCode().toString(),
+            keyPrefix = "sk_test",
+            permissions = setOf(Permission.SCREENSHOT_CREATE),
+            rateLimit = 60,
+            usageCount = 0,
+            isActive = true,
+            lastUsed = null,
+            expiresAt = Clock.System.now().plus(365, DateTimeUnit.DAY, TimeZone.UTC),
+            createdAt = Clock.System.now()
+        )
+
+        // Initialize database with default users and API keys
+        users[freeUser.id] = freeUser
+        users[starterUser.id] = starterUser
+        apiKeys[freeApiKey.id] = freeApiKey
+        apiKeys[starterApiKey.id] = starterApiKey
     }
 
     // Thread-safe operations
@@ -209,7 +281,7 @@ object InMemoryDatabase {
         }
     }
 
-    // === MÉTODOS HELPER ===
+    // === HELPER METHODS ===
 
     fun clearScreenshots() {
         synchronized(screenshots) {

@@ -5,7 +5,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotStatus
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
-import dev.screenshotapi.core.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.usecases.billing.DeductCreditsRequest
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig

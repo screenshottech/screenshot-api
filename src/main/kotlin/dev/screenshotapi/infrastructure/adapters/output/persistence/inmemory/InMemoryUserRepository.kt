@@ -91,9 +91,9 @@ class InMemoryUserRepository : UserRepository {
             id = user.planId,
             name = user.planName,
             creditsPerMonth = 1000,
-            priceCents = 0,
-            createdAt = kotlinx.datetime.Clock.System.now(),
-            updatedAt = kotlinx.datetime.Clock.System.now()
+            priceCentsMonthly = 0,
+            createdAt = Clock.System.now(),
+            updatedAt = Clock.System.now()
         )
 
         return UserWithDetails(

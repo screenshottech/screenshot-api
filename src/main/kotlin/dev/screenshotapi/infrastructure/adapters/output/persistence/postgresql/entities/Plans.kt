@@ -12,7 +12,9 @@ object Plans : IdTable<String>("plans") {
     val name = varchar("name", 255)
     val description = text("description").nullable()
     val creditsPerMonth = integer("credits_per_month")
-    val priceCents = integer("price_cents")
+    val priceCentsMonthly = integer("price_cents_monthly")
+    val priceCentsAnnual = integer("price_cents_annual").nullable()
+    val billingCycle = varchar("billing_cycle", 20).default("monthly") // 'monthly' or 'annual'
     val currency = varchar("currency", 10).default("USD")
     val features = text("features").nullable() // JSONB stored as text
     val isActive = bool("is_active").default(true)

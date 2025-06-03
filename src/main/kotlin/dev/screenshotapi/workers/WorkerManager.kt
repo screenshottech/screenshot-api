@@ -3,7 +3,7 @@ package dev.screenshotapi.workers
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
-import dev.screenshotapi.core.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
@@ -38,19 +38,19 @@ class WorkerManager(
         if (isRunning.compareAndSet(false, true)) {
             logger.info("Starting WorkerManager with min=$minWorkers, max=$maxWorkers workers")
 
-            // Iniciar workers mínimos
+            // Init min workers
             repeat(minWorkers) {
                 startWorker()
             }
 
-            // Iniciar monitor de auto-scaling (solo en producción)
+            // Init auto-scaling monitor (only in production)
             if (scalingEnabled) {
                 scope.launch {
                     monitorAndScale()
                 }
             }
 
-            // Iniciar monitor de salud de workers
+            // Init health monitor
             scope.launch {
                 healthMonitor()
             }
@@ -65,10 +65,10 @@ class WorkerManager(
         if (isRunning.compareAndSet(true, false)) {
             logger.info("Shutting down WorkerManager...")
 
-            // Cancelar todas las corrutinas
+            // Cancel coroutine scope
             scope.cancel()
 
-            // Detener todos los workers gracefully
+            // Stop all workers gracefully
             val shutdownJobs = workers.values.map { worker ->
                 scope.launch {
                     try {
@@ -79,10 +79,10 @@ class WorkerManager(
                 }
             }
 
-            // Esperar a que todos los workers terminen (con timeout)
+            // Wait for all workers to shutdown
             runBlocking {
                 try {
-                    withTimeout(30_000) { // 30 segundos timeout
+                    withTimeout(30_000) {
                         shutdownJobs.joinAll()
                     }
                 } catch (e: TimeoutCancellationException) {
@@ -112,7 +112,7 @@ class WorkerManager(
 
         workers[workerId] = worker
 
-        // Iniciar worker en un coroutine separado
+        // Initialize worker in a separate coroutine
         scope.launch {
             try {
                 worker.start()
@@ -122,10 +122,10 @@ class WorkerManager(
                 workers.remove(workerId)
                 logger.info("Worker $workerId removed from pool")
 
-                // Si estamos por debajo del mínimo y el manager sigue corriendo, iniciar un nuevo worker
+                // If we're below the minimum and the manager is still running, start a new worker
                 if (isRunning.get() && workers.size < minWorkers) {
                     logger.info("Worker count below minimum, starting replacement worker")
-                    delay(5000) // Esperar antes de reiniciar
+                    delay(5000)
                     if (isRunning.get()) {
                         startWorker()
                     }
@@ -183,14 +183,13 @@ class WorkerManager(
                     }
                 }
 
-                // Actualizar métricas
                 metricsService.updateWorkerMetrics(workers.size, queueSize)
 
-                delay(30_000) // Check every 30 seconds
+                delay(30_000)
 
             } catch (e: Exception) {
                 logger.error("Error in auto-scaling monitor", e)
-                delay(60_000) // Wait longer on error
+                delay(60_000)
             }
         }
 
@@ -207,21 +206,20 @@ class WorkerManager(
                 unhealthyWorkers.forEach { worker ->
                     logger.warn("Unhealthy worker detected: ${worker.id}, restarting...")
 
-                    // Remover worker no saludable
+                    // Remove worker not healthy
                     workers.remove(worker.id)
                     worker.stop()
 
-                    // Iniciar reemplazo
                     startWorker()
 
                     metricsService.recordWorkerRestart(worker.id, "unhealthy")
                 }
 
-                delay(60_000) // Check every minute
+                delay(60_000)
 
             } catch (e: Exception) {
                 logger.error("Error in health monitor", e)
-                delay(120_000) // Wait longer on error
+                delay(120_000)
             }
         }
 
@@ -237,13 +235,12 @@ class WorkerManager(
     }
 
     private suspend fun calculateAverageWaitTime(): Long {
-        // En una implementación real, esto calcularía el tiempo promedio de espera
-        // basado en trabajos completados recientemente
-        return 30_000L // 30 segundos por defecto
+        // TODO: Implement this logic to calculate average wait time based on recently completed jobs
+        return 30_000L
     }
 
     private suspend fun calculateOldestJobAge(): Long {
-        // En una implementación real, esto encontraría el trabajo más antiguo en la cola
+        // TODO: Implement this logic to calculate oldest job age
         return 0L
     }
 
@@ -314,7 +311,7 @@ class WorkerManager(
         )
     }
 
-    // Método para forzar scaling manual (útil para testing)
+    // Force scaling to a specific number of workers (min: minWorkers, max: maxWorkers)
     fun forceScale(targetWorkers: Int): Boolean {
         if (targetWorkers < minWorkers || targetWorkers > maxWorkers) {
             logger.warn("Cannot force scale to $targetWorkers (min: $minWorkers, max: $maxWorkers)")

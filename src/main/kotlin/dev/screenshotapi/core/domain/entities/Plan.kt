@@ -7,7 +7,9 @@ data class Plan(
     val name: String,
     val description: String? = null,
     val creditsPerMonth: Int,
-    val priceCents: Int,
+    val priceCentsMonthly: Int,
+    val priceCentsAnnual: Int? = null,
+    val billingCycle: String = "monthly", // 'monthly' or 'annual'
     val currency: String = "USD",
     val features: List<String> = emptyList(),
     val isActive: Boolean = true,

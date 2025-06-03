@@ -24,7 +24,9 @@ CREATE TABLE IF NOT EXISTS plans (
     name VARCHAR(255) NOT NULL,
     description TEXT NULL, -- Kotlin schema has nullable()
     credits_per_month INTEGER NOT NULL,
-    price_cents INTEGER NOT NULL,
+    price_cents_monthly INTEGER NOT NULL DEFAULT 0,
+    price_cents_annual INTEGER NULL,
+    billing_cycle VARCHAR(20) NOT NULL DEFAULT 'monthly',
     currency VARCHAR(10) NOT NULL DEFAULT 'USD',
     features TEXT NULL, -- Was JSONB, Kotlin schema uses text("features").nullable() for JSON storage
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -146,19 +148,27 @@ CREATE INDEX IF NOT EXISTS "activitiesTimestampIndex" ON activities(timestamp); 
 CREATE INDEX IF NOT EXISTS idx_stripe_customers_user_id_explicit_for_non_warn ON stripe_customers(user_id); -- Added this to address the specific warning if you don't change Kotlin, ensure it's unique if it should be.
 
 
-INSERT INTO plans (id, name, description, credits_per_month, price_cents, currency, features, is_active, created_at, updated_at) VALUES
-                                                                                                                                     ('plan_free', 'Free Plan', 'Perfect for getting started', 100, 0, 'USD',
-                                                                                                                                      '{"max_resolution": "1920x1080", "formats": ["PNG", "JPEG"], "support": "community"}', true, NOW(), NOW()),
-                                                                                                                                     ('plan_basic', 'Basic Plan', 'For small projects and personal use', 1000, 999, 'USD',
-                                                                                                                                      '{"max_resolution": "1920x1080", "formats": ["PNG", "JPEG", "PDF"], "support": "email"}', true, NOW(), NOW()),
-                                                                                                                                     ('plan_pro', 'Pro Plan', 'For businesses and heavy usage', 10000, 4999, 'USD',
-                                                                                                                                      '{"max_resolution": "4096x4096", "formats": ["PNG", "JPEG", "PDF"], "support": "priority"}', true, NOW(), NOW())
+INSERT INTO plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, created_at, updated_at) VALUES
+                                                                                                                                     ('plan_free', 'Free Forever', '3x more generous than competitors - perfect for developers', 300, 0, NULL, 'monthly', 'USD',
+                                                                                                                                      '["Basic screenshots", "PNG/JPEG formats", "Standard support", "API access"]', true, NOW(), NOW()),
+                                                                                                                                     ('plan_starter_monthly', 'Starter Monthly', '12% cheaper than competitors + OCR included', 2000, 1499, NULL, 'monthly', 'USD',
+                                                                                                                                      '["All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks"]', true, NOW(), NOW()),
+                                                                                                                                     ('plan_starter_annual', 'Starter Annual', '12% cheaper + OCR included + 10% annual savings', 2000, 1499, 16200, 'annual', 'USD',
+                                                                                                                                      '["All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks", "10% savings (2 months free)"]', true, NOW(), NOW()),
+                                                                                                                                     ('plan_pro_monthly', 'Professional Monthly', '13% cheaper + batch processing + analytics dashboard', 10000, 6900, NULL, 'monthly', 'USD',
+                                                                                                                                      '["All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee"]', true, NOW(), NOW()),
+                                                                                                                                     ('plan_pro_annual', 'Professional Annual', '13% cheaper + batch processing + analytics + 10% annual savings', 10000, 6900, 74520, 'annual', 'USD',
+                                                                                                                                      '["All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee", "10% savings (2 months free)"]', true, NOW(), NOW()),
+                                                                                                                                     ('plan_enterprise_monthly', 'Enterprise Monthly', '12% cheaper + unlimited requests + white-label + on-premise', 50000, 22900, NULL, 'monthly', 'USD',
+                                                                                                                                      '["All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations"]', true, NOW(), NOW()),
+                                                                                                                                     ('plan_enterprise_annual', 'Enterprise Annual', '12% cheaper + unlimited + white-label + on-premise + 10% annual savings', 50000, 22900, 247320, 'annual', 'USD',
+                                                                                                                                      '["All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations", "10% savings (2 months free)"]', true, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
 -- Insert development user
 -- Note: stripe_customer_id and last_activity will be NULL for this user as they are not provided.
 INSERT INTO users (id, email, password_hash, name, credits_remaining, status, plan_id, created_at, updated_at) VALUES
-    ('user_123', 'dev@example.com', '$2a$10$rY8F8qX9Z1M2N3O4P5Q6R7S8T9U0V1W2X3Y4Z5A6B7C8D9E0F1G2H3', 'Development User', 1000, 'ACTIVE', 'plan_basic', NOW(), NOW())
+    ('user_123', 'dev@example.com', '$2a$10$rY8F8qX9Z1M2N3O4P5Q6R7S8T9U0V1W2X3Y4Z5A6B7C8D9E0F1G2H3', 'Development User', 1000, 'ACTIVE', 'plan_starter_monthly', NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
 -- Insert development API key

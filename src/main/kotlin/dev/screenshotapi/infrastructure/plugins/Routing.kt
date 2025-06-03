@@ -1,12 +1,11 @@
 package dev.screenshotapi.infrastructure.plugins
 
-import dev.screenshotapi.infrastructure.adapters.input.rest.AdminController
-import dev.screenshotapi.infrastructure.adapters.input.rest.AuthController
-import dev.screenshotapi.infrastructure.adapters.input.rest.HealthController
-import dev.screenshotapi.infrastructure.adapters.input.rest.ScreenshotController
+import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.http.content.*
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.routing.*
 import org.koin.ktor.ext.inject
 import java.io.File
@@ -36,11 +35,14 @@ fun Application.configureRouting() {
             post("/auth/login") { authController.login(call) }
             post("/auth/register") { authController.register(call) }
 
-            // Protected routes (API Key authentication)
+            // Protected routes (API Key authentication) with dynamic rate limiting
             authenticate("api-key") {
-                post("/screenshot") { screenshotController.takeScreenshot(call) }
-                get("/screenshot/{jobId}") { screenshotController.getScreenshotStatus(call) }
-                get("/screenshots") { screenshotController.listScreenshots(call) }
+                rateLimit(RateLimitName("screenshots")) {
+                    post("/screenshots") { screenshotController.takeScreenshot(call) }
+                    get("/screenshots/{jobId}") { screenshotController.getScreenshotStatus(call) }
+                    get("/screenshots") { screenshotController.listScreenshots(call) }
+                }
+
             }
 
             // Admin routes (JWT authentication)
@@ -64,4 +66,6 @@ fun Application.configureRouting() {
             }
         }
     }
+
 }
+

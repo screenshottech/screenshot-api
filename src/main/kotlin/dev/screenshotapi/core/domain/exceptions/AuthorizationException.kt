@@ -1,6 +1,6 @@
 package dev.screenshotapi.core.domain.exceptions
 
-import java.time.Instant
+import kotlinx.datetime.Instant
 
 sealed class AuthorizationException(message: String, cause: Throwable? = null) : BusinessException(message, cause) {
     class InsufficientPermissions(val requiredPermission: String) :

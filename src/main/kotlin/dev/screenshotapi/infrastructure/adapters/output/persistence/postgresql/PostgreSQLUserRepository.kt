@@ -178,7 +178,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
             id = user.planId,
             name = user.planName,
             creditsPerMonth = 1000,
-            priceCents = 0,
+            priceCentsMonthly = 0,
             createdAt = Clock.System.now(),
             updatedAt = Clock.System.now()
         )

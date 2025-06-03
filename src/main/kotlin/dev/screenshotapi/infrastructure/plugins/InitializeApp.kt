@@ -1,6 +1,6 @@
 package dev.screenshotapi.infrastructure.plugins
 
-import dev.screenshotapi.core.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.initializeDatabase
 import dev.screenshotapi.infrastructure.services.ScreenshotServiceImpl

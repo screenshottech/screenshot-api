@@ -2,11 +2,15 @@ package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.core.domain.repositories.ActivityRepository
 import dev.screenshotapi.core.domain.repositories.ApiKeyRepository
+import dev.screenshotapi.core.domain.repositories.PlanRepository
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
+import dev.screenshotapi.core.domain.repositories.UsageRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.ports.output.StorageOutputPort
-import dev.screenshotapi.core.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.RateLimitingService
+import dev.screenshotapi.core.ports.output.UsageTrackingPort
+import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.usecases.admin.GetScreenshotStatsUseCase
 import dev.screenshotapi.core.usecases.admin.GetSystemStatsUseCase
 import dev.screenshotapi.core.usecases.admin.GetUserActivityUseCase
@@ -33,13 +37,18 @@ import dev.screenshotapi.infrastructure.adapters.input.rest.AdminController
 import dev.screenshotapi.infrastructure.adapters.input.rest.AuthController
 import dev.screenshotapi.infrastructure.adapters.input.rest.HealthController
 import dev.screenshotapi.infrastructure.adapters.input.rest.ScreenshotController
+import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryActivityRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryApiKeyRepository
+import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryPlanRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryScreenshotRepository
+import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryUsageRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryUserRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLActivityRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLApiKeyRepository
+import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLPlanRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLScreenshotRepository
+import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLUsageRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLUserRepository
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
@@ -49,7 +58,9 @@ import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.services.BrowserPoolManager
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
+import dev.screenshotapi.infrastructure.services.RateLimitingServiceImpl
 import dev.screenshotapi.infrastructure.services.ScreenshotServiceImpl
+import dev.screenshotapi.infrastructure.services.UsageTrackingServiceImpl
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -91,6 +102,8 @@ fun repositoryModule(config: AppConfig) = module {
     single<ScreenshotRepository> { createScreenshotRepository(config, get()) }
     single<QueueRepository> { createQueueRepository(config, getOrNull<StatefulRedisConnection<String, String>>()) }
     single<ActivityRepository> { createActivityRepository(config, get()) }
+    single<PlanRepository> { createPlanRepository(config, getOrNull()) }
+    single<UsageRepository> { createUsageRepository(config, get()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<Database> { createDatabase(config) }
     if (!config.redis.useInMemory) {
@@ -112,6 +125,12 @@ private fun createQueueRepository(config: AppConfig, redisConnection: StatefulRe
 
 private fun createActivityRepository(config: AppConfig, database: Database): ActivityRepository =
     if (config.database.useInMemory) InMemoryActivityRepository() else PostgreSQLActivityRepository(database)
+
+private fun createPlanRepository(config: AppConfig, database: Database?): PlanRepository =
+    if (config.database.useInMemory) InMemoryPlanRepository() else PostgreSQLPlanRepository(database!!)
+
+private fun createUsageRepository(config: AppConfig, database: Database): UsageRepository =
+    if (config.database.useInMemory) InMemoryUsageRepository() else PostgreSQLUsageRepository()
 
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
@@ -170,6 +189,15 @@ fun serviceModule() = module {
     single { BrowserPoolManager(get<ScreenshotConfig>()) }
     single { NotificationService() }
     single { MetricsService() }
+    single<UsageTrackingPort> {
+        UsageTrackingServiceImpl(
+            userRepository = get(),
+            usageRepository = get(),
+            shortTermCache = CacheFactory.createRateLimitCache(get(), get()),
+            monthlyCache = CacheFactory.createUsageCache(get(), get())
+        )
+    }
+    single<RateLimitingService> { RateLimitingServiceImpl(get(), get(), get()) }
     single {
         WorkerManager(
             queueRepository = get(),

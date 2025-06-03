@@ -7,7 +7,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest
 import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 import dev.screenshotapi.core.ports.output.StorageOutputPort
-import dev.screenshotapi.core.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import kotlinx.coroutines.*
 import kotlinx.datetime.Clock

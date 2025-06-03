@@ -2,7 +2,6 @@ package dev.screenshotapi.infrastructure.auth
 
 import dev.screenshotapi.core.domain.entities.Permission
 import dev.screenshotapi.core.domain.entities.UserStatus
-import io.ktor.server.auth.*
 
 data class UserPrincipal(
     val userId: String,
@@ -13,7 +12,7 @@ data class UserPrincipal(
     val isAdmin: Boolean = false,
     val planId: String,
     val creditsRemaining: Int
-) : Principal {
+) {
 
     fun hasPermission(permission: Permission): Boolean {
         return permissions.contains(permission) || isAdmin

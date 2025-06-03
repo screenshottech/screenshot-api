@@ -6,6 +6,8 @@ val jetbrains_exposed_version: String by project
 val postgresql_version : String by project
 val hikari_version : String by project
 val microsoft_playwright_version : String by project
+val aws_sdk_kotlin_version: String by project
+val lettuce_version: String by project
 
 plugins {
     kotlin("jvm") version "2.1.10"
@@ -38,6 +40,7 @@ dependencies {
     implementation("io.ktor:ktor-server-openapi")
     implementation("io.ktor:ktor-server-call-logging")
     implementation("io.ktor:ktor-server-call-id")
+    implementation("io.ktor:ktor-server-rate-limit")
     implementation("ch.qos.logback:logback-classic:$logback_version")
     implementation("io.ktor:ktor-server-config-yaml")
     implementation("io.insert-koin:koin-ktor:$koin_version")
@@ -56,13 +59,13 @@ dependencies {
     implementation("com.zaxxer:HikariCP:$hikari_version")
 
     // Redis
-    implementation("io.lettuce:lettuce-core:6.3.0.RELEASE")
+    implementation("io.lettuce:lettuce-core:$lettuce_version")
 
     // Screenshot
     implementation("com.microsoft.playwright:playwright:$microsoft_playwright_version")
 
     // AWS S3
-    implementation("aws.sdk.kotlin:s3:1.0.30")
+    implementation("aws.sdk.kotlin:s3:$aws_sdk_kotlin_version")
 
     // HTTP Client
     implementation("io.ktor:ktor-client-core")

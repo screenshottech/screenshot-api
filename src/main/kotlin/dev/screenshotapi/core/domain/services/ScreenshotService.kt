@@ -1,4 +1,4 @@
-package dev.screenshotapi.core.services
+package dev.screenshotapi.core.domain.services
 
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest
 

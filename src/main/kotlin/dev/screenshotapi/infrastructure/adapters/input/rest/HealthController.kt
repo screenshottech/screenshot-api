@@ -1,6 +1,7 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest
 
 
+import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.http.*
@@ -75,7 +76,7 @@ class HealthController : KoinComponent {
 
     suspend fun testScreenshot(call: ApplicationCall) {
         try {
-            val screenshotService: dev.screenshotapi.core.services.ScreenshotService by inject()
+            val screenshotService: ScreenshotService by inject()
 
             val request = dev.screenshotapi.core.domain.entities.ScreenshotRequest(
                 url = "https://carboit.com",

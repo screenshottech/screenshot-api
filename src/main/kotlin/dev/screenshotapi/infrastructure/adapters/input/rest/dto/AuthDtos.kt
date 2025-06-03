@@ -136,33 +136,3 @@ fun CreateApiKeyResponse.toDto(): ApiKeyResponseDto = ApiKeyResponseDto(
     isActive = isActive,
     createdAt = createdAt
 )
-
-// Commented out extension functions that reference non-existent classes for now
-// These can be implemented when the corresponding UseCase classes are fully implemented
-
-/*
-fun ListApiKeysResponse.toDto(): ApiKeysListResponseDto = ApiKeysListResponseDto(
-    apiKeys = emptyList()
-)
-
-fun UpdateUserProfileResponse.toDto(): UserProfileResponseDto = UserProfileResponseDto(
-    userId = userId,
-    email = email,
-    name = name,
-    status = "active",
-    planId = "basic_plan",
-    creditsRemaining = 100,
-    createdAt = "2023-01-01T00:00:00Z",
-    lastActivity = null
-)
-
-fun GetUserUsageResponse.toDto(): UserUsageResponseDto = UserUsageResponseDto(
-    userId = userId,
-    creditsRemaining = 100,
-    totalScreenshots = 0,
-    screenshotsLast30Days = 0,
-    planId = "basic_plan",
-    currentPeriodStart = "2023-01-01T00:00:00Z",
-    currentPeriodEnd = "2023-02-01T00:00:00Z"
-)
-*/
