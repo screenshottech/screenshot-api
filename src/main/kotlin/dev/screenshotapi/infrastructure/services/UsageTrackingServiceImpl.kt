@@ -191,6 +191,12 @@ class UsageTrackingServiceImpl(
             )
         }
 
+        val logger = org.slf4j.LoggerFactory.getLogger(this::class.java)
+        logger.info("Short-term usage updated for user $userId: " +
+                "before=[hourly=${current.hourlyRequests}, minutely=${current.minutelyRequests}] " +
+                "after=[hourly=${updated.hourlyRequests}, minutely=${updated.minutelyRequests}] " +
+                "hoursPassed=$hoursPassed, minutesPassed=$minutesPassed")
+
         // Cache for 1 hour
         shortTermCache.put(cacheKey, updated, 1.hours)
     }

@@ -51,7 +51,7 @@ fun Application.configureRateLimit() {
                             0 // Allow request
                         } else {
                             // Add retry after header if available
-                            result.retryAfterSeconds?.let { retryAfter ->
+                            result.retryAfterSeconds.let { retryAfter ->
                                 call.response.headers.append("Retry-After", retryAfter.toString())
                             }
                             10000 // Block request
@@ -77,20 +77,20 @@ private fun addRateLimitHeaders(call: ApplicationCall, result: dev.screenshotapi
         append("X-RateLimit-Limit", result.requestsPerHour.toString())
         append("X-RateLimit-Remaining", result.remainingRequests.toString())
         append("X-RateLimit-Reset", result.resetTimeHourly.epochSeconds.toString())
-        
+
         // Detailed rate limit headers
         append("X-RateLimit-Limit-Hourly", result.requestsPerHour.toString())
         append("X-RateLimit-Remaining-Hourly", result.remainingHourly.toString())
         append("X-RateLimit-Reset-Hourly", result.resetTimeHourly.epochSeconds.toString())
-        
+
         append("X-RateLimit-Limit-Minutely", result.requestsPerMinute.toString())
         append("X-RateLimit-Remaining-Minutely", result.remainingMinutely.toString())
         append("X-RateLimit-Reset-Minutely", result.resetTimeMinutely.epochSeconds.toString())
-        
+
         // Monthly credits
         append("X-RateLimit-Credits-Remaining", result.remainingCredits.toString())
         append("X-RateLimit-Credits-Used", (result.remainingCredits).toString()) // This would need monthly usage data
-        
+
         // Plan information
         append("X-RateLimit-Plan", "auto-detected") // Could be enhanced to show actual plan name
     }

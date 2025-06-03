@@ -37,12 +37,14 @@ fun Application.configureRouting() {
 
             // Protected routes (API Key authentication) with dynamic rate limiting
             authenticate("api-key") {
+                // Screenshot creation endpoint with rate limiting
                 rateLimit(RateLimitName("screenshots")) {
                     post("/screenshots") { screenshotController.takeScreenshot(call) }
-                    get("/screenshots/{jobId}") { screenshotController.getScreenshotStatus(call) }
-                    get("/screenshots") { screenshotController.listScreenshots(call) }
                 }
-
+                
+                // Other screenshot endpoints without rate limiting
+                get("/screenshots/{jobId}") { screenshotController.getScreenshotStatus(call) }
+                get("/screenshots") { screenshotController.listScreenshots(call) }
             }
 
             // Admin routes (JWT authentication)

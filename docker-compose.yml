@@ -105,6 +105,7 @@ services:
       SCREENSHOT_MAX_TIMEOUT: "60000"
       
       # Rate limiting
+      RATE_LIMITING_ENABLED: "true"
       RATE_LIMIT_CAPACITY: "100"
       RATE_LIMIT_RATE_SECONDS: "60"
       

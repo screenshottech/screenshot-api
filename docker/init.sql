@@ -3,22 +3,7 @@
 -- Create extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; -- Kept, though not strictly necessary if all IDs are app-generated varchars
 
--- Users table
-CREATE TABLE IF NOT EXISTS users (
-                                     id VARCHAR(255) PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(255), -- Was NOT NULL, Kotlin schema has nullable()
-    credits_remaining INTEGER NOT NULL DEFAULT 0, -- Was DEFAULT 100, Kotlin schema has default(0)
-    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', -- Was VARCHAR(50), Kotlin schema has VARCHAR(20)
-    plan_id VARCHAR(255) REFERENCES plans(id), -- Added explicit foreign key reference
-    stripe_customer_id VARCHAR(100) NULL, -- Added from Kotlin schema
-    last_activity TIMESTAMP WITH TIME ZONE NULL, -- Added from Kotlin schema
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-    );
-
--- Plans table
+-- Plans table (MUST be created FIRST because users references it)
 CREATE TABLE IF NOT EXISTS plans (
                                      id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -30,6 +15,21 @@ CREATE TABLE IF NOT EXISTS plans (
     currency VARCHAR(10) NOT NULL DEFAULT 'USD',
     features TEXT NULL, -- Was JSONB, Kotlin schema uses text("features").nullable() for JSON storage
     is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    );
+
+-- Users table (references plans, so created AFTER plans)
+CREATE TABLE IF NOT EXISTS users (
+                                     id VARCHAR(255) PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(255), -- Was NOT NULL, Kotlin schema has nullable()
+    credits_remaining INTEGER NOT NULL DEFAULT 0, -- Was DEFAULT 100, Kotlin schema has default(0)
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', -- Was VARCHAR(50), Kotlin schema has VARCHAR(20)
+    plan_id VARCHAR(255) REFERENCES plans(id), -- Added explicit foreign key reference
+    stripe_customer_id VARCHAR(100) NULL, -- Added from Kotlin schema
+    last_activity TIMESTAMP WITH TIME ZONE NULL, -- Added from Kotlin schema
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     );
@@ -96,6 +96,19 @@ CREATE TABLE IF NOT EXISTS usage_logs (
     user_agent TEXT NULL, -- Added from Kotlin schema
     timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW() -- Was 'created_at'; removed endpoint, method, status_code, response_time_ms
     );
+
+-- Usage tracking table for monthly usage and rate limiting
+CREATE TABLE IF NOT EXISTS usage_tracking (
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    month VARCHAR(7) NOT NULL, -- Format: "2025-01"
+    total_requests INTEGER NOT NULL DEFAULT 0,
+    plan_credits_limit INTEGER NOT NULL,
+    remaining_credits INTEGER NOT NULL,
+    last_request_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, month)
+);
 
 -- Stripe customers table
 CREATE TABLE IF NOT EXISTS stripe_customers (
@@ -173,9 +186,10 @@ INSERT INTO users (id, email, password_hash, name, credits_remaining, status, pl
 
 -- Insert development API key
 -- Note: updated_at column removed from api_keys table and this insert.
+-- Hash calculated: 'sk_development_test_key_123456789'.hashCode().toString() = 746689971
 INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix, permissions, rate_limit, usage_count, is_active, created_at) VALUES
     ('key_123', 'user_123', 'Development Key',
-     '$2a$10$sk_development_test_key_123456789_hash', 'sk_dev',
+     '746689971', 'sk_dev',
      '["SCREENSHOT_CREATE", "SCREENSHOT_READ", "SCREENSHOT_LIST"]', 1000, 0, true, NOW())
     ON CONFLICT (id) DO NOTHING;
 
@@ -196,6 +210,8 @@ CREATE TRIGGER update_plans_updated_at BEFORE UPDATE ON plans
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- Trigger for api_keys removed as updated_at is not in its Kotlin schema
 CREATE TRIGGER update_screenshots_updated_at BEFORE UPDATE ON screenshots
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_usage_tracking_updated_at BEFORE UPDATE ON usage_tracking
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_stripe_customers_updated_at BEFORE UPDATE ON stripe_customers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

@@ -26,11 +26,24 @@ class RateLimitingServiceImpl(
     }
 
     override suspend fun isAllowed(userId: String): Boolean {
+        val now = Clock.System.now()
+        
+        // FIRST: Update short-term usage counters for accurate rate limiting
+        usageTrackingService.updateShortTermUsage(userId, now)
+        
         val status = getRateLimitStatus(userId)
+        
+        logger.info("Rate limit check for user $userId: allowed=${status.isAllowed}, " +
+                "remainingRequests=${status.remainingRequests}, " +
+                "remainingCredits=${status.remainingCredits}")
 
         if (status.isAllowed) {
-            // Record the request in persistent storage
+            // Record the request in persistent storage (monthly tracking)
             usageTrackingService.trackUsage(userId, 1)
+        } else {
+            logger.warn("Rate limit BLOCKED for user $userId: " +
+                    "retryAfterSeconds=${status.retryAfterSeconds}, " +
+                    "hasMonthlyCredits=${status.hasMonthlyCredits}")
         }
 
         return status.isAllowed
@@ -38,6 +51,8 @@ class RateLimitingServiceImpl(
 
     override suspend fun checkRateLimit(userId: String): RateLimitResult {
         val now = Clock.System.now()
+        // Update short-term usage first for accurate rate limiting
+        usageTrackingService.updateShortTermUsage(userId, now)
         val shortTermUsage = usageTrackingService.getShortTermUsage(userId)
         val remainingCredits = usageTrackingService.getRemainingCredits(userId)
 
@@ -135,6 +150,8 @@ class RateLimitingServiceImpl(
 
     override suspend fun getRateLimitStatus(userId: String): RateLimitStatus {
         val now = Clock.System.now()
+        // Update short-term usage first for accurate rate limiting
+        usageTrackingService.updateShortTermUsage(userId, now)
         val shortTermUsage = usageTrackingService.getShortTermUsage(userId)
         val remainingCredits = usageTrackingService.getRemainingCredits(userId)
 
@@ -142,6 +159,11 @@ class RateLimitingServiceImpl(
         val user = userRepository.findById(userId)
         val rateLimitInfo = getRateLimitInfo(user?.planId)
         val planType = user?.planId ?: "free"
+        
+        logger.info("Rate limit status for user $userId (plan: $planType): " +
+                "hourlyRequests=${shortTermUsage.hourlyRequests}/${rateLimitInfo.requestsPerHour}, " +
+                "minutelyRequests=${shortTermUsage.minutelyRequests}/${rateLimitInfo.requestsPerMinute}, " +
+                "remainingCredits=$remainingCredits")
 
         // Check if user has remaining credits
         if (remainingCredits <= 0) {
@@ -233,9 +255,10 @@ class RateLimitingServiceImpl(
         }
 
         return plan?.let { RateLimitInfo.fromPlan(it) } ?: RateLimitInfo(
-            requestsPerMinute = 10,
-            requestsPerHour = 100,
-            concurrentRequests = 1
+            requestsPerMinute = 3,
+            requestsPerHour = 60,
+            concurrentRequests = 2,
+            requestsPerDay = 100
         )
     }
 

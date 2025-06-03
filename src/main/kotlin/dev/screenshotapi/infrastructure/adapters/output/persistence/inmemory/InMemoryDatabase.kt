@@ -29,9 +29,9 @@ object InMemoryDatabase {
         )
 
         val starterPlan = freePlan.copy(
-            id = "plan_starter",
-            name = "Starter Plan",
-            description = "Developer plan",
+            id = "plan_starter_monthly",
+            name = "Starter Monthly",
+            description = "12% cheaper than competitors + OCR included",
             creditsPerMonth = 2000,
             priceCentsMonthly = 1499
         )

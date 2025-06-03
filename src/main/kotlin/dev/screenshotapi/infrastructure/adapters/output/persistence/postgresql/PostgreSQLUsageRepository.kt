@@ -75,8 +75,8 @@ class PostgreSQLUsageRepository(private val database: Database) : UsageRepositor
                     val newRemainingCredits = (planCredits - amount).coerceAtLeast(0)
 
                     UsageTracking.insert {
-                        it[this.userId] = userId
-                        it[this.month] = month
+                        it[UsageTracking.userId] = userId
+                        it[UsageTracking.month] = month
                         it[totalRequests] = amount
                         it[planCreditsLimit] = planCredits
                         it[remainingCredits] = newRemainingCredits
