@@ -1,6 +1,8 @@
 package dev.screenshotapi.infrastructure.services
 
-import com.microsoft.playwright.*
+import com.microsoft.playwright.BrowserType
+import com.microsoft.playwright.Page
+import com.microsoft.playwright.Playwright
 import com.microsoft.playwright.options.LoadState
 import com.microsoft.playwright.options.ScreenshotType
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat
@@ -9,239 +11,190 @@ import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.StorageOutputPort
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.Clock
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.slf4j.LoggerFactory
-import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.math.min
 
+/**
+ * Bulletproof screenshot service - no browser pool, fresh browser per request
+ * More resource intensive but much more stable under high load
+ */
 class ScreenshotServiceImpl(
     private val storagePort: StorageOutputPort,
     private val config: ScreenshotConfig
 ) : ScreenshotService {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
-    private val playwright = Playwright.create()
-    private val browserPool = ConcurrentLinkedQueue<Browser>()
 
-    init {
-        // Initialize browser pool
-        repeat(config.browserPoolSize) {
-            try {
-                val browser = createBrowser()
-                browserPool.offer(browser)
-                logger.debug("Created browser instance for pool")
-            } catch (e: Exception) {
-                logger.warn("Failed to create initial browser instance", e)
-            }
-        }
-
-        logger.info("ScreenshotService initialized with ${browserPool.size} browsers in pool")
-    }
+    // Very limited concurrency to prevent resource exhaustion
+    private val concurrencySemaphore = Semaphore(min(config.maxConcurrentRequests, 10))
 
     override suspend fun takeScreenshot(request: ScreenshotRequest): String = withContext(Dispatchers.IO) {
         validateRequest(request)
 
-        val browser = borrowBrowser()
-
-        try {
-            withTimeout(config.maxTimeoutDuration.inWholeMilliseconds) {
-                when (request.format) {
-                    ScreenshotFormat.PDF -> takePdfScreenshot(browser, request)
-                    else -> takeImageScreenshot(browser, request)
-                }
-            }
-        } catch (e: Exception) {
-            logger.error("Screenshot failed for URL: ${request.url}", e)
-            throw when (e) {
-                is TimeoutCancellationException ->
-                    ScreenshotException.TimeoutException(request.url, config.maxTimeout)
-
-                else -> ScreenshotException.BrowserException(request.url, e)
-            }
-        } finally {
-            returnBrowser(browser)
+        // Limit concurrency
+        concurrencySemaphore.withPermit {
+            executeScreenshotWithIsolatedPlaywright(request)
         }
     }
 
-    private suspend fun takeImageScreenshot(browser: Browser, request: ScreenshotRequest): String {
-        val page = browser.newPage()
+    private suspend fun executeScreenshotWithIsolatedPlaywright(request: ScreenshotRequest): String {
+        // Each request gets completely isolated resources
+        return withTimeout(config.maxTimeoutDuration.inWholeMilliseconds) {
 
-        try {
-            configurePage(page, request)
-            navigateToUrl(page, request.url)
-            waitForPageReady(page, request)
-
-            val screenshotOptions = Page.ScreenshotOptions()
-                .setFullPage(request.fullPage)
-                .setType(
-                    when (request.format) {
-                        ScreenshotFormat.PNG -> ScreenshotType.PNG
-                        ScreenshotFormat.JPEG -> ScreenshotType.JPEG
-                        ScreenshotFormat.WEBP -> ScreenshotType.PNG // Take PNG and convert to WEBP
-                        else -> throw ScreenshotException.UnsupportedFormat(request.format.name)
-                    }
+            // Create fresh Playwright instance
+            Playwright.create().use { playwright ->
+                // Create fresh browser
+                val browser = playwright.chromium().launch(
+                    BrowserType.LaunchOptions()
+                        .setHeadless(true)
+                        .setArgs(getSimpleBrowserArgs())
                 )
+
+                browser.use {
+                    // Create fresh page
+                    val page = browser.newPage()
+
+                    page.use {
+                        // Configure and take screenshot
+                        when (request.format) {
+                            ScreenshotFormat.PDF -> takePdfScreenshot(page, request)
+                            else -> takeImageScreenshot(page, request)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun takeImageScreenshot(page: Page, request: ScreenshotRequest): String {
+        // Simple page configuration
+        page.setViewportSize(request.width, request.height)
+        page.setDefaultTimeout(15000.0)
+
+        // Navigate to URL
+        val response = page.navigate(request.url)
+        if (response?.ok() == false) {
+            throw ScreenshotException.UrlNotAccessible(request.url, response.status())
+        }
+
+        // Wait for page to load
+        page.waitForLoadState(LoadState.NETWORKIDLE,
+            Page.WaitForLoadStateOptions().setTimeout(10000.0))
+
+        // Optional wait time
+        request.waitTime?.let { delay(minOf(it, 5000)) }
+
+        // Take screenshot
+        val screenshotBytes = page.screenshot(
+            Page.ScreenshotOptions()
+                .setFullPage(request.fullPage)
+                .setType(when (request.format) {
+                    ScreenshotFormat.PNG -> ScreenshotType.PNG
+                    ScreenshotFormat.JPEG -> ScreenshotType.JPEG
+                    ScreenshotFormat.WEBP -> ScreenshotType.PNG
+                    else -> throw ScreenshotException.UnsupportedFormat(request.format.name)
+                })
                 .apply {
-                    // Only apply quality for formats that support it
                     if (request.format == ScreenshotFormat.JPEG) {
                         setQuality(request.quality)
                     }
                 }
+        )
 
-            val screenshotBytes = page.screenshot(screenshotOptions)
-
-            // Convert to WEBP if needed
-            val finalBytes = if (request.format == ScreenshotFormat.WEBP) {
-                convertToWebP(screenshotBytes, request.quality)
-            } else {
-                screenshotBytes
-            }
-
-            // Validate file size
-            if (finalBytes.size > config.maxFileSize) {
-                throw ScreenshotException.FileTooLarge(
-                    finalBytes.size.toLong(),
-                    config.maxFileSize
-                )
-            }
-
-            // Generate filename and upload
-            val filename = generateFilename(request)
-            val contentType = getContentType(request.format)
-
-            return storagePort.upload(finalBytes, filename, contentType)
-
-        } finally {
-            page.close()
+        // Convert to WebP if needed
+        val finalBytes = if (request.format == ScreenshotFormat.WEBP) {
+            convertToWebP(screenshotBytes, request.quality)
+        } else {
+            screenshotBytes
         }
+
+        // Check file size
+        if (finalBytes.size > config.maxFileSize) {
+            throw ScreenshotException.FileTooLarge(finalBytes.size.toLong(), config.maxFileSize)
+        }
+
+        // Upload and return
+        val filename = generateFilename(request)
+        val contentType = getContentType(request.format)
+        return storagePort.upload(finalBytes, filename, contentType)
     }
 
-    private suspend fun takePdfScreenshot(browser: Browser, request: ScreenshotRequest): String {
+    private suspend fun takePdfScreenshot(page: Page, request: ScreenshotRequest): String {
         if (!config.enablePdfGeneration) {
             throw ScreenshotException.UnsupportedFormat("PDF generation is disabled")
         }
 
-        val page = browser.newPage()
-
-        try {
-            configurePage(page, request)
-            navigateToUrl(page, request.url)
-            waitForPageReady(page, request)
-
-            val pdfBytes = page.pdf(
-                Page.PdfOptions()
-                    .setFormat("A4")
-                    .setPrintBackground(true)
-                    .setDisplayHeaderFooter(false)
-            )
-
-            if (pdfBytes.size > config.maxFileSize) {
-                throw ScreenshotException.FileTooLarge(
-                    pdfBytes.size.toLong(),
-                    config.maxFileSize
-                )
-            }
-
-            // Generate filename and upload
-            val filename = generateFilename(request, "pdf")
-
-            return storagePort.upload(pdfBytes, filename, "application/pdf")
-
-        } finally {
-            page.close()
-        }
-    }
-
-    private fun configurePage(page: Page, request: ScreenshotRequest) {
-        // Set viewport
+        // Simple page configuration for PDF
         page.setViewportSize(request.width, request.height)
+        page.setDefaultTimeout(15000.0)
 
-        // Set timeouts
-        page.setDefaultTimeout(config.pageLoadTimeoutDuration.inWholeMilliseconds.toDouble())
+        // Navigate
+        val response = page.navigate(request.url)
+        if (response?.ok() == false) {
+            throw ScreenshotException.UrlNotAccessible(request.url, response.status())
+        }
 
-        // Set user agent
-        page.setExtraHTTPHeaders(
-            mapOf(
-                "User-Agent" to config.userAgent
-            )
+        // Wait for page load
+        page.waitForLoadState(LoadState.NETWORKIDLE,
+            Page.WaitForLoadStateOptions().setTimeout(10000.0))
+
+        // Optional wait time
+        request.waitTime?.let { delay(minOf(it.toLong(), 5000)) }
+
+        // Generate PDF
+        val pdfBytes = page.pdf(
+            Page.PdfOptions()
+                .setFormat("A4")
+                .setPrintBackground(true)
+                .setDisplayHeaderFooter(false)
+                .setPreferCSSPageSize(true)
         )
 
-        // Configure browser features
-        if (!config.enableJavaScript) {
-            page.addInitScript("() => { window.navigator.javaEnabled = () => false; }")
+        // Check file size
+        if (pdfBytes.size > config.maxFileSize) {
+            throw ScreenshotException.FileTooLarge(pdfBytes.size.toLong(), config.maxFileSize)
         }
 
-        if (!config.enableImages) {
-            page.route("**/*.{jpg,jpeg,png,gif,webp,svg}") { route ->
-                route.abort()
-            }
-        }
-
-        if (!config.enableCSS) {
-            page.route("**/*.css") { route ->
-                route.abort()
-            }
-        }
+        // Upload and return
+        val filename = generateFilename(request, "pdf")
+        return storagePort.upload(pdfBytes, filename, "application/pdf")
     }
 
-    private suspend fun navigateToUrl(page: Page, url: String) {
-        try {
-            val response = page.navigate(url)
-
-            if (response != null && !response.ok()) {
-                throw ScreenshotException.UrlNotAccessible(url, response.status())
-            }
-
-            page.waitForLoadState(
-                LoadState.NETWORKIDLE,
-                Page.WaitForLoadStateOptions()
-                    .setTimeout(config.networkIdleTimeoutDuration.inWholeMilliseconds.toDouble())
-            )
-
-        } catch (e: PlaywrightException) {
-            logger.error("Failed to navigate to URL: $url", e)
-            throw ScreenshotException.UrlNotAccessible(url)
-        }
-    }
-
-    private suspend fun waitForPageReady(page: Page, request: ScreenshotRequest) {
-        request.waitForSelector?.let { selector ->
-            try {
-                page.waitForSelector(
-                    selector,
-                    Page.WaitForSelectorOptions().setTimeout(10_000.0)
-                )
-            } catch (e: Exception) {
-                logger.warn("Selector '$selector' not found within timeout, continuing...")
-            }
-        }
-
-        request.waitTime?.let { waitTime ->
-            if (waitTime > 0) {
-                delay(waitTime)
-            }
-        }
+    private fun getSimpleBrowserArgs(): List<String> {
+        return listOf(
+            // Essential args only - keep it simple
+            "--no-sandbox", // Disable sandbox for better compatibility
+            "--disable-setuid-sandbox", // Disable setuid sandbox
+            "--disable-dev-shm-usage", // Disable /dev/shm usage to avoid issues in Docker
+            "--disable-gpu", // Disable GPU hardware acceleration
+            "--headless", // Run in headless mode
+            "--hide-scrollbars", // Hide scrollbars for cleaner screenshots
+            "--mute-audio", // Mute audio to avoid sound issues
+            "--no-first-run", // Skip first run experience
+        )
     }
 
     private fun validateRequest(request: ScreenshotRequest) {
         if (!config.isValidUrl(request.url)) {
             throw ScreenshotException.InvalidUrl(request.url)
         }
-
         if (!config.isValidDimensions(request.width, request.height)) {
             throw ScreenshotException.UnsupportedFormat("Invalid dimensions: ${request.width}x${request.height}")
         }
-
         if (!config.isValidFormat(request.format.name)) {
             throw ScreenshotException.UnsupportedFormat(request.format.name)
         }
-
         if (!config.isValidQuality(request.quality)) {
             throw ScreenshotException.UnsupportedFormat("Invalid quality: ${request.quality}")
         }
-
         request.waitTime?.let { waitTime ->
             if (!config.isValidWaitTime(waitTime)) {
                 throw ScreenshotException.UnsupportedFormat("Invalid wait time: ${waitTime}ms")
@@ -249,37 +202,11 @@ class ScreenshotServiceImpl(
         }
     }
 
-    private fun borrowBrowser(): Browser {
-        return browserPool.poll() ?: createBrowser()
-    }
-
-    private fun returnBrowser(browser: Browser) {
-        if (browserPool.size < config.browserPoolSize && browser.isConnected) {
-            browserPool.offer(browser)
-        } else {
-            try {
-                browser.close()
-            } catch (e: Exception) {
-                logger.warn("Error closing browser", e)
-            }
-        }
-    }
-
-    private fun createBrowser(): Browser {
-        return playwright.chromium().launch(
-            BrowserType.LaunchOptions()
-                .setHeadless(true)
-                .setArgs(config.getOptimalBrowserArgs())
-                .setTimeout(config.browserLaunchTimeoutDuration.inWholeMilliseconds.toDouble())
-        )
-    }
-
     private fun generateFilename(request: ScreenshotRequest, extension: String? = null): String {
         val timestamp = Clock.System.now().toEpochMilliseconds()
         val urlHash = request.url.hashCode().toString().takeLast(8)
         val ext = extension ?: request.format.name.lowercase()
         val dimensions = "${request.width}x${request.height}"
-
         return "screenshots/${timestamp}_${urlHash}_${dimensions}.$ext"
     }
 
@@ -294,63 +221,29 @@ class ScreenshotServiceImpl(
 
     private fun convertToWebP(pngBytes: ByteArray, quality: Int): ByteArray {
         return try {
-            // Validate input
-            if (pngBytes.isEmpty()) {
-                logger.warn("Empty PNG bytes provided for WebP conversion, returning original")
-                return pngBytes
-            }
-
-            // Convert PNG to WebP using Skia
-            val image = Image.makeFromEncoded(pngBytes)
-            if (image == null) {
-                logger.warn("Failed to decode PNG image, returning original bytes")
-                return pngBytes
-            }
-
-            // Validate quality (should be 0-100 for Skia)
+            if (pngBytes.isEmpty()) return pngBytes
+            val image = Image.makeFromEncoded(pngBytes) ?: return pngBytes
             val qualityInt = quality.coerceIn(0, 100)
-            
-            logger.debug("Converting PNG to WebP with quality: $qualityInt")
-
-            // Try WebP encoding with error handling
             val webpData = image.encodeToData(EncodedImageFormat.WEBP, qualityInt)
-            
-            if (webpData == null) {
-                logger.warn("Skia WebP encoding returned null, falling back to PNG")
-                return pngBytes
-            }
-
-            val webpBytes = webpData.bytes
-            if (webpBytes == null || webpBytes.isEmpty()) {
-                logger.warn("Skia WebP encoding returned empty bytes, falling back to PNG")
-                return pngBytes
-            }
-
-            logger.debug("Successfully converted PNG (${pngBytes.size} bytes) to WebP (${webpBytes.size} bytes)")
-            return webpBytes
-
+            webpData?.bytes ?: pngBytes
         } catch (e: Exception) {
-            logger.error("Error converting PNG to WebP: ${e.message}, falling back to PNG", e)
-            return pngBytes
+            logger.warn("WebP conversion failed, using PNG", e)
+            pngBytes
         }
     }
 
+    // No cleanup needed - each request is completely isolated!
     fun cleanup() {
-        try {
-            browserPool.forEach { browser ->
-                try {
-                    browser.close()
-                } catch (e: Exception) {
-                    logger.warn("Error closing browser during cleanup", e)
-                }
-            }
-            browserPool.clear()
+        logger.info("Simple screenshot service cleanup - nothing to clean up!")
+    }
+}
 
-            playwright.close()
-
-            logger.info("ScreenshotService cleanup completed")
-        } catch (e: Exception) {
-            logger.error("Error during ScreenshotService cleanup", e)
-        }
+// Extension function for semaphore
+private suspend fun <T> Semaphore.withPermit(block: suspend () -> T): T {
+    acquire()
+    try {
+        return block()
+    } finally {
+        release()
     }
 }

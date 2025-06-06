@@ -6,6 +6,7 @@ import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
+import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
@@ -23,6 +24,7 @@ class WorkerManager(
     private val screenshotService: ScreenshotService,
     private val deductCreditsUseCase: DeductCreditsUseCase,
     private val usageTrackingService: UsageTrackingPort,
+    private val logUsageUseCase: LogUsageUseCase,
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
     private val config: AppConfig
@@ -108,6 +110,7 @@ class WorkerManager(
             screenshotService = screenshotService,
             deductCreditsUseCase = deductCreditsUseCase,
             usageTrackingService = usageTrackingService,
+            logUsageUseCase = logUsageUseCase,
             notificationService = notificationService,
             metricsService = metricsService,
             config = config.screenshot

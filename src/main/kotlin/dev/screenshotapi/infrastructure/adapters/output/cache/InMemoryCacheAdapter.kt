@@ -6,6 +6,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.reflect.KClass
 import kotlin.time.Duration
 
 /**
@@ -25,7 +26,7 @@ class InMemoryCacheAdapter(
     private val accessOrder = ConcurrentHashMap<String, Instant>()
     private val mutex = Mutex()
 
-    override suspend fun <T> get(key: String, type: Class<T>): T? {
+    override suspend fun <T : Any> get(key: String, type: KClass<T>): T? {
         val entry = cache[key] ?: return null
 
         // Check expiration
@@ -81,7 +82,7 @@ class InMemoryCacheAdapter(
 
     override suspend fun increment(key: String, delta: Long): Long {
         mutex.withLock {
-            val current = get(key, Long::class.java) ?: 0L
+            val current = get(key, Long::class) ?: 0L
             val newValue = current + delta
             put(key, newValue)
             return newValue

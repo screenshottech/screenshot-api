@@ -18,6 +18,13 @@ class InMemoryUserRepository : UserRepository {
 
     override suspend fun findByEmail(email: String): User? = InMemoryDatabase.findUserByEmail(email)
 
+    override suspend fun findByExternalId(externalId: String, authProvider: String): User? {
+        // For in-memory implementation, iterate through all users
+        return InMemoryDatabase.getAllUsers().find { 
+            it.externalId == externalId && it.authProvider == authProvider 
+        }
+    }
+
     override suspend fun update(user: User): User = InMemoryDatabase.saveUser(user)
 
     override suspend fun delete(id: String): Boolean {

@@ -6,13 +6,15 @@ data class User(
     val id: String,
     val email: String,
     val name: String? = null,
-    val passwordHash: String,
+    val passwordHash: String? = null,
     val planId: String,
     val planName: String = "Free",
     val creditsRemaining: Int,
     val status: UserStatus = UserStatus.ACTIVE,
     val stripeCustomerId: String? = null,
     val lastActivity: Instant? = null,
+    val authProvider: String = "local",
+    val externalId: String? = null,
     val createdAt: Instant,
     val updatedAt: Instant
 ) {

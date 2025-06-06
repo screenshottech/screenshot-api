@@ -1,12 +1,15 @@
 package dev.screenshotapi.core.usecases.auth
 
 import dev.screenshotapi.core.domain.repositories.ApiKeyRepository
+import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
+import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.infrastructure.config.AppConfig
 import org.slf4j.LoggerFactory
 
 class ValidateApiKeyUseCase(
     private val apiKeyRepository: ApiKeyRepository,
-    private val config: AppConfig
+    private val config: AppConfig,
+    private val logUsageUseCase: LogUsageUseCase
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
 
@@ -23,6 +26,18 @@ class ValidateApiKeyUseCase(
             
             if (dbApiKey != null && dbApiKey.isActive) {
                 logger.info("API key validated for user: ${dbApiKey.userId}")
+                
+                // Log API key usage
+                logUsageUseCase.invoke(LogUsageUseCase.Request(
+                    userId = dbApiKey.userId,
+                    action = UsageLogAction.API_KEY_USED,
+                    apiKeyId = dbApiKey.id,
+                    metadata = mapOf(
+                        "keyName" to dbApiKey.name,
+                        "keyPrefix" to dbApiKey.keyPrefix
+                    )
+                ))
+                
                 ApiKeyValidationResult(
                     isValid = true,
                     userId = dbApiKey.userId,
@@ -46,7 +61,7 @@ class ValidateApiKeyUseCase(
         }
     }
     
-    private fun developmentValidation(apiKey: String): ApiKeyValidationResult {
+    private suspend fun developmentValidation(apiKey: String): ApiKeyValidationResult {
         // For development, accept any API key that starts with "sk_"
         return if (apiKey.startsWith("sk_") && apiKey.length > 10) {
             // Map specific keys to appropriate users for testing
@@ -55,11 +70,24 @@ class ValidateApiKeyUseCase(
                 apiKey.contains("free") -> "user_free_1"  // Free plan user
                 else -> "user_starter_1"  // Default to starter for testing
             }
+            val keyId = "key_${userId}"
+            
+            // Log API key usage for development mode too
+            logUsageUseCase.invoke(LogUsageUseCase.Request(
+                userId = userId,
+                action = UsageLogAction.API_KEY_USED,
+                apiKeyId = keyId,
+                metadata = mapOf(
+                    "keyName" to "development_key",
+                    "keyPrefix" to apiKey.take(8),
+                    "mode" to "development"
+                )
+            ))
             
             ApiKeyValidationResult(
                 isValid = true,
                 userId = userId,
-                keyId = "key_${userId}"
+                keyId = keyId
             )
         } else {
             ApiKeyValidationResult(

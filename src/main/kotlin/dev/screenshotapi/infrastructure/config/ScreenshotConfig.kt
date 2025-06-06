@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import java.net.URI
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 data class ScreenshotConfig(
     val maxWidth: Int,
@@ -41,7 +42,9 @@ data class ScreenshotConfig(
     val concurrentScreenshots: Int,
     val queueMaxSize: Long,
     val cleanupOldScreenshots: Boolean,
-    val screenshotRetentionDays: Int
+    val screenshotRetentionDays: Int,
+    val selectorTimeoutDuration: Duration = 10.seconds,
+    val maxConcurrentRequests: Int
 ) {
     companion object {
         fun load(): ScreenshotConfig = ScreenshotConfig(
@@ -115,7 +118,9 @@ data class ScreenshotConfig(
             cleanupOldScreenshots = System.getenv("CLEANUP_OLD_SCREENSHOTS")?.toBoolean()
                 ?: true,
             screenshotRetentionDays = System.getenv("SCREENSHOT_RETENTION_DAYS")?.toInt()
-                ?: 30
+                ?: 30,
+            maxConcurrentRequests = System.getenv("MAX_CONCURRENT_REQUESTS")?.toInt()
+                ?: 10
         )
     }
 

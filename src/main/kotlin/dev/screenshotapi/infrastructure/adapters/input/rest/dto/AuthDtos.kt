@@ -136,3 +136,13 @@ fun CreateApiKeyResponse.toDto(): ApiKeyResponseDto = ApiKeyResponseDto(
     isActive = isActive,
     createdAt = createdAt
 )
+
+fun dev.screenshotapi.core.usecases.auth.GetUserUsageResponse.toDto(): UserUsageResponseDto = UserUsageResponseDto(
+    userId = userId,
+    creditsRemaining = creditsRemaining,
+    totalScreenshots = totalScreenshots,
+    screenshotsLast30Days = screenshotsLast30Days,
+    planId = planId,
+    currentPeriodStart = currentPeriodStart.toString(),
+    currentPeriodEnd = currentPeriodEnd.toString()
+)

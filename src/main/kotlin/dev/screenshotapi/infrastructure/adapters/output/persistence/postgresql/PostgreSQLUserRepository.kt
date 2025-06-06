@@ -33,6 +33,8 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[status] = user.status.name
                 it[stripeCustomerId] = user.stripeCustomerId
                 it[lastActivity] = user.lastActivity
+                it[authProvider] = user.authProvider
+                it[externalId] = user.externalId
                 it[updatedAt] = Clock.System.now()
             }
 
@@ -54,6 +56,8 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[status] = user.status.name
                 it[stripeCustomerId] = user.stripeCustomerId
                 it[lastActivity] = user.lastActivity
+                it[authProvider] = user.authProvider
+                it[externalId] = user.externalId
                 it[createdAt] = now
                 it[updatedAt] = now
             }
@@ -76,6 +80,12 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
             ?.toUser()
     }
 
+    override suspend fun findByExternalId(externalId: String, authProvider: String): User? = dbQuery(database) {
+        Users.select { (Users.externalId eq externalId) and (Users.authProvider eq authProvider) }
+            .singleOrNull()
+            ?.toUser()
+    }
+
     override suspend fun update(user: User): User = dbQuery(database) {
         Users.update({ Users.id eq user.id }) {
             it[email] = user.email
@@ -86,6 +96,8 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
             it[status] = user.status.name
             it[stripeCustomerId] = user.stripeCustomerId
             it[lastActivity] = user.lastActivity
+            it[authProvider] = user.authProvider
+            it[externalId] = user.externalId
             it[updatedAt] = Clock.System.now()
         }
 

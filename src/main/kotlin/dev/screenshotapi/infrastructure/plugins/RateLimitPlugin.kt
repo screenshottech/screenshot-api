@@ -28,7 +28,7 @@ fun Application.configureRateLimit() {
                 }
 
                 // Check if rate limiting is enabled
-                if (!isRateLimitingEnabled()) {
+                if (isRateLimitingEnabled()) {
                     return@requestWeight 0
                 }
 

@@ -11,6 +11,7 @@ import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.future.await
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import kotlin.reflect.KClass
 import kotlin.time.Duration
 
 /**
@@ -28,7 +29,7 @@ class RedisCacheAdapter(
         isLenient = true
     }
 
-    override suspend fun <T> get(key: String, type: Class<T>): T? {
+    override suspend fun <T : Any> get(key: String, type: KClass<T>): T? {
         return try {
             val value = commands.get(prefixKey(key)).await() ?: return null
             deserializeValue(value, type)
@@ -124,10 +125,12 @@ class RedisCacheAdapter(
             else -> {
                 try {
                     // Fallback to toString for non-serializable objects
-                    logger.debug("Serializing non-serializable object to string: ${value::class.java.name}")
+                    val className = value::class.java.name
+                    logger.debug("Serializing non-serializable object to string: {}", className)
                     value.toString()
                 } catch (e: Exception) {
-                    logger.warn("Failed to serialize object, using empty string: ${value::class.java.name}", e)
+                    val className = value::class.java.name
+                    logger.warn("Failed to serialize object, using empty string: {}", className, e)
                     ""
                 }
             }
@@ -135,33 +138,33 @@ class RedisCacheAdapter(
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun <T> deserializeValue(value: String, type: Class<T>): T? {
+    private fun <T : Any> deserializeValue(value: String, type: KClass<T>): T? {
         return try {
             when (type) {
-                String::class.java -> value as T
-                Int::class.java -> value.toInt() as T
-                Long::class.java -> value.toLong() as T
-                Double::class.java -> value.toDouble() as T
-                Boolean::class.java -> value.toBoolean() as T
-                UserUsage::class.java -> {
+                String::class -> value as T
+                Int::class -> value.toInt() as T
+                Long::class -> value.toLong() as T
+                Double::class -> value.toDouble() as T
+                Boolean::class -> value.toBoolean() as T
+                UserUsage::class -> {
                     val dto = json.decodeFromString(UserUsageCacheDto.serializer(), value)
                     dto.toDomain() as T
                 }
-                ShortTermUsage::class.java -> {
+                ShortTermUsage::class -> {
                     val dto = json.decodeFromString(ShortTermUsageCacheDto.serializer(), value)
                     dto.toDomain() as T
                 }
-                DailyUsage::class.java -> {
+                DailyUsage::class -> {
                     val dto = json.decodeFromString(DailyUsageCacheDto.serializer(), value)
                     dto.toDomain() as T
                 }
                 else -> {
-                    logger.warn("Cannot deserialize unknown type: ${type.name}, returning null")
+                    logger.warn("Cannot deserialize unknown type: ${type.simpleName}, returning null")
                     null
                 }
             }
         } catch (e: Exception) {
-            logger.error("Error deserializing value for type: ${type.name}", e)
+            logger.error("Error deserializing value for type: ${type.simpleName}", e)
             null
         }
     }

@@ -1,6 +1,5 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest
 
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.util.*
@@ -13,7 +12,7 @@ data class ErrorResponseDto(
     val field: String? = null,
     val resourceType: String? = null,
     val resourceId: String? = null,
-    val details: Map<String, @Contextual Any>? = null,
+    val details: Map<String, String>? = null,
     val traceId: String = UUID.randomUUID().toString()
 ) {
     companion object {

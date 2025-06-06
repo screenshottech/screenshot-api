@@ -16,6 +16,8 @@ fun ResultRow.toUser(): User {
         status = UserStatus.valueOf(this[Users.status]),
         stripeCustomerId = this[Users.stripeCustomerId],
         lastActivity = this[Users.lastActivity],
+        authProvider = this[Users.authProvider],
+        externalId = this[Users.externalId],
         createdAt = this[Users.createdAt],
         updatedAt = this[Users.updatedAt]
     )

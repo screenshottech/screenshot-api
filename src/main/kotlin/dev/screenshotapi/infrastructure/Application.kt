@@ -12,7 +12,7 @@ fun Application.module() {
     configureSecurity()
     configureSerialization()
     configureAdministration()
-    configureHTTP()
+    configureCORS()
     configureMonitoring()
     configureOpenAPI()
     configureRateLimit()

@@ -9,6 +9,8 @@ import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.usecases.billing.DeductCreditsRequest
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
+import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
+import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
@@ -29,6 +31,7 @@ class ScreenshotWorker(
     private val screenshotService: ScreenshotService,
     private val deductCreditsUseCase: DeductCreditsUseCase,
     private val usageTrackingService: UsageTrackingPort,
+    private val logUsageUseCase: LogUsageUseCase,
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
     private val config: ScreenshotConfig
@@ -165,10 +168,25 @@ class ScreenshotWorker(
             val completedJob = job.markAsCompleted(resultUrl, processingTime)
             screenshotRepository.update(completedJob)
 
-            // 5. Track usage in monthly tracking
+            // 5. Log screenshot completion in usage logs
+            logUsageUseCase.invoke(LogUsageUseCase.Request(
+                userId = job.userId,
+                action = UsageLogAction.SCREENSHOT_COMPLETED,
+                creditsUsed = 1,
+                apiKeyId = job.apiKeyId,
+                screenshotId = job.id,
+                metadata = mapOf(
+                    "url" to job.request.url,
+                    "format" to job.request.format.name,
+                    "processingTime" to processingTime.toString(),
+                    "resultUrl" to resultUrl
+                )
+            ))
+
+            // 6. Track usage in monthly tracking
             usageTrackingService.trackUsage(job.userId, 1)
 
-            // 6. Deduct credits
+            // 7. Deduct credits
             deductCreditsUseCase(DeductCreditsRequest(job.userId, 1))
 
             // 7. Send webhook if configured

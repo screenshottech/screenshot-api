@@ -1,6 +1,8 @@
 package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
+import dev.screenshotapi.infrastructure.adapters.input.rest.multiProviderAuthRoutes
+import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.http.content.*
@@ -15,6 +17,7 @@ fun Application.configureRouting() {
     val authController by inject<AuthController>()
     val adminController by inject<AdminController>()
     val healthController by inject<HealthController>()
+    val authProviderFactory by inject<AuthProviderFactory>()
 
     routing {
         // Health checks
@@ -34,21 +37,24 @@ fun Application.configureRouting() {
             // Public routes
             post("/auth/login") { authController.login(call) }
             post("/auth/register") { authController.register(call) }
+            
+            // Multi-provider auth routes
+            multiProviderAuthRoutes(authProviderFactory)
 
-            // Protected routes (API Key authentication) with dynamic rate limiting
-            authenticate("api-key") {
+            // Screenshot endpoints with multiple authentication support
+            // Supports both: JWT + X-API-Key header, or standalone API key
+            authenticate("api-key", "jwt", optional = true) {
                 // Screenshot creation endpoint with rate limiting
                 rateLimit(RateLimitName("screenshots")) {
                     post("/screenshots") { screenshotController.takeScreenshot(call) }
                 }
                 
-                // Other screenshot endpoints without rate limiting
+                // Screenshot status by job ID
                 get("/screenshots/{jobId}") { screenshotController.getScreenshotStatus(call) }
+                
+                // Screenshot listing (requires authentication)
                 get("/screenshots") { screenshotController.listScreenshots(call) }
-            }
 
-            // Admin routes (JWT authentication)
-            authenticate("jwt") {
                 route("/admin") {
                     get("/users") { adminController.listUsers(call) }
                     get("/users/{userId}") { adminController.getUser(call) }

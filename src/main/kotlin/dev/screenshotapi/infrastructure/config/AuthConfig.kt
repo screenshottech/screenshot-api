@@ -18,7 +18,10 @@ data class AuthConfig(
     val passwordRequireSpecialChars: Boolean,
     val maxLoginAttempts: Int,
     val lockoutDurationMinutes: Int,
-    val sessionTimeoutMinutes: Int
+    val sessionTimeoutMinutes: Int,
+    val defaultAuthProvider: String,
+    val enabledAuthProviders: List<String>,
+    val clerkDomain: String?
 ) {
     companion object {
         fun load(): AuthConfig = AuthConfig(
@@ -49,7 +52,12 @@ data class AuthConfig(
             lockoutDurationMinutes = System.getenv("LOCKOUT_DURATION_MINUTES")?.toInt()
                 ?: 15,
             sessionTimeoutMinutes = System.getenv("SESSION_TIMEOUT_MINUTES")?.toInt()
-                ?: 60
+                ?: 60,
+            defaultAuthProvider = System.getenv("DEFAULT_AUTH_PROVIDER")
+                ?: "local",
+            enabledAuthProviders = System.getenv("ENABLED_AUTH_PROVIDERS")?.split(",")?.map { it.trim() }
+                ?: listOf("local"),
+            clerkDomain = System.getenv("CLERK_DOMAIN")
         )
     }
 

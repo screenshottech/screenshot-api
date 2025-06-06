@@ -122,7 +122,7 @@ fun TakeScreenshotRequestDto.toDomainRequest(userId: String, apiKeyId: String): 
         waitTime = waitTime,
         waitForSelector = waitForSelector,
         quality = quality,
-        format = DomainFormat.valueOf(format)
+        format = DomainFormat.fromString(format)
     )
 
     return TakeScreenshotUseCase.Request(
@@ -141,7 +141,7 @@ fun ScreenshotRequestDto.toDomain() = DomainScreenshotRequest(
     waitTime = waitTime,
     waitForSelector = waitForSelector,
     quality = quality,
-    format = DomainFormat.valueOf(format)
+    format = DomainFormat.fromString(format)
 )
 
 // Helper mapping functions

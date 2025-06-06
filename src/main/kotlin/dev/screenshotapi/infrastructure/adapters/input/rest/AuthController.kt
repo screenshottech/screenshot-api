@@ -10,7 +10,10 @@ import dev.screenshotapi.infrastructure.adapters.input.rest.dto.CreateApiKeyRequ
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.LoginRequestDto
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.RegisterRequestDto
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.UpdateProfileRequestDto
+import dev.screenshotapi.infrastructure.adapters.input.rest.dto.toDto
 import dev.screenshotapi.infrastructure.auth.UserPrincipal
+import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
+import dev.screenshotapi.infrastructure.auth.providers.LocalAuthProvider
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -28,6 +31,7 @@ class AuthController : KoinComponent {
     private val getUserProfileUseCase: GetUserProfileUseCase by inject()
     private val updateUserProfileUseCase: UpdateUserProfileUseCase by inject()
     private val getUserUsageUseCase: GetUserUsageUseCase by inject()
+    private val authProviderFactory: AuthProviderFactory by inject()
 
     suspend fun login(call: ApplicationCall) {
         try {
@@ -35,9 +39,13 @@ class AuthController : KoinComponent {
             val request = AuthenticateUserRequest(dto.email, dto.password)
             val response = authenticateUserUseCase(request)
 
+            // Generate JWT token for the authenticated user
+            val localAuthProvider = authProviderFactory.getProvider("local") as? LocalAuthProvider
+            val jwt = localAuthProvider?.createToken(response.userId ?: "unknown") ?: "jwt_generation_failed"
+            
             call.respond(
                 HttpStatusCode.OK, mapOf(
-                    "token" to "jwt_placeholder",
+                    "token" to jwt,
                     "userId" to response.userId,
                     "email" to response.email
                 )
@@ -165,16 +173,23 @@ class AuthController : KoinComponent {
             val principal = call.principal<UserPrincipal>()!!
             val response = listApiKeysUseCase(ListApiKeysRequest(principal.userId))
 
-            call.respond(
-                HttpStatusCode.OK, mapOf(
-                "apiKeys" to response.apiKeys.map {
-                    mapOf(
-                        "id" to it.id,
-                        "name" to it.name,
-                        "isActive" to it.isActive
-                    )
-                }
-            ))
+            val apiKeysDto = response.apiKeys.map { apiKey ->
+                dev.screenshotapi.infrastructure.adapters.input.rest.dto.ApiKeySummaryResponseDto(
+                    id = apiKey.id,
+                    name = apiKey.name,
+                    isActive = apiKey.isActive,
+                    maskedKey = "sk_****${apiKey.id.takeLast(4)}",
+                    usageCount = 0, // TODO: implement usage tracking
+                    createdAt = apiKey.createdAt.toString(),
+                    lastUsedAt = null // TODO: implement last used tracking
+                )
+            }
+            
+            val responseDto = dev.screenshotapi.infrastructure.adapters.input.rest.dto.ApiKeysListResponseDto(
+                apiKeys = apiKeysDto
+            )
+
+            call.respond(HttpStatusCode.OK, responseDto)
 
         } catch (e: Exception) {
             call.application.log.error("List API keys error", e)
@@ -195,14 +210,7 @@ class AuthController : KoinComponent {
             )
             val response = createApiKeyUseCase(request)
 
-            call.respond(
-                HttpStatusCode.Created, mapOf(
-                    "id" to response.id,
-                    "name" to response.name,
-                    "keyValue" to response.keyValue,
-                    "isActive" to response.isActive
-                )
-            )
+            call.respond(HttpStatusCode.Created, response.toDto())
 
         } catch (e: ValidationException) {
             call.respond(
@@ -243,17 +251,19 @@ class AuthController : KoinComponent {
 
     suspend fun getUsage(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            println("Getting usage - checking principal...")
+            val principal = call.principal<UserPrincipal>()
+            println("Principal: $principal")
+            
+            if (principal == null) {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "No valid principal found"))
+                return
+            }
+            
+            println("User ID from principal: ${principal.userId}")
             val response = getUserUsageUseCase(GetUserUsageRequest(principal.userId))
 
-            call.respond(
-                HttpStatusCode.OK, mapOf(
-                    "userId" to response.userId,
-                    "creditsRemaining" to response.creditsRemaining,
-                    "totalScreenshots" to response.totalScreenshots,
-                    "screenshotsLast30Days" to response.screenshotsLast30Days
-                )
-            )
+            call.respond(HttpStatusCode.OK, response.toDto())
 
         } catch (e: Exception) {
             call.application.log.error("Get usage error", e)

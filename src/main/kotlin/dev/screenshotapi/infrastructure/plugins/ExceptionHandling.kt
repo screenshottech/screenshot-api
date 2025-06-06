@@ -44,8 +44,8 @@ fun Application.configureExceptionHandling() {
                     message = cause.message ?: "Insufficient credits",
                     details = mapOf(
                         "userId" to cause.userId,
-                        "requiredCredits" to cause.requiredCredits,
-                        "availableCredits" to cause.availableCredits
+                        "requiredCredits" to cause.requiredCredits.toString(),
+                        "availableCredits" to cause.availableCredits.toString()
                     )
                 )
             )
@@ -85,6 +85,40 @@ fun Application.configureExceptionHandling() {
             )
         }
 
+        exception<AuthorizationException.ApiKeyRequired> { call, cause ->
+            call.respond(
+                HttpStatusCode.PaymentRequired,
+                ErrorResponseDto(
+                    code = "API_KEY_REQUIRED",
+                    message = cause.message ?: "Valid API key required for screenshot processing",
+                    details = mapOf(
+                        "action" to "Create an API key in your dashboard",
+                        "endpoint" to "/api/v1/user/api-keys"
+                    )
+                )
+            )
+        }
+
+        exception<AuthorizationException.ApiKeyNotOwned> { call, cause ->
+            call.respond(
+                HttpStatusCode.Forbidden,
+                ErrorResponseDto(
+                    code = "API_KEY_NOT_OWNED",
+                    message = cause.message ?: "API key does not belong to authenticated user"
+                )
+            )
+        }
+
+        exception<AuthorizationException.ApiKeyInactive> { call, cause ->
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                ErrorResponseDto(
+                    code = "API_KEY_INACTIVE",
+                    message = cause.message ?: "API key is inactive"
+                )
+            )
+        }
+
         exception<AuthorizationException.RateLimitExceeded> { call, cause ->
             call.respond(
                 HttpStatusCode.TooManyRequests,
@@ -116,7 +150,7 @@ fun Application.configureExceptionHandling() {
                     message = cause.message ?: "Screenshot timeout",
                     details = mapOf(
                         "url" to cause.url,
-                        "timeoutMs" to cause.timeoutMs
+                        "timeoutMs" to cause.timeoutMs.toString()
                     )
                 )
             )
@@ -129,8 +163,8 @@ fun Application.configureExceptionHandling() {
                     code = "FILE_TOO_LARGE",
                     message = cause.message ?: "File too large",
                     details = mapOf(
-                        "sizeBytes" to cause.sizeBytes,
-                        "maxSizeBytes" to cause.maxSizeBytes
+                        "sizeBytes" to cause.sizeBytes.toString(),
+                        "maxSizeBytes" to cause.maxSizeBytes.toString()
                     )
                 )
             )

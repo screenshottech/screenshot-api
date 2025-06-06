@@ -6,6 +6,7 @@ import dev.screenshotapi.core.domain.repositories.PlanRepository
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UsageRepository
+import dev.screenshotapi.core.domain.repositories.UsageLogRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.ports.output.StorageOutputPort
 import dev.screenshotapi.core.domain.services.RateLimitingService
@@ -26,10 +27,13 @@ import dev.screenshotapi.core.usecases.auth.ListApiKeysUseCase
 import dev.screenshotapi.core.usecases.auth.RegisterUserUseCase
 import dev.screenshotapi.core.usecases.auth.UpdateUserProfileUseCase
 import dev.screenshotapi.core.usecases.auth.ValidateApiKeyUseCase
+import dev.screenshotapi.core.usecases.auth.ValidateApiKeyOwnershipUseCase
 import dev.screenshotapi.core.usecases.billing.AddCreditsUseCase
 import dev.screenshotapi.core.usecases.billing.CheckCreditsUseCase
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.billing.HandlePaymentUseCase
+import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
+import dev.screenshotapi.core.usecases.logging.GetUsageLogsUseCase
 import dev.screenshotapi.core.usecases.screenshot.GetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.ListScreenshotsUseCase
 import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
@@ -43,18 +47,21 @@ import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InM
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryPlanRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryScreenshotRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryUsageRepository
+import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryUsageLogRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.InMemoryUserRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLActivityRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLApiKeyRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLPlanRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLScreenshotRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLUsageRepository
+import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLUsageLogRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.PostgreSQLUserRepository
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.storage.StorageFactory
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
+import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.services.BrowserPoolManager
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
@@ -62,10 +69,15 @@ import dev.screenshotapi.infrastructure.services.RateLimitingServiceImpl
 import dev.screenshotapi.infrastructure.services.ScreenshotServiceImpl
 import dev.screenshotapi.infrastructure.services.UsageTrackingServiceImpl
 import dev.screenshotapi.workers.WorkerManager
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Database
 import org.koin.dsl.module
 import org.koin.ktor.plugin.Koin
@@ -104,6 +116,7 @@ fun repositoryModule(config: AppConfig) = module {
     single<ActivityRepository> { createActivityRepository(config, get()) }
     single<PlanRepository> { createPlanRepository(config, getOrNull()) }
     single<UsageRepository> { createUsageRepository(config, get()) }
+    single<UsageLogRepository> { createUsageLogRepository(config, get()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<Database> { createDatabase(config) }
     if (!config.redis.useInMemory) {
@@ -132,6 +145,9 @@ private fun createPlanRepository(config: AppConfig, database: Database?): PlanRe
 private fun createUsageRepository(config: AppConfig, database: Database): UsageRepository =
     if (config.database.useInMemory) InMemoryUsageRepository() else PostgreSQLUsageRepository(database)
 
+private fun createUsageLogRepository(config: AppConfig, database: Database): UsageLogRepository =
+    if (config.database.useInMemory) InMemoryUsageLogRepository() else PostgreSQLUsageLogRepository()
+
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
         Database.connect(
@@ -159,19 +175,24 @@ fun useCaseModule() = module {
     single { ListScreenshotsUseCase(get()) }
 
     // Auth use cases - mixed injection patterns
-    single { ValidateApiKeyUseCase(get(), get()) }
-    single { CreateApiKeyUseCase() }
+    single { ValidateApiKeyUseCase(get(), get(), get<LogUsageUseCase>()) }
+    single { ValidateApiKeyOwnershipUseCase(get<ApiKeyRepository>()) }
+    single { CreateApiKeyUseCase(get<ApiKeyRepository>(), get<UserRepository>()) }
     single { DeleteApiKeyUseCase(get<ApiKeyRepository>()) }
     single { ListApiKeysUseCase(get<ApiKeyRepository>(), get<UserRepository>()) }
-    single { AuthenticateUserUseCase() }
-    single { RegisterUserUseCase() }
+    single { AuthenticateUserUseCase(get<UserRepository>()) }
+    single { RegisterUserUseCase(get<UserRepository>(), get<PlanRepository>()) }
     single { GetUserProfileUseCase() }
     single { GetUserUsageUseCase(get<UserRepository>(), get<ScreenshotRepository>()) }
     single { UpdateUserProfileUseCase(get<UserRepository>()) }
 
+    // Logging use cases
+    single { LogUsageUseCase(get<UsageLogRepository>()) }
+    single { GetUsageLogsUseCase(get<UsageLogRepository>()) }
+
     // Billing use cases - mixed injection patterns
     single { CheckCreditsUseCase() }
-    single { DeductCreditsUseCase() }
+    single { DeductCreditsUseCase(get<UserRepository>(), get<LogUsageUseCase>()) }
     single { AddCreditsUseCase(get<UserRepository>()) }
     single { HandlePaymentUseCase(get<UserRepository>(), get<AddCreditsUseCase>()) }
 
@@ -198,6 +219,23 @@ fun serviceModule() = module {
         )
     }
     single<RateLimitingService> { RateLimitingServiceImpl(get(), get(), get()) }
+    single<HttpClient> {
+        HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                })
+            }
+        }
+    }
+    single {
+        AuthProviderFactory(
+            userRepository = get(),
+            planRepository = get(),
+            httpClient = get(),
+            authConfig = get()
+        )
+    }
     single {
         WorkerManager(
             queueRepository = get(),
@@ -206,6 +244,7 @@ fun serviceModule() = module {
             screenshotService = get(),
             deductCreditsUseCase = get(),
             usageTrackingService = get(),
+            logUsageUseCase = get(),
             notificationService = get(),
             metricsService = get(),
             config = get()

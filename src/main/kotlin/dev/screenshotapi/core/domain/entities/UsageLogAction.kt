@@ -1,0 +1,14 @@
+package dev.screenshotapi.core.domain.entities
+
+enum class UsageLogAction {
+    SCREENSHOT_CREATED,
+    SCREENSHOT_COMPLETED,
+    SCREENSHOT_FAILED,
+    CREDITS_DEDUCTED,
+    CREDITS_ADDED,
+    API_KEY_USED,
+    API_KEY_CREATED,
+    USER_REGISTERED,
+    PLAN_UPGRADED,
+    PAYMENT_PROCESSED
+}

@@ -1,0 +1,149 @@
+openapi: 3.0.3
+info:
+  title: Screenshot API
+  description: |
+    API for capturing and managing website screenshots.
+    
+    ## Authentication
+    - **API Key**: Include `X-API-Key` in the header
+    - **JWT**: For admin endpoints, include `Authorization: Bearer <token>`
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@screenshotapi.dev
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.screenshotapi.dev
+    description: Production server
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      name: X-API-Key
+      in: header
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        status:
+          type: integer
+          format: int32
+    
+    ScreenshotRequest:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+          example: https://example.com
+        width:
+          type: integer
+          minimum: 320
+          maximum: 1920
+          example: 1280
+        height:
+          type: integer
+          minimum: 240
+          maximum: 1080
+          example: 800
+        fullPage:
+          type: boolean
+          default: false
+        format:
+          type: string
+          enum: [png, jpeg, webp]
+          default: png
+        quality:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 90
+        delay:
+          type: integer
+          description: Delay in milliseconds before taking the screenshot
+          default: 0
+    
+    ScreenshotResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          example: "job_12345"
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        url:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://api.screenshotapi.dev/files/screenshot_12345.png"
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  /api/v1/screenshots:
+    post:
+      summary: Take a screenshot
+      description: Submit a new screenshot request
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreenshotRequest'
+      responses:
+        '202':
+          description: Screenshot request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenshotResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/screenshots/{jobId}:
+    get:
+      summary: Get screenshot status
+      description: Check the status of a screenshot job
+      security:
+        - apiKey: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Screenshot status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenshotResponse'
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
