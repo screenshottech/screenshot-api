@@ -1,6 +1,26 @@
-# Screenshot API Service
+# 📸 Screenshot API
 
-A high-performance screenshot generation API built with Ktor, implementing Clean Architecture principles. This service provides automated screenshot and PDF generation capabilities using Microsoft Playwright.
+> **A production-ready screenshot API that developers actually want to use.**
+
+High-performance, beautifully architected screenshot generation service built with Kotlin & Ktor. From simple screenshots to complex automation workflows - designed by developers, for developers.
+
+## 🎯 Why This API?
+
+In a world full of screenshot services, why build another one? Because most solutions force you to choose between **simplicity** and **power**, between **quick hacks** and **maintainable code**. This API bridges that gap.
+
+**🏗️ Architecture First**  
+Showcase how Clean Architecture and Domain-Driven Design create maintainable, testable systems that scale beautifully.
+
+**⚡ Performance Obsessed**  
+Smart browser pooling, async processing, and efficient resource management ensure your screenshots generate fast, even under heavy load.
+
+**🔧 Developer Experience**  
+Self-documenting API, comprehensive examples, Docker-ready deployment, and monitoring built-in. Because your time is valuable.
+
+**🚀 Production Ready**  
+Full observability, rate limiting, audit logging, and webhook support. Deploy with confidence, scale without surprises.
+
+Perfect for developers who need reliable screenshot automation without vendor lock-in or black box solutions.
 
 ## 🚀 Quick Start
 
@@ -55,7 +75,7 @@ curl -X POST "http://localhost:8080/api/v1/screenshot" \
 ## 🛠️ Development
 
 ### Prerequisites
-- **Java 21** or higher
+- **Java 17** or higher
 - **Docker & Docker Compose** (for containerized development)
 - **PostgreSQL** (optional, can use in-memory database)
 - **Redis** (optional, can use in-memory queue)
@@ -92,23 +112,42 @@ docker-compose logs -f screenshot-api
 
 ## 🏗️ Architecture
 
+Built with **Clean Architecture** (Hexagonal Architecture) and **Domain-Driven Design** principles:
+
 ```
-src/
-├── main/kotlin/com/screenshotapi/
-│   ├── core/                    # Business logic (Clean Architecture)
-│   │   ├── domain/             # Domain entities and repositories
-│   │   ├── usecases/           # Business use cases
-│   │   └── services/           # Domain services
-│   ├── infrastructure/         # External concerns
-│   │   ├── adapters/           # Input/Output adapters
-│   │   ├── config/             # Configuration
-│   │   └── services/           # Infrastructure services
-│   └── workers/                # Background job processing
-└── docker/                     # Docker configuration
-    ├── start.sh               # Start script with options
-    ├── stop.sh                # Stop script with options
-    └── README.md              # Docker documentation
+┌─────────────────────────────────────────────────────────────┐
+│                    Infrastructure Layer                     │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                Application Layer                    │   │
+│  │  ┌─────────────────────────────────────────────┐   │   │
+│  │  │              Domain Layer                   │   │   │
+│  │  │                                             │   │   │
+│  │  │  • Entities (User, Screenshot, ApiKey)     │   │   │
+│  │  │  • Value Objects (ScreenshotRequest)       │   │   │
+│  │  │  • Repository Interfaces                   │   │   │
+│  │  │  • Domain Services & Exceptions            │   │   │
+│  │  │                                             │   │   │
+│  │  └─────────────────────────────────────────────┘   │   │
+│  │                                                     │   │
+│  │  • Use Cases (Business Logic)                      │   │
+│  │  • Input/Output Ports                              │   │
+│  │                                                     │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│  • REST Controllers & Authentication                       │
+│  • Database Adapters (PostgreSQL, InMemory)               │
+│  • External Services (Playwright, Storage, Cache)         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+**Key Benefits:**
+- **Framework Independence**: Core logic isolated from external dependencies
+- **Testability**: Business rules testable without infrastructure
+- **Flexibility**: Easy to swap databases, frameworks, or external services
+- **Maintainability**: Clear separation of concerns and dependencies
+
+See our detailed [Architecture Guide](docs/ARCHITECTURE.md) for deep-dive technical documentation.
 
 ## 📡 API Endpoints
 
@@ -192,28 +231,74 @@ curl -X GET "http://localhost:8080/api/v1/screenshot/{jobId}" \
 
 ## 📚 Documentation
 
-- [Docker Setup Guide](docker/README.md)
-- [API Documentation](.http/api.http)
-- [Architecture Overview](docs/architecture.md)
+### Getting Started
+- [🐳 Docker Setup Guide](docker/README.md) - Complete Docker deployment guide
+- [📡 API Reference](docs/API_REFERENCE.md) - Comprehensive API documentation
+- [🏗️ Architecture Deep-Dive](docs/ARCHITECTURE.md) - Clean Architecture implementation guide
+
+### Advanced Topics
+- [🤝 Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
+- [🌐 cURL Examples](examples/curl-examples.md) - Practical API usage examples
+- [⚙️ Configuration Guide](docs/DEPLOYMENT.md) - Production deployment strategies *(Coming Soon)*
+- [📈 Performance Tuning](docs/PERFORMANCE.md) - Optimization techniques *(Coming Soon)*
+
+## 🛣️ Roadmap
+
+### 🔮 Upcoming Features
+- **🔍 OCR Integration**: Extract text content from screenshots using advanced recognition
+- **📱 Mobile Simulation**: iPhone, Android device viewport simulation
+- **🎥 Video Capture**: Generate animated GIFs and MP4 recordings
+- **⚡ Batch Processing**: Process multiple URLs in a single request
+- **🎨 Custom CSS Injection**: Modify page styling before capture
+- **⏰ Scheduled Screenshots**: Cron-like automation for recurring captures
+- **🌍 Multi-region Deployment**: Global edge processing for faster response times
+
+### 🔧 Technical Improvements
+- **📊 Enhanced Metrics**: Detailed performance analytics and insights
+- **🛡️ Advanced Security**: Role-based access control and API quotas
+- **🔄 Auto-scaling**: Dynamic worker pool management
+- **📦 SDK Libraries**: Official client libraries for popular languages
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation, every contribution helps make this API better.
+
+**Quick Start:**
+1. 🍴 Fork the repository
+2. 🌿 Create feature branch (`git checkout -b feature/amazing-feature`)
+3. ✨ Make your changes with tests
+4. 📝 Update documentation if needed
+5. 🚀 Submit a Pull Request
+
+See our [Contributing Guide](CONTRIBUTING.md) for detailed guidelines.
+
+## 💡 Show Your Support
+
+Give a ⭐️ if this project helped you! It helps others discover this API.
+
+## 📞 Connect & Support
+
+- 🐛 **Found a bug?** [Open an issue](https://github.com/screenshot-api-dev/screenshot-api/issues)
+- 💭 **Have an idea?** [Start a discussion](https://github.com/screenshot-api-dev/screenshot-api/discussions)
+- 📧 **Need help?** Email screenshotapi.dev@gmail.com
+- 🐦 **Follow updates** [@screenshot_api_dev](https://twitter.com/screenshot_api_dev)
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-If the server starts successfully, you'll see the following output:
+## 🚀 Ready to Deploy?
+
+If the server starts successfully, you'll see:
 
 ```
 2025-05-28 15:38:39.818 [main] INFO  Application - Application started in 13.623 seconds.
 2025-05-28 15:38:39.873 [main] INFO  Application - Responding at http://0.0.0.0:8080
 ```
+
+**🎉 Your screenshot API is now live and ready to capture the web!**
+
+*Built with ❤️ using Kotlin, Ktor, and Clean Architecture principles.*
 
