@@ -23,8 +23,10 @@ import dev.screenshotapi.core.usecases.auth.CreateApiKeyUseCase
 import dev.screenshotapi.core.usecases.auth.DeleteApiKeyUseCase
 import dev.screenshotapi.core.usecases.auth.GetUserProfileUseCase
 import dev.screenshotapi.core.usecases.auth.GetUserUsageUseCase
+import dev.screenshotapi.core.usecases.auth.GetUserUsageTimelineUseCase
 import dev.screenshotapi.core.usecases.auth.ListApiKeysUseCase
 import dev.screenshotapi.core.usecases.auth.RegisterUserUseCase
+import dev.screenshotapi.core.usecases.auth.UpdateApiKeyUseCase
 import dev.screenshotapi.core.usecases.auth.UpdateUserProfileUseCase
 import dev.screenshotapi.core.usecases.auth.ValidateApiKeyUseCase
 import dev.screenshotapi.core.usecases.auth.ValidateApiKeyOwnershipUseCase
@@ -109,43 +111,45 @@ fun configModule(config: AppConfig) = module {
 }
 
 fun repositoryModule(config: AppConfig) = module {
-    single<UserRepository> { createUserRepository(config, get()) }
-    single<ApiKeyRepository> { createApiKeyRepository(config, get()) }
-    single<ScreenshotRepository> { createScreenshotRepository(config, get()) }
+    single<UserRepository> { createUserRepository(config, getOrNull()) }
+    single<ApiKeyRepository> { createApiKeyRepository(config, getOrNull()) }
+    single<ScreenshotRepository> { createScreenshotRepository(config, getOrNull()) }
     single<QueueRepository> { createQueueRepository(config, getOrNull<StatefulRedisConnection<String, String>>()) }
-    single<ActivityRepository> { createActivityRepository(config, get()) }
+    single<ActivityRepository> { createActivityRepository(config, getOrNull()) }
     single<PlanRepository> { createPlanRepository(config, getOrNull()) }
-    single<UsageRepository> { createUsageRepository(config, get()) }
-    single<UsageLogRepository> { createUsageLogRepository(config, get()) }
+    single<UsageRepository> { createUsageRepository(config, getOrNull()) }
+    single<UsageLogRepository> { createUsageLogRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
-    single<Database> { createDatabase(config) }
+    if (!config.database.useInMemory) {
+        single<Database> { createDatabase(config) }
+    }
     if (!config.redis.useInMemory) {
         single<StatefulRedisConnection<String, String>> { createRedisConnection(config) }
     }
 }
 
-private fun createUserRepository(config: AppConfig, database: Database): UserRepository =
-    if (config.database.useInMemory) InMemoryUserRepository() else PostgreSQLUserRepository(database)
+private fun createUserRepository(config: AppConfig, database: Database?): UserRepository =
+    if (config.database.useInMemory) InMemoryUserRepository() else PostgreSQLUserRepository(database!!)
 
-private fun createApiKeyRepository(config: AppConfig, database: Database): ApiKeyRepository =
-    if (config.database.useInMemory) InMemoryApiKeyRepository() else PostgreSQLApiKeyRepository(database)
+private fun createApiKeyRepository(config: AppConfig, database: Database?): ApiKeyRepository =
+    if (config.database.useInMemory) InMemoryApiKeyRepository() else PostgreSQLApiKeyRepository(database!!)
 
-private fun createScreenshotRepository(config: AppConfig, database: Database): ScreenshotRepository =
-    if (config.database.useInMemory) InMemoryScreenshotRepository() else PostgreSQLScreenshotRepository(database)
+private fun createScreenshotRepository(config: AppConfig, database: Database?): ScreenshotRepository =
+    if (config.database.useInMemory) InMemoryScreenshotRepository() else PostgreSQLScreenshotRepository(database!!)
 
 private fun createQueueRepository(config: AppConfig, redisConnection: StatefulRedisConnection<String, String>?): QueueRepository =
     if (config.redis.useInMemory) InMemoryQueueAdapter() else RedisQueueAdapter(redisConnection!!)
 
-private fun createActivityRepository(config: AppConfig, database: Database): ActivityRepository =
-    if (config.database.useInMemory) InMemoryActivityRepository() else PostgreSQLActivityRepository(database)
+private fun createActivityRepository(config: AppConfig, database: Database?): ActivityRepository =
+    if (config.database.useInMemory) InMemoryActivityRepository() else PostgreSQLActivityRepository(database!!)
 
 private fun createPlanRepository(config: AppConfig, database: Database?): PlanRepository =
     if (config.database.useInMemory) InMemoryPlanRepository() else PostgreSQLPlanRepository(database!!)
 
-private fun createUsageRepository(config: AppConfig, database: Database): UsageRepository =
-    if (config.database.useInMemory) InMemoryUsageRepository() else PostgreSQLUsageRepository(database)
+private fun createUsageRepository(config: AppConfig, database: Database?): UsageRepository =
+    if (config.database.useInMemory) InMemoryUsageRepository() else PostgreSQLUsageRepository(database!!)
 
-private fun createUsageLogRepository(config: AppConfig, database: Database): UsageLogRepository =
+private fun createUsageLogRepository(config: AppConfig, database: Database?): UsageLogRepository =
     if (config.database.useInMemory) InMemoryUsageLogRepository() else PostgreSQLUsageLogRepository()
 
 private fun createDatabase(config: AppConfig): Database =
@@ -178,12 +182,14 @@ fun useCaseModule() = module {
     single { ValidateApiKeyUseCase(get(), get(), get<LogUsageUseCase>()) }
     single { ValidateApiKeyOwnershipUseCase(get<ApiKeyRepository>()) }
     single { CreateApiKeyUseCase(get<ApiKeyRepository>(), get<UserRepository>()) }
+    single { UpdateApiKeyUseCase(get<ApiKeyRepository>()) }
     single { DeleteApiKeyUseCase(get<ApiKeyRepository>()) }
     single { ListApiKeysUseCase(get<ApiKeyRepository>(), get<UserRepository>()) }
     single { AuthenticateUserUseCase(get<UserRepository>()) }
     single { RegisterUserUseCase(get<UserRepository>(), get<PlanRepository>()) }
     single { GetUserProfileUseCase() }
     single { GetUserUsageUseCase(get<UserRepository>(), get<ScreenshotRepository>()) }
+    single { GetUserUsageTimelineUseCase(get<UsageRepository>(), get<UserRepository>()) }
     single { UpdateUserProfileUseCase(get<UserRepository>()) }
 
     // Logging use cases
@@ -243,7 +249,6 @@ fun serviceModule() = module {
             userRepository = get(),
             screenshotService = get(),
             deductCreditsUseCase = get(),
-            usageTrackingService = get(),
             logUsageUseCase = get(),
             notificationService = get(),
             metricsService = get(),

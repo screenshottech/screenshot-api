@@ -79,7 +79,8 @@ class ClerkAuthProvider(
         // Check if user already exists
         val existingUser = userRepository.findByEmail(authResult.email)
         if (existingUser != null) {
-            return authResult
+            // Return AuthResult with internal user ID for existing users
+            return authResult.copy(userId = existingUser.id)
         }
 
         // Create new user with free plan
@@ -99,8 +100,9 @@ class ClerkAuthProvider(
             updatedAt = Clock.System.now()
         )
 
-        userRepository.save(newUser)
-        return authResult
+        val savedUser = userRepository.save(newUser)
+        // Return AuthResult with internal user ID for new users
+        return authResult.copy(userId = savedUser.id)
     }
 
     private suspend fun getPublicKey(kid: String): RSAPublicKey? {

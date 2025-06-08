@@ -9,6 +9,7 @@ import dev.screenshotapi.core.usecases.auth.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.CreateApiKeyRequestDto
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.LoginRequestDto
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.RegisterRequestDto
+import dev.screenshotapi.infrastructure.adapters.input.rest.dto.UpdateApiKeyRequestDto
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.UpdateProfileRequestDto
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.toDto
 import dev.screenshotapi.infrastructure.auth.UserPrincipal
@@ -28,9 +29,11 @@ class AuthController : KoinComponent {
     private val createApiKeyUseCase: CreateApiKeyUseCase by inject()
     private val listApiKeysUseCase: ListApiKeysUseCase by inject()
     private val deleteApiKeyUseCase: DeleteApiKeyUseCase by inject()
+    private val updateApiKeyUseCase: UpdateApiKeyUseCase by inject()
     private val getUserProfileUseCase: GetUserProfileUseCase by inject()
     private val updateUserProfileUseCase: UpdateUserProfileUseCase by inject()
     private val getUserUsageUseCase: GetUserUsageUseCase by inject()
+    private val getUserUsageTimelineUseCase: GetUserUsageTimelineUseCase by inject()
     private val authProviderFactory: AuthProviderFactory by inject()
 
     suspend fun login(call: ApplicationCall) {
@@ -226,6 +229,40 @@ class AuthController : KoinComponent {
         }
     }
 
+    suspend fun updateApiKey(call: ApplicationCall) {
+        try {
+            val principal = call.principal<UserPrincipal>()!!
+            val keyId = call.parameters["keyId"]!!
+            val dto = call.receive<UpdateApiKeyRequestDto>()
+            val request = UpdateApiKeyRequest(
+                userId = principal.userId,
+                apiKeyId = keyId,
+                isActive = dto.isActive,
+                name = dto.name
+            )
+            val response = updateApiKeyUseCase(request)
+
+            call.respond(HttpStatusCode.OK, response.toDto())
+
+        } catch (e: ResourceNotFoundException) {
+            call.respond(
+                HttpStatusCode.NotFound,
+                ErrorResponseDto.notFound("API Key", call.parameters["keyId"] ?: "unknown")
+            )
+        } catch (e: ValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponseDto.validation(e.message ?: "Validation failed", e.field)
+            )
+        } catch (e: Exception) {
+            call.application.log.error("Update API key error", e)
+            call.respond(
+                HttpStatusCode.InternalServerError,
+                ErrorResponseDto.internal("Failed to update API key")
+            )
+        }
+    }
+
     suspend fun deleteApiKey(call: ApplicationCall) {
         try {
             val principal = call.principal<UserPrincipal>()!!
@@ -270,6 +307,70 @@ class AuthController : KoinComponent {
             call.respond(
                 HttpStatusCode.InternalServerError,
                 ErrorResponseDto.internal("Failed to get usage statistics")
+            )
+        }
+    }
+
+    suspend fun getUsageTimeline(call: ApplicationCall) {
+        try {
+            // Check authentication first
+            val principal = call.principal<UserPrincipal>()
+            if (principal == null) {
+                call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponseDto.unauthorized("Authentication required")
+                )
+                return
+            }
+            
+            // Validate period parameter with proper error handling
+            val periodParam = call.parameters["period"]
+            val period = try {
+                dev.screenshotapi.core.domain.entities.TimePeriod.fromString(periodParam)
+            } catch (e: Exception) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponseDto.validation(
+                        "Invalid period parameter. Valid values: 7d, 30d, 90d, 1y",
+                        "period"
+                    )
+                )
+                return
+            }
+            
+            val granularity = call.parameters["granularity"]?.let { 
+                try { 
+                    dev.screenshotapi.core.domain.entities.TimeGranularity.valueOf(it.uppercase()) 
+                } catch (e: IllegalArgumentException) { 
+                    dev.screenshotapi.core.domain.entities.TimeGranularity.DAILY 
+                }
+            } ?: dev.screenshotapi.core.domain.entities.TimeGranularity.DAILY
+
+            val request = GetUserUsageTimelineRequest(
+                userId = principal.userId,
+                period = period,
+                granularity = granularity
+            )
+            
+            val response = getUserUsageTimelineUseCase(request)
+
+            call.respond(HttpStatusCode.OK, response.toDto())
+
+        } catch (e: ResourceNotFoundException) {
+            call.respond(
+                HttpStatusCode.NotFound,
+                ErrorResponseDto.notFound("User", "timeline")
+            )
+        } catch (e: ValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponseDto.validation(e.message ?: "Validation failed", e.field)
+            )
+        } catch (e: Exception) {
+            call.application.log.error("Get usage timeline error", e)
+            call.respond(
+                HttpStatusCode.InternalServerError,
+                ErrorResponseDto.internal("Failed to get usage timeline")
             )
         }
     }

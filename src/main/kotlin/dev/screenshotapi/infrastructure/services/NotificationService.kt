@@ -27,7 +27,8 @@ class NotificationService {
 
     suspend fun sendWebhook(webhookUrl: String, job: ScreenshotJob) {
         try {
-            logger.info("Sending webhook to $webhookUrl for job ${job.id}")
+            logger.info("Webhook request initiated: jobId={}, webhookUrl={}, status={}", 
+                job.id, webhookUrl, job.status.name)
 
             val payload = WebhookPayload(
                 jobId = job.id,
@@ -45,13 +46,16 @@ class NotificationService {
             }
 
             if (response.status.isSuccess()) {
-                logger.info("Webhook sent successfully to $webhookUrl for job ${job.id}")
+                logger.info("Webhook delivered successfully: jobId={}, webhookUrl={}, statusCode={}", 
+                    job.id, webhookUrl, response.status.value)
             } else {
-                logger.warn("Webhook failed with status ${response.status} for job ${job.id}")
+                logger.warn("Webhook delivery failed: jobId={}, webhookUrl={}, statusCode={}, statusText={}", 
+                    job.id, webhookUrl, response.status.value, response.status.description)
             }
 
         } catch (e: Exception) {
-            logger.error("Failed to send webhook to $webhookUrl for job ${job.id}", e)
+            logger.error("Webhook delivery exception: jobId={}, webhookUrl={}, error={}", 
+                job.id, webhookUrl, e.message, e)
         }
     }
 

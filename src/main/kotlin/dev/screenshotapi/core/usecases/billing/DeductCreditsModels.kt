@@ -1,10 +1,13 @@
 package dev.screenshotapi.core.usecases.billing
 
+import dev.screenshotapi.core.domain.entities.CreditDeductionReason
 import kotlinx.datetime.Instant
 
 data class DeductCreditsRequest(
     val userId: String,
-    val amount: Int
+    val amount: Int,
+    val jobId: String? = null, // Optional job context for traceability
+    val reason: CreditDeductionReason? = null // Optional reason for business traceability
 ) {
     init {
         require(amount > 0) { "Amount must be positive" }

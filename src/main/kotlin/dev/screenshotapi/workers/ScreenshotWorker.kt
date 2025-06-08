@@ -6,11 +6,11 @@ import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.ScreenshotService
-import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.usecases.billing.DeductCreditsRequest
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.core.domain.entities.UsageLogAction
+import dev.screenshotapi.core.domain.entities.JobType
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
@@ -30,7 +30,6 @@ class ScreenshotWorker(
     private val userRepository: UserRepository,
     private val screenshotService: ScreenshotService,
     private val deductCreditsUseCase: DeductCreditsUseCase,
-    private val usageTrackingService: UsageTrackingPort,
     private val logUsageUseCase: LogUsageUseCase,
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
@@ -150,14 +149,37 @@ class ScreenshotWorker(
         currentState.set(WorkerState.PROCESSING)
         updateActivity()
 
-        logger.info("Processing job ${job.id} for user ${job.userId}")
+        logger.info(
+            """
+            Processing job ${job.id} for user ${job.userId}:
+            - Type: ${job.jobType.displayName}
+            - URL: ${job.request.url}
+            - Format: ${job.request.format.name}
+            - Credits: ${job.jobType.defaultCredits}
+            """.trimIndent()
+        )
 
         try {
             // 1. Update status to "processing"
             val processingJob = job.markAsProcessing()
             screenshotRepository.update(processingJob)
+            logger.info("Job state transition: jobId={}, from=QUEUED, to=PROCESSING, userId={}", 
+                job.id, job.userId)
 
-            // 2. Validate user and credits
+            // 2. Log screenshot creation in usage logs
+            logUsageUseCase.invoke(LogUsageUseCase.Request(
+                userId = job.userId,
+                action = UsageLogAction.SCREENSHOT_CREATED,
+                creditsUsed = 0, // No credits deducted yet
+                apiKeyId = job.apiKeyId,
+                screenshotId = job.id,
+                metadata = mapOf(
+                    "url" to job.request.url,
+                    "format" to job.request.format.name
+                )
+            ))
+
+            // 3. Validate user and credits
             validateUserAndCredits(job)
 
             // 3. Take screenshot with retries
@@ -167,12 +189,14 @@ class ScreenshotWorker(
             // 4. Update status to "completed"
             val completedJob = job.markAsCompleted(resultUrl, processingTime)
             screenshotRepository.update(completedJob)
+            logger.info("Job state transition: jobId={}, from=PROCESSING, to=COMPLETED, userId={}, processingTime={}ms", 
+                job.id, job.userId, processingTime)
 
-            // 5. Log screenshot completion in usage logs
+            // 5. Log screenshot completion in usage logs (no credits here, just event logging)
             logUsageUseCase.invoke(LogUsageUseCase.Request(
                 userId = job.userId,
                 action = UsageLogAction.SCREENSHOT_COMPLETED,
-                creditsUsed = 1,
+                creditsUsed = 0, // No credits - just event logging
                 apiKeyId = job.apiKeyId,
                 screenshotId = job.id,
                 metadata = mapOf(
@@ -183,11 +207,18 @@ class ScreenshotWorker(
                 )
             ))
 
-            // 6. Track usage in monthly tracking
-            usageTrackingService.trackUsage(job.userId, 1)
+            // 6. Deduct credits (this also tracks usage in monthly tracking)
+            val creditsToDeduct = job.jobType.defaultCredits
+            deductCreditsUseCase(DeductCreditsRequest(
+                userId = job.userId, 
+                amount = creditsToDeduct,
+                jobId = job.id,
+                reason = JobType.getDeductionReason(job.jobType)
+            ))
+            logger.info("Credits deducted: jobId={}, userId={}, jobType={}, amount={}", 
+                job.id, job.userId, job.jobType.name, creditsToDeduct)
 
-            // 7. Deduct credits
-            deductCreditsUseCase(DeductCreditsRequest(job.userId, 1))
+            // Note: Removed usageTrackingService.trackUsage() to prevent double credit deduction
 
             // 7. Send webhook if configured
             sendWebhookIfConfigured(completedJob)
@@ -195,7 +226,8 @@ class ScreenshotWorker(
             // 8. Update metrics
             recordSuccessMetrics(processingTime)
 
-            logger.info("Job ${job.id} completed successfully in ${processingTime}ms")
+            logger.info("Job completed successfully: jobId={}, userId={}, processingTime={}ms, resultUrl={}", 
+                job.id, job.userId, processingTime, resultUrl)
 
         } catch (e: Exception) {
             handleJobFailure(job, e, System.currentTimeMillis() - startTime)
@@ -219,17 +251,20 @@ class ScreenshotWorker(
 
         repeat(config.retryAttempts) { attempt ->
             try {
-                logger.debug("Screenshot attempt ${attempt + 1}/${config.retryAttempts} for job ${job.id}")
+                logger.info("Screenshot attempt: jobId={}, attempt={}/{}, url={}", 
+                    job.id, attempt + 1, config.retryAttempts, job.request.url)
                 return screenshotService.takeScreenshot(job.request)
 
             } catch (e: Exception) {
                 lastException = e
 
                 if (attempt < config.retryAttempts - 1) {
-                    logger.warn("Screenshot attempt ${attempt + 1} failed for job ${job.id}, retrying in ${config.retryDelay}: ${e.message}")
+                    logger.warn("Screenshot attempt failed: jobId={}, attempt={}/{}, retryIn={}, error={}", 
+                        job.id, attempt + 1, config.retryAttempts, config.retryDelay, e.message)
                     delay(config.retryDelay.inWholeMilliseconds)
                 } else {
-                    logger.error("All screenshot attempts failed for job ${job.id}", e)
+                    logger.error("All screenshot attempts exhausted: jobId={}, attempts={}, finalError={}", 
+                        job.id, config.retryAttempts, e.message, e)
                 }
             }
         }
@@ -255,18 +290,42 @@ class ScreenshotWorker(
                 notificationService.sendWebhook(webhookUrl, job)
                 val updatedJob = job.markWebhookSent()
                 screenshotRepository.update(updatedJob)
+                logger.info("Webhook sent successfully: jobId={}, webhookUrl={}", job.id, webhookUrl)
             } catch (e: Exception) {
-                logger.error("Failed to send webhook for job ${job.id}", e)
+                logger.error("Webhook sending failed: jobId={}, webhookUrl={}, error={}", 
+                    job.id, webhookUrl, e.message, e)
             }
         }
     }
 
     private suspend fun handleJobFailure(job: ScreenshotJob, error: Exception, processingTime: Long) {
         try {
+            // 1. Update job status to failed
             val failedJob = job.markAsFailed(error.message ?: "Unknown error", processingTime)
             screenshotRepository.update(failedJob)
+            logger.info("Job state transition: jobId={}, from=PROCESSING, to=FAILED, userId={}, processingTime={}ms", 
+                job.id, job.userId, processingTime)
+
+            // 2. Log screenshot failure in usage logs
+            logUsageUseCase.invoke(LogUsageUseCase.Request(
+                userId = job.userId,
+                action = UsageLogAction.SCREENSHOT_FAILED,
+                creditsUsed = 0, // No credits deducted for failed attempts
+                apiKeyId = job.apiKeyId,
+                screenshotId = job.id,
+                metadata = mapOf(
+                    "url" to job.request.url,
+                    "format" to job.request.format.name,
+                    "processingTime" to processingTime.toString(),
+                    "errorMessage" to (error.message ?: "Unknown error"),
+                    "errorType" to (error::class.simpleName ?: "Exception")
+                )
+            ))
+
+            // 3. Record failure metrics
             recordFailureMetrics(processingTime, error)
-            logger.error("Job ${job.id} failed after ${processingTime}ms: ${error.message}", error)
+            logger.error("Job failed: jobId={}, userId={}, processingTime={}ms, errorType={}, errorMessage={}", 
+                job.id, job.userId, processingTime, error::class.simpleName, error.message, error)
         } catch (e: Exception) {
             logger.error("Failed to handle job failure for ${job.id}", e)
         }

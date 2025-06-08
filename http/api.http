@@ -17,6 +17,35 @@ Content-Type: application/json
     "password": "password123"
   }
 
+### Test 1: JWT only (should return 402 API_KEY_REQUIRED)
+POST http://localhost:8080/api/v1/screenshots
+Authorization: Bearer bearer_token_placeholder
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "width": 1920,
+  "height": 1080,
+  "fullPage": false,
+  "quality": 80,
+  "format": "PNG"
+}
+
+### Test 2: JWT + X-API-Key header (should work)
+POST http://localhost:8080/api/v1/screenshots
+Authorization: Bearer bearer_token_placeholder
+X-API-Key: sk_development_test_key_123456789
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "width": 1920,
+  "height": 1080,
+  "fullPage": false,
+  "quality": 80,
+  "format": "PNG"
+}
+
 
 ####
 POST http://localhost:8080/api/v1/user/api-keys
@@ -57,7 +86,7 @@ Content-Type: application/json
 
 ###
 # Get screenshot status - replace JOB_ID with the actual jobId from above
-GET http://localhost:8080/api/v1/screenshots/job_1748931369843_af006514
+GET http://localhost:8080/api/v1/screenshots/job_1749013691844_498af008
 Authorization: Bearer sk_development_test_key_123456789
 
 ###
@@ -74,4 +103,33 @@ Authorization: Bearer sk_development_test_key_123456789
 # Test direct screenshot generation (bypass worker)
 GET http://localhost:8080/test-screenshot
 
+###
+# Test Usage Timeline Endpoint
+# Get usage timeline with default parameters (30d, daily)
+GET http://localhost:8080/api/v1/user/usage/timeline
+Authorization: Bearer bearer_token_placeholder
 
+###
+# Test Usage Timeline with 7 days period
+GET http://localhost:8080/api/v1/user/usage/timeline?period=7d&granularity=DAILY
+Authorization: Bearer bearer_token_placeholder
+
+###
+# Test Usage Timeline with 90 days period and weekly granularity
+GET http://localhost:8080/api/v1/user/usage/timeline?period=90d&granularity=WEEKLY
+Authorization: Bearer bearer_token_placeholder
+
+###
+# Test Usage Timeline with invalid period (should return 400)
+GET http://localhost:8080/api/v1/user/usage/timeline?period=invalid&granularity=DAILY
+Authorization: Bearer bearer_token_placeholder
+
+### Auth clerk provider
+###
+POST http://localhost:8080/api/v1/auth/clerk/login
+Authorization: Bearer bearer_token_placeholder
+Content-Type: application/json
+
+{
+  "token": "clerk_token_placeholder"
+}

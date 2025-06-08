@@ -1,11 +1,14 @@
 package dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql
 
 import dev.screenshotapi.core.domain.entities.UserUsage
+import dev.screenshotapi.core.domain.entities.UsageTimelineEntry
+import dev.screenshotapi.core.domain.entities.TimeGranularity
 import dev.screenshotapi.core.domain.repositories.UsageRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.Plans
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.UsageTracking
+import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.UsageLogs
 import dev.screenshotapi.infrastructure.exceptions.DatabaseException
-import kotlinx.datetime.Clock
+import kotlinx.datetime.*
 import org.jetbrains.exposed.sql.*
 import org.slf4j.LoggerFactory
 
@@ -172,6 +175,114 @@ class PostgreSQLUsageRepository(private val database: Database) : UsageRepositor
             logger.error("Error getting monthly stats for user: $userId", e)
             throw DatabaseException.OperationFailed("Failed to get monthly stats", e)
         }
+    }
+
+    override suspend fun getUsageTimeline(
+        userId: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        granularity: TimeGranularity
+    ): List<UsageTimelineEntry> {
+        return try {
+            dbQuery(database) {
+                // Convert LocalDate to Instant for database queries
+                val startInstant = startDate.atStartOfDayIn(TimeZone.UTC)
+                val endInstant = endDate.plus(1, DateTimeUnit.DAY).atStartOfDayIn(TimeZone.UTC)
+
+                // Query usage logs for the specified period and user
+                val logs = UsageLogs.select {
+                    (UsageLogs.userId eq userId) and 
+                    (UsageLogs.timestamp greaterEq startInstant) and 
+                    (UsageLogs.timestamp less endInstant)
+                }.orderBy(UsageLogs.timestamp to SortOrder.ASC).toList()
+
+                // Group logs by date and aggregate data
+                val logsByDate = logs.groupBy { row ->
+                    val timestamp = row[UsageLogs.timestamp]
+                    timestamp.toLocalDateTime(TimeZone.UTC).date
+                }
+
+                // Generate date range based on granularity
+                val dateRange = generateDateRange(startDate, endDate, granularity)
+
+                // Create timeline entries for each date/period
+                dateRange.map { date ->
+                    val logsForDate = when (granularity) {
+                        TimeGranularity.DAILY -> logsByDate[date] ?: emptyList()
+                        TimeGranularity.WEEKLY -> {
+                            // Get logs for the whole week starting from this date
+                            val weekStart = date
+                            val weekEnd = date.plus(DatePeriod(days = 6))
+                            logsByDate.filterKeys { it >= weekStart && it <= weekEnd }.values.flatten()
+                        }
+                        TimeGranularity.MONTHLY -> {
+                            // Get logs for the whole month
+                            val monthStart = LocalDate(date.year, date.month, 1)
+                            val monthEnd = monthStart.plus(DatePeriod(months = 1)).minus(DatePeriod(days = 1))
+                            logsByDate.filterKeys { it >= monthStart && it <= monthEnd }.values.flatten()
+                        }
+                    }
+
+                    // Calculate metrics from logs - now with proper tracking
+                    val screenshotsCreated = logsForDate.count { it[UsageLogs.action] == "SCREENSHOT_CREATED" }
+                    val successfulScreenshots = logsForDate.count { it[UsageLogs.action] == "SCREENSHOT_COMPLETED" }
+                    val failedScreenshots = logsForDate.count { it[UsageLogs.action] == "SCREENSHOT_FAILED" }
+                    val apiKeyUsedCount = logsForDate.count { it[UsageLogs.action] == "API_KEY_USED" }
+                    // Total screenshots = screenshots that were actually started (created)
+                    val screenshots = screenshotsCreated
+                    val creditsUsed = logsForDate.sumOf { it[UsageLogs.creditsUsed] }
+                    val apiCalls = apiKeyUsedCount // Count API calls specifically
+
+                    UsageTimelineEntry(
+                        date = date,
+                        screenshots = screenshots,
+                        creditsUsed = creditsUsed,
+                        apiCalls = apiCalls,
+                        successfulScreenshots = successfulScreenshots,
+                        failedScreenshots = failedScreenshots
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Error getting usage timeline for user: $userId", e)
+            throw DatabaseException.OperationFailed("Failed to get usage timeline", e)
+        }
+    }
+
+    /**
+     * Generate date range based on granularity
+     */
+    private fun generateDateRange(startDate: LocalDate, endDate: LocalDate, granularity: TimeGranularity): List<LocalDate> {
+        val dates = mutableListOf<LocalDate>()
+        var currentDate = startDate
+
+        when (granularity) {
+            TimeGranularity.DAILY -> {
+                while (currentDate <= endDate) {
+                    dates.add(currentDate)
+                    currentDate = currentDate.plus(DatePeriod(days = 1))
+                }
+            }
+            TimeGranularity.WEEKLY -> {
+                // Start from the beginning of the week (Monday)
+                val weekStart = startDate.minus(DatePeriod(days = startDate.dayOfWeek.ordinal))
+                currentDate = weekStart
+                while (currentDate <= endDate) {
+                    dates.add(currentDate)
+                    currentDate = currentDate.plus(DatePeriod(days = 7))
+                }
+            }
+            TimeGranularity.MONTHLY -> {
+                // Start from the beginning of the month
+                currentDate = LocalDate(startDate.year, startDate.month, 1)
+                while (currentDate <= endDate) {
+                    dates.add(currentDate)
+                    currentDate = currentDate.plus(DatePeriod(months = 1))
+                }
+            }
+        }
+
+        return dates
     }
 
     /**

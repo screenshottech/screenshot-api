@@ -7,6 +7,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import kotlinx.datetime.Clock
+import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
@@ -17,8 +18,14 @@ class TakeScreenshotUseCase(
     private val screenshotRepository: ScreenshotRepository,
     private val queueRepository: QueueRepository
 ) {
+    private val logger = LoggerFactory.getLogger(this::class.java)
     suspend operator fun invoke(request: Request): Response {
         val jobId = "job_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}"
+        
+        logger.info("Creating screenshot job: jobId={}, userId={}, url={}, format={}, dimensions={}x{}", 
+            jobId, request.userId, request.screenshotRequest.url, 
+            request.screenshotRequest.format.name,
+            request.screenshotRequest.width, request.screenshotRequest.height)
 
         // Create screenshot job
         val job = ScreenshotJob(
@@ -41,6 +48,9 @@ class TakeScreenshotUseCase(
         screenshotRepository.save(job)
         queueRepository.enqueue(job)
         val queueSize = queueRepository.size()
+        
+        logger.info("Screenshot job created and enqueued: jobId={}, queuePosition={}, estimatedCompletion=30-60s", 
+            jobId, queueSize)
 
         return Response(
             jobId = jobId,

@@ -67,9 +67,11 @@ fun Application.configureRouting() {
 
                     get("/api-keys") { authController.listApiKeys(call) }
                     post("/api-keys") { authController.createApiKey(call) }
+                    patch("/api-keys/{keyId}") { authController.updateApiKey(call) }
                     delete("/api-keys/{keyId}") { authController.deleteApiKey(call) }
 
                     get("/usage") { authController.getUsage(call) }
+                    get("/usage/timeline") { authController.getUsageTimeline(call) }
                 }
             }
         }

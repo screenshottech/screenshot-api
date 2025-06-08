@@ -3,7 +3,11 @@ package dev.screenshotapi.infrastructure.adapters.input.rest.dto
 import dev.screenshotapi.core.usecases.auth.AuthenticateUserResponse
 import dev.screenshotapi.core.usecases.auth.CreateApiKeyResponse
 import dev.screenshotapi.core.usecases.auth.GetUserProfileResponse
+import dev.screenshotapi.core.usecases.auth.GetUserUsageTimelineResponse
 import dev.screenshotapi.core.usecases.auth.RegisterUserResponse
+import dev.screenshotapi.core.usecases.auth.UpdateApiKeyResponse
+import dev.screenshotapi.core.domain.entities.UsageTimelineEntry
+import dev.screenshotapi.core.domain.entities.UsageTimelineSummary
 import kotlinx.serialization.Serializable
 
 // Request DTOs
@@ -30,6 +34,12 @@ data class UpdateProfileRequestDto(
 data class CreateApiKeyRequestDto(
     val name: String,
     val permissions: List<String>? = null
+)
+
+@Serializable
+data class UpdateApiKeyRequestDto(
+    val isActive: Boolean? = null,
+    val name: String? = null
 )
 
 // Response DTOs
@@ -100,6 +110,35 @@ data class UserUsageResponseDto(
     val currentPeriodEnd: String
 )
 
+@Serializable
+data class UsageTimelineEntryDto(
+    val date: String, // ISO date string
+    val screenshots: Int,
+    val creditsUsed: Int,
+    val apiCalls: Int,
+    val successfulScreenshots: Int,
+    val failedScreenshots: Int
+)
+
+@Serializable
+data class UsageTimelineSummaryDto(
+    val totalScreenshots: Int,
+    val totalCreditsUsed: Int,
+    val totalApiCalls: Int,
+    val averageDaily: Double,
+    val successRate: Double,
+    val peakDay: String?, // ISO date string
+    val peakDayScreenshots: Int
+)
+
+@Serializable
+data class UsageTimelineResponseDto(
+    val timeline: List<UsageTimelineEntryDto>,
+    val summary: UsageTimelineSummaryDto,
+    val period: String,
+    val granularity: String
+)
+
 // Extension functions for conversion
 fun AuthenticateUserResponse.toDto(): LoginResponseDto = LoginResponseDto(
     token = token ?: "jwt_token_placeholder",
@@ -137,6 +176,16 @@ fun CreateApiKeyResponse.toDto(): ApiKeyResponseDto = ApiKeyResponseDto(
     createdAt = createdAt
 )
 
+fun UpdateApiKeyResponse.toDto(): ApiKeySummaryResponseDto = ApiKeySummaryResponseDto(
+    id = apiKey.id,
+    name = apiKey.name,
+    isActive = apiKey.isActive,
+    maskedKey = "sk_****${apiKey.id.takeLast(4)}",
+    usageCount = apiKey.usageCount,
+    createdAt = apiKey.createdAt.toString(),
+    lastUsedAt = apiKey.lastUsed?.toString()
+)
+
 fun dev.screenshotapi.core.usecases.auth.GetUserUsageResponse.toDto(): UserUsageResponseDto = UserUsageResponseDto(
     userId = userId,
     creditsRemaining = creditsRemaining,
@@ -145,4 +194,31 @@ fun dev.screenshotapi.core.usecases.auth.GetUserUsageResponse.toDto(): UserUsage
     planId = planId,
     currentPeriodStart = currentPeriodStart.toString(),
     currentPeriodEnd = currentPeriodEnd.toString()
+)
+
+// Timeline conversion functions
+fun UsageTimelineEntry.toDto(): UsageTimelineEntryDto = UsageTimelineEntryDto(
+    date = date.toString(),
+    screenshots = screenshots,
+    creditsUsed = creditsUsed,
+    apiCalls = apiCalls,
+    successfulScreenshots = successfulScreenshots,
+    failedScreenshots = failedScreenshots
+)
+
+fun UsageTimelineSummary.toDto(): UsageTimelineSummaryDto = UsageTimelineSummaryDto(
+    totalScreenshots = totalScreenshots,
+    totalCreditsUsed = totalCreditsUsed,
+    totalApiCalls = totalApiCalls,
+    averageDaily = averageDaily,
+    successRate = successRate,
+    peakDay = peakDay?.toString(),
+    peakDayScreenshots = peakDayScreenshots
+)
+
+fun GetUserUsageTimelineResponse.toDto(): UsageTimelineResponseDto = UsageTimelineResponseDto(
+    timeline = timeline.map { it.toDto() },
+    summary = summary.toDto(),
+    period = period.name,
+    granularity = granularity.name
 )

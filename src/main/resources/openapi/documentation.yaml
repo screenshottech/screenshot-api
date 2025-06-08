@@ -2,15 +2,31 @@ openapi: 3.0.3
 info:
   title: Screenshot API
   description: |
-    API for capturing and managing website screenshots.
+    API for capturing and managing website screenshots with comprehensive user management and analytics.
     
     ## Authentication
-    - **API Key**: Include `X-API-Key` in the header
-    - **JWT**: For admin endpoints, include `Authorization: Bearer <token>`
+    The API supports multiple authentication methods:
+    - **API Key**: Include `X-API-Key` in the header for programmatic access
+    - **API Key ID**: Include `X-API-Key-ID` in the header with JWT for secure access
+    - **JWT**: Include `Authorization: Bearer <token>` for user-authenticated endpoints
+    
+    ## Rate Limiting
+    - Free plan: 300 requests/month
+    - Starter plan: 1000 requests/month
+    - Pro plan: 10000 requests/month
+    
+    ## Supported Formats
+    - PNG (lossless)
+    - JPEG (compressed)
+    - WEBP (modern, smaller size)
+    - PDF (document format)
   version: 1.0.0
   contact:
     name: API Support
     email: support@screenshotapi.dev
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
 
 servers:
   - url: http://localhost:8080
@@ -24,10 +40,17 @@ components:
       type: apiKey
       name: X-API-Key
       in: header
+      description: API key for programmatic access
+    apiKeyId:
+      type: apiKey
+      name: X-API-Key-ID
+      in: header
+      description: API key ID (used with JWT for enhanced security)
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: JWT token for user authentication
 
   schemas:
     ErrorResponse:
@@ -35,12 +58,20 @@ components:
       properties:
         error:
           type: string
+          description: Error type
         message:
           type: string
+          description: Human-readable error message
         status:
           type: integer
           format: int32
+          description: HTTP status code
+        details:
+          type: object
+          description: Additional error details
+          nullable: true
     
+    # Screenshot related schemas
     ScreenshotRequest:
       type: object
       required:
@@ -49,74 +80,771 @@ components:
         url:
           type: string
           format: uri
+          description: The URL to capture
           example: https://example.com
         width:
           type: integer
           minimum: 320
           maximum: 1920
+          default: 1920
+          description: Screenshot width in pixels
           example: 1280
         height:
           type: integer
           minimum: 240
           maximum: 1080
+          default: 1080
+          description: Screenshot height in pixels
           example: 800
         fullPage:
           type: boolean
           default: false
+          description: Capture the full page length
         format:
           type: string
-          enum: [png, jpeg, webp]
-          default: png
+          enum: [PNG, JPEG, WEBP, PDF]
+          default: PNG
+          description: Output format
         quality:
           type: integer
           minimum: 1
           maximum: 100
           default: 90
+          description: Image quality (for JPEG/WEBP)
         delay:
           type: integer
-          description: Delay in milliseconds before taking the screenshot
+          minimum: 0
+          maximum: 30000
           default: 0
+          description: Delay in milliseconds before taking the screenshot
     
     ScreenshotResponse:
       type: object
       properties:
         jobId:
           type: string
-          example: "job_12345"
+          description: Unique job identifier
+          example: "job_1749294000_abc12345"
         status:
           type: string
-          enum: [pending, processing, completed, failed]
-        url:
+          enum: [QUEUED, PROCESSING, COMPLETED, FAILED]
+          description: Current job status
+        estimatedCompletion:
+          type: string
+          description: Estimated completion time
+          example: "30-60s"
+        queuePosition:
+          type: integer
+          description: Position in the processing queue
+          example: 5
+
+    ScreenshotStatusResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          description: Unique job identifier
+          example: "job_1749294000_abc12345"
+        status:
+          type: string
+          enum: [QUEUED, PROCESSING, COMPLETED, FAILED]
+          description: Current job status
+        resultUrl:
           type: string
           format: uri
           nullable: true
+          description: URL to download the screenshot (available when completed)
           example: "https://api.screenshotapi.dev/files/screenshot_12345.png"
-        timestamp:
+        createdAt:
           type: string
           format: date-time
+          description: Job creation timestamp
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Job completion timestamp
+        processingTimeMs:
+          type: integer
+          nullable: true
+          description: Processing time in milliseconds
+        errorMessage:
+          type: string
+          nullable: true
+          description: Error message if job failed
+        request:
+          $ref: '#/components/schemas/ScreenshotRequest'
+
+    # User management schemas
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          minLength: 8
+          description: User password (minimum 8 characters)
+          example: "password123"
+        name:
+          type: string
+          description: User's full name
+          example: "John Doe"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          description: User password
+          example: "password123"
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT authentication token
+        userId:
+          type: string
+          description: User identifier
+        email:
+          type: string
+          format: email
+          description: User email
+        expiresAt:
+          type: string
+          format: date-time
+          description: Token expiration time
+
+    UserProfile:
+      type: object
+      properties:
+        userId:
+          type: string
+          description: User identifier
+        email:
+          type: string
+          format: email
+          description: User email
+        name:
+          type: string
+          nullable: true
+          description: User's full name
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+          description: Account status
+        planId:
+          type: string
+          description: Current subscription plan
+          example: "plan_starter"
+        creditsRemaining:
+          type: integer
+          description: Number of credits remaining
+          example: 250
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation date
+        lastActivity:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last activity timestamp
+
+    # API Key management schemas
+    CreateApiKeyRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Human-readable name for the API key
+          example: "Production Key"
+
+    ApiKeyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: API key identifier
+        name:
+          type: string
+          description: API key name
+        keyValue:
+          type: string
+          description: The actual API key (only shown on creation)
+          example: "sk_live_abc123..."
+        isActive:
+          type: boolean
+          description: Whether the API key is active
+        maskedKey:
+          type: string
+          description: Masked version of the API key
+          example: "sk_live_***...abc"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        lastUsed:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last usage timestamp
+
+    # Usage and analytics schemas
+    UsageTimelineEntry:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: Date for this entry
+          example: "2025-01-06"
+        screenshots:
+          type: integer
+          minimum: 0
+          description: Number of screenshots taken
+          example: 15
+        creditsUsed:
+          type: integer
+          minimum: 0
+          description: Credits consumed
+          example: 30
+        apiCalls:
+          type: integer
+          minimum: 0
+          description: Number of API calls made
+          example: 16
+        successfulScreenshots:
+          type: integer
+          minimum: 0
+          description: Number of successful screenshots
+          example: 14
+        failedScreenshots:
+          type: integer
+          minimum: 0
+          description: Number of failed screenshots
+          example: 1
+
+    UsageTimelineSummary:
+      type: object
+      properties:
+        totalScreenshots:
+          type: integer
+          minimum: 0
+          description: Total screenshots in the period
+          example: 150
+        totalCreditsUsed:
+          type: integer
+          minimum: 0
+          description: Total credits consumed
+          example: 300
+        totalApiCalls:
+          type: integer
+          minimum: 0
+          description: Total API calls made
+          example: 155
+        averageDaily:
+          type: number
+          format: double
+          minimum: 0
+          description: Average daily usage
+          example: 5.0
+        successRate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Success rate percentage
+          example: 93.33
+        peakDay:
+          type: string
+          format: date
+          nullable: true
+          description: Date with highest usage
+          example: "2025-01-15"
+        peakDayScreenshots:
+          type: integer
+          minimum: 0
+          description: Screenshots taken on peak day
+          example: 25
+
+    UsageTimelineResponse:
+      type: object
+      properties:
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageTimelineEntry'
+          description: Timeline data points
+        summary:
+          $ref: '#/components/schemas/UsageTimelineSummary'
+        period:
+          type: string
+          enum: [SEVEN_DAYS, THIRTY_DAYS, NINETY_DAYS, ONE_YEAR]
+          description: Time period covered
+        granularity:
+          type: string
+          enum: [DAILY, WEEKLY, MONTHLY]
+          description: Data aggregation level
+
+    UserUsage:
+      type: object
+      properties:
+        userId:
+          type: string
+          description: User identifier
+        totalScreenshots:
+          type: integer
+          minimum: 0
+          description: Total screenshots taken
+          example: 45
+        creditsRemaining:
+          type: integer
+          minimum: 0
+          description: Credits remaining this month
+          example: 255
+        creditsUsed:
+          type: integer
+          minimum: 0
+          description: Credits used this month
+          example: 45
+        planLimit:
+          type: integer
+          description: Monthly credit limit
+          example: 300
+        resetDate:
+          type: string
+          format: date
+          description: Next billing cycle reset date
+          example: "2025-02-01"
 
 paths:
+  # Authentication endpoints
+  /api/v1/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      description: Create a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                  email:
+                    type: string
+                  status:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      description: Authenticate user and receive JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # User profile endpoints
+  /api/v1/user/profile:
+    get:
+      tags: [User Management]
+      summary: Get user profile
+      description: Retrieve the authenticated user's profile information
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/user/usage:
+    get:
+      tags: [Usage & Analytics]
+      summary: Get current usage statistics
+      description: Retrieve current month's usage statistics for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usage statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserUsage'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/user/usage/timeline:
+    get:
+      tags: [Usage & Analytics]
+      summary: Get usage timeline
+      description: |
+        Retrieve detailed usage timeline with customizable period and granularity.
+        Provides comprehensive analytics including success rates, peak usage days, and trends.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 90d, 1y]
+            default: 30d
+          description: Time period to analyze
+          example: 30d
+        - name: granularity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DAILY, WEEKLY, MONTHLY]
+            default: DAILY
+          description: Data aggregation level
+          example: DAILY
+      responses:
+        '200':
+          description: Usage timeline data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageTimelineResponse'
+              example:
+                timeline:
+                  - date: "2025-01-06"
+                    screenshots: 15
+                    creditsUsed: 30
+                    apiCalls: 16
+                    successfulScreenshots: 14
+                    failedScreenshots: 1
+                  - date: "2025-01-07"
+                    screenshots: 8
+                    creditsUsed: 16
+                    apiCalls: 9
+                    successfulScreenshots: 8
+                    failedScreenshots: 0
+                summary:
+                  totalScreenshots: 150
+                  totalCreditsUsed: 300
+                  totalApiCalls: 155
+                  averageDaily: 5.0
+                  successRate: 93.33
+                  peakDay: "2025-01-15"
+                  peakDayScreenshots: 25
+                period: "THIRTY_DAYS"
+                granularity: "DAILY"
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "VALIDATION_ERROR"
+                message: "Invalid period parameter. Valid values: 7d, 30d, 90d, 1y"
+                status: 400
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # API Key management endpoints
+  /api/v1/user/api-keys:
+    get:
+      tags: [API Key Management]
+      summary: List API keys
+      description: Retrieve all API keys for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKeys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiKeyResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [API Key Management]
+      summary: Create API key
+      description: Create a new API key for the authenticated user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+      responses:
+        '201':
+          description: API key created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/user/api-keys/{keyId}:
+    delete:
+      tags: [API Key Management]
+      summary: Delete API key
+      description: Delete an API key (permanently disables it)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: API key identifier
+          example: "key_abc123"
+      responses:
+        '200':
+          description: API key deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Screenshot endpoints
   /api/v1/screenshots:
     post:
+      tags: [Screenshots]
       summary: Take a screenshot
-      description: Submit a new screenshot request
+      description: |
+        Submit a new screenshot request. Supports multiple authentication methods:
+        1. API Key in X-API-Key header
+        2. API Key ID in X-API-Key-ID header with JWT authentication
+        3. API Key in Authorization header as Bearer token
       security:
         - apiKey: []
+        - apiKeyId: []
+          bearerAuth: []
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ScreenshotRequest'
+            example:
+              url: "https://example.com"
+              width: 1280
+              height: 800
+              fullPage: false
+              format: "PNG"
       responses:
         '202':
-          description: Screenshot request accepted
+          description: Screenshot request accepted and queued for processing
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScreenshotResponse'
+              example:
+                jobId: "job_1749294000_abc12345"
+                status: "QUEUED"
+                estimatedCompletion: "30-60s"
+                queuePosition: 3
         '400':
-          description: Invalid request
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [Screenshots]
+      summary: List screenshots
+      description: Retrieve a paginated list of screenshots for the authenticated user
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of results per page
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [QUEUED, PROCESSING, COMPLETED, FAILED]
+          description: Filter by screenshot status
+      responses:
+        '200':
+          description: List of screenshots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  screenshots:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScreenshotStatusResponse'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 45
+                      totalPages:
+                        type: integer
+                        example: 3
+        '401':
+          description: Authentication required
           content:
             application/json:
               schema:
@@ -124,26 +852,88 @@ paths:
 
   /api/v1/screenshots/{jobId}:
     get:
+      tags: [Screenshots]
       summary: Get screenshot status
-      description: Check the status of a screenshot job
+      description: Check the status and details of a specific screenshot job
       security:
         - apiKey: []
+        - bearerAuth: []
       parameters:
         - name: jobId
           in: path
           required: true
           schema:
             type: string
+          description: Screenshot job identifier
+          example: "job_1749294000_abc12345"
       responses:
         '200':
-          description: Screenshot status
+          description: Screenshot job details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ScreenshotResponse'
+                $ref: '#/components/schemas/ScreenshotStatusResponse'
+              example:
+                jobId: "job_1749294000_abc12345"
+                status: "COMPLETED"
+                resultUrl: "https://api.screenshotapi.dev/files/screenshot_12345.png"
+                createdAt: "2025-01-06T10:30:00Z"
+                completedAt: "2025-01-06T10:30:45Z"
+                processingTimeMs: 45000
+                errorMessage: null
+                request:
+                  url: "https://example.com"
+                  width: 1280
+                  height: 800
+                  fullPage: false
+                  format: "PNG"
         '404':
-          description: Job not found
+          description: Job not found or access denied
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Health check endpoint
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      description: Check API health status
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                    example: "1.0.0"
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: User Management
+    description: User profile and account management
+  - name: API Key Management
+    description: API key creation and management
+  - name: Screenshots
+    description: Screenshot generation and management
+  - name: Usage & Analytics
+    description: Usage statistics and analytics
+  - name: System
+    description: System health and status endpoints

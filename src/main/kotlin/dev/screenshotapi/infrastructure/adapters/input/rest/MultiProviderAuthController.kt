@@ -6,11 +6,9 @@ import dev.screenshotapi.infrastructure.adapters.input.rest.dto.AuthProvidersLis
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.providers.LocalAuthProvider
 import io.ktor.http.*
-import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kotlinx.serialization.json.Json
 
 fun Route.multiProviderAuthRoutes(authProviderFactory: AuthProviderFactory) {
     
@@ -81,6 +79,9 @@ fun Route.multiProviderAuthRoutes(authProviderFactory: AuthProviderFactory) {
                 } else {
                     // Get local provider to generate JWT for external auth
                     val localProvider = authProviderFactory.getProvider("local") as? LocalAuthProvider
+                    
+                    // AuthResult now contains the internal user ID for external providers
+                    println("Creating JWT for internal user ID: ${authResult.userId}")
                     val generatedJwt = localProvider?.createToken(authResult.userId) ?: "token_generation_failed"
                     println("Generated JWT for user ${authResult.userId}: ${generatedJwt.take(50)}...")
                     generatedJwt

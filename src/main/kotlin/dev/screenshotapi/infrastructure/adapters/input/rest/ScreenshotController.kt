@@ -3,6 +3,8 @@ package dev.screenshotapi.infrastructure.adapters.input.rest
 import dev.screenshotapi.core.usecases.screenshot.*
 import dev.screenshotapi.core.usecases.auth.ValidateApiKeyUseCase
 import dev.screenshotapi.core.usecases.auth.ValidateApiKeyOwnershipUseCase
+import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
+import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.core.domain.exceptions.AuthenticationException
 import dev.screenshotapi.core.domain.exceptions.AuthorizationException
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.*
@@ -26,6 +28,7 @@ class ScreenshotController : KoinComponent {
     private val listScreenshotsUseCase: ListScreenshotsUseCase by inject()
     private val validateApiKeyUseCase: ValidateApiKeyUseCase by inject()
     private val validateApiKeyOwnershipUseCase: ValidateApiKeyOwnershipUseCase by inject()
+    private val logUsageUseCase: LogUsageUseCase by inject()
 
     suspend fun takeScreenshot(call: ApplicationCall) {
         val dto = call.receive<TakeScreenshotRequestDto>()
@@ -117,7 +120,22 @@ class ScreenshotController : KoinComponent {
                 userId = userId
             )
             val result = validateApiKeyOwnershipUseCase(request)
-            result.isValid && result.isActive
+            
+            if (result.isValid && result.isActive) {
+                // Log API key usage when ownership is validated
+                logUsageUseCase.invoke(LogUsageUseCase.Request(
+                    userId = userId,
+                    action = UsageLogAction.API_KEY_USED,
+                    apiKeyId = apiKeyId,
+                    metadata = mapOf(
+                        "validationType" to "ownership",
+                        "method" to "X-API-Key-ID"
+                    )
+                ))
+                true
+            } else {
+                false
+            }
         } catch (e: Exception) {
             false
         }

@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotJob
 import dev.screenshotapi.core.domain.entities.ScreenshotStatus as DomainStatus
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
+import org.slf4j.LoggerFactory
 
 /**
  * Use case for retrieving the status of a screenshot job (pure domain).
@@ -11,9 +12,15 @@ import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
 class GetScreenshotStatusUseCase(
     private val screenshotRepository: ScreenshotRepository
 ) {
+    private val logger = LoggerFactory.getLogger(this::class.java)
     suspend operator fun invoke(request: Request): Response {
+        logger.debug("Querying job status: jobId={}, userId={}", request.jobId, request.userId)
+        
         val job = screenshotRepository.findByIdAndUserId(request.jobId, request.userId)
             ?: throw ResourceNotFoundException("Screenshot", request.jobId)
+            
+        logger.debug("Job status query result: jobId={}, status={}, processingTime={}ms", 
+            job.id, job.status.name, job.processingTimeMs ?: 0)
 
         return Response(
             jobId = job.id,

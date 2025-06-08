@@ -13,6 +13,7 @@ data class ScreenshotJob(
     val apiKeyId: String,
     val request: ScreenshotRequest,
     val status: ScreenshotStatus,
+    val jobType: JobType = JobType.SCREENSHOT, // Default to screenshot for backward compatibility
     val resultUrl: String? = null,
     val errorMessage: String? = null,
     val processingTimeMs: Long? = null,

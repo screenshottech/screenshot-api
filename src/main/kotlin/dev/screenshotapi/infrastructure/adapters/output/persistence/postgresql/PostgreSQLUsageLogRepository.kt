@@ -5,6 +5,8 @@ import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.core.domain.repositories.UsageLogRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.UsageLogs
 import kotlinx.datetime.Instant
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -20,8 +22,8 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
             it[action] = usageLog.action.name
             it[creditsUsed] = usageLog.creditsUsed
             it[metadata] = usageLog.metadata?.let { map ->
-                kotlinx.serialization.json.Json.encodeToString(
-                    kotlinx.serialization.serializer<Map<String, String>>(),
+                Json.encodeToString(
+                    serializer<Map<String, String>>(),
                     map
                 )
             }
@@ -54,7 +56,7 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
         action: UsageLogAction,
         limit: Int
     ): List<UsageLog> = transaction {
-        UsageLogs.select { 
+        UsageLogs.select {
             (UsageLogs.userId eq userId) and (UsageLogs.action eq action.name)
         }
             .orderBy(UsageLogs.timestamp, SortOrder.DESC)

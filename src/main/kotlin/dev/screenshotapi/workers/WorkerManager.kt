@@ -4,7 +4,6 @@ import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.ScreenshotService
-import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.infrastructure.config.AppConfig
@@ -23,7 +22,6 @@ class WorkerManager(
     private val userRepository: UserRepository,
     private val screenshotService: ScreenshotService,
     private val deductCreditsUseCase: DeductCreditsUseCase,
-    private val usageTrackingService: UsageTrackingPort,
     private val logUsageUseCase: LogUsageUseCase,
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
@@ -109,7 +107,6 @@ class WorkerManager(
             userRepository = userRepository,
             screenshotService = screenshotService,
             deductCreditsUseCase = deductCreditsUseCase,
-            usageTrackingService = usageTrackingService,
             logUsageUseCase = logUsageUseCase,
             notificationService = notificationService,
             metricsService = metricsService,
@@ -117,20 +114,23 @@ class WorkerManager(
         )
 
         workers[workerId] = worker
+        logger.info("Worker created: workerId={}, totalWorkers={}", workerId, workers.size)
 
         // Initialize worker in a separate coroutine
         scope.launch {
             try {
+                logger.info("Starting worker: workerId={}", workerId)
                 worker.start()
             } catch (e: Exception) {
-                logger.error("Worker $workerId failed", e)
+                logger.error("Worker failed to start: workerId={}, error={}", workerId, e.message, e)
             } finally {
                 workers.remove(workerId)
-                logger.info("Worker $workerId removed from pool")
+                logger.info("Worker removed from pool: workerId={}, remainingWorkers={}", workerId, workers.size)
 
                 // If we're below the minimum and the manager is still running, start a new worker
                 if (isRunning.get() && workers.size < minWorkers) {
-                    logger.info("Worker count below minimum, starting replacement worker")
+                    logger.info("Worker count below minimum: current={}, min={}, starting replacement", 
+                        workers.size, minWorkers)
                     delay(5000)
                     if (isRunning.get()) {
                         startWorker()
@@ -139,7 +139,7 @@ class WorkerManager(
             }
         }
 
-        logger.info("Started worker $workerId, total workers: ${workers.size}")
+        logger.info("Worker startup initiated: workerId={}, totalWorkers={}", workerId, workers.size)
         return workerId
     }
 

@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.entities.UsageLog
 import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.core.domain.repositories.UsageLogRepository
 import dev.screenshotapi.core.usecases.common.UseCase
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
 class LogUsageUseCase(
@@ -20,11 +21,11 @@ class LogUsageUseCase(
             metadata = request.metadata,
             ipAddress = request.ipAddress,
             userAgent = request.userAgent,
-            timestamp = request.timestamp ?: kotlinx.datetime.Clock.System.now()
+            timestamp = request.timestamp ?: Clock.System.now()
         )
 
         val savedLog = usageLogRepository.save(usageLog)
-        
+
         return Response(
             logId = savedLog.id,
             success = true

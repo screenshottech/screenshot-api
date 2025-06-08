@@ -25,8 +25,6 @@ class ValidateApiKeyUseCase(
             val dbApiKey = apiKeyRepository.findByKeyHash(keyHash)
             
             if (dbApiKey != null && dbApiKey.isActive) {
-                logger.info("API key validated for user: ${dbApiKey.userId}")
-                
                 // Log API key usage
                 logUsageUseCase.invoke(LogUsageUseCase.Request(
                     userId = dbApiKey.userId,
@@ -44,7 +42,6 @@ class ValidateApiKeyUseCase(
                     keyId = dbApiKey.id
                 )
             } else {
-                logger.warn("Invalid or inactive API key attempted")
                 ApiKeyValidationResult(
                     isValid = false,
                     userId = null,
