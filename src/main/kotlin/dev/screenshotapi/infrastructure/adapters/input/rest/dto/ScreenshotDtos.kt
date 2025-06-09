@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotJob
 import dev.screenshotapi.core.usecases.screenshot.GetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.ListScreenshotsUseCase
 import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
+import dev.screenshotapi.core.usecases.screenshot.BulkStatusResponse
 import kotlinx.serialization.Serializable
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat as DomainFormat
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest as DomainScreenshotRequest
@@ -81,6 +82,29 @@ data class PaginationDto(
     val hasPrevious: Boolean
 )
 
+@Serializable
+data class BulkStatusRequestDto(
+    val jobIds: List<String>
+)
+
+@Serializable
+data class BulkStatusJobResponseDto(
+    val jobId: String,
+    val status: String,
+    val resultUrl: String? = null,
+    val processingTimeMs: Long? = null,
+    val completedAt: String? = null,
+    val errorMessage: String? = null
+)
+
+@Serializable
+data class BulkStatusResponseDto(
+    val jobs: List<BulkStatusJobResponseDto>,
+    val requestedAt: String,
+    val totalJobs: Int,
+    val foundJobs: Int
+)
+
 // Mapping functions for domain -> DTO
 fun TakeScreenshotUseCase.Response.toDto() = TakeScreenshotResponseDto(
     jobId = jobId,
@@ -110,6 +134,22 @@ fun ListScreenshotsUseCase.Response.toDto() = ListScreenshotsResponseDto(
         hasNext = (page * limit) < total,
         hasPrevious = page > 1
     )
+)
+
+fun BulkStatusResponse.toDto() = BulkStatusResponseDto(
+    jobs = jobs.map { job ->
+        BulkStatusJobResponseDto(
+            jobId = job.jobId,
+            status = job.status,
+            resultUrl = job.resultUrl,
+            processingTimeMs = job.processingTimeMs,
+            completedAt = job.completedAt?.toString(),
+            errorMessage = job.errorMessage
+        )
+    },
+    requestedAt = requestedAt.toString(),
+    totalJobs = totalJobs,
+    foundJobs = foundJobs
 )
 
 // Mapping functions for DTO -> domain

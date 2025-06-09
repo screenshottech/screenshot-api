@@ -9,10 +9,12 @@ import dev.screenshotapi.core.usecases.common.UseCase
 import kotlinx.datetime.Clock
 import java.util.*
 import dev.screenshotapi.core.domain.entities.Permission
+import dev.screenshotapi.core.ports.output.HashingPort
 
 class CreateApiKeyUseCase(
     private val apiKeyRepository: ApiKeyRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val hashingPort: HashingPort
 ) : UseCase<CreateApiKeyRequest, CreateApiKeyResponse> {
     
     override suspend fun invoke(request: CreateApiKeyRequest): CreateApiKeyResponse {
@@ -25,9 +27,9 @@ class CreateApiKeyUseCase(
         val user = userRepository.findById(request.userId)
             ?: throw ResourceNotFoundException("User", request.userId)
         
-        // Generate API key
-        val keyValue = "sk_${request.userId}_${UUID.randomUUID().toString().replace("-", "")}"
-        val keyHash = keyValue.hashCode().toString()
+        // Generate secure API key
+        val keyValue = "sk_${UUID.randomUUID().toString().replace("-", "")}"
+        val keyHash = hashingPort.hashSecure(keyValue)
         
         val apiKey = ApiKey(
             id = "key_${System.currentTimeMillis()}",

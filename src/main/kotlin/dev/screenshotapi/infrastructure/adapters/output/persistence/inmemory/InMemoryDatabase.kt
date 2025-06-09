@@ -224,6 +224,23 @@ object InMemoryDatabase {
         }
     }
 
+    fun findScreenshotsByUserAndStatus(userId: String, status: ScreenshotStatus, page: Int = 1, limit: Int = 20): List<ScreenshotJob> {
+        synchronized(screenshots) {
+            val userScreenshots = screenshots.values
+                .filter { it.userId == userId && it.status == status }
+                .sortedByDescending { it.createdAt }
+
+            val startIndex = (page - 1) * limit
+            return userScreenshots.drop(startIndex).take(limit)
+        }
+    }
+
+    fun countScreenshotsByUserAndStatus(userId: String, status: ScreenshotStatus): Long {
+        synchronized(screenshots) {
+            return screenshots.values.count { it.userId == userId && it.status == status }.toLong()
+        }
+    }
+
     fun findPendingScreenshots(): List<ScreenshotJob> {
         synchronized(screenshots) {
             return screenshots.values.filter {
@@ -292,6 +309,14 @@ object InMemoryDatabase {
     fun getScreenshotCount(): Int {
         synchronized(screenshots) {
             return screenshots.size
+        }
+    }
+
+    fun findScreenshotsByIds(ids: List<String>, userId: String): List<ScreenshotJob> {
+        synchronized(screenshots) {
+            return screenshots.values.filter { job ->
+                ids.contains(job.id) && job.userId == userId
+            }
         }
     }
 }

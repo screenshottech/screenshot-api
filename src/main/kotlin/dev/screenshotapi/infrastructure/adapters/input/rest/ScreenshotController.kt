@@ -25,6 +25,7 @@ import org.koin.core.component.inject
 class ScreenshotController : KoinComponent {
     private val takeScreenshotUseCase: TakeScreenshotUseCase by inject()
     private val getScreenshotStatusUseCase: GetScreenshotStatusUseCase by inject()
+    private val bulkGetScreenshotStatusUseCase: BulkGetScreenshotStatusUseCase by inject()
     private val listScreenshotsUseCase: ListScreenshotsUseCase by inject()
     private val validateApiKeyUseCase: ValidateApiKeyUseCase by inject()
     private val validateApiKeyOwnershipUseCase: ValidateApiKeyOwnershipUseCase by inject()
@@ -204,6 +205,36 @@ class ScreenshotController : KoinComponent {
 
         // Execute use case and convert response back to DTO
         val result = listScreenshotsUseCase(useCaseRequest)
+        call.respond(HttpStatusCode.OK, result.toDto())
+    }
+
+    suspend fun getBulkScreenshotStatus(call: ApplicationCall) {
+        // Support both API Key and JWT authentication
+        val userId = when {
+            call.principal<ApiKeyPrincipal>() != null -> {
+                call.principal<ApiKeyPrincipal>()!!.userId
+            }
+            call.principal<UserPrincipal>() != null -> {
+                call.principal<UserPrincipal>()!!.userId
+            }
+            else -> {
+                call.respond(HttpStatusCode.Unauthorized, 
+                    ErrorResponseDto.unauthorized("Authentication required"))
+                return
+            }
+        }
+
+        // Parse job IDs from request body
+        val requestDto = call.receive<BulkStatusRequestDto>()
+        
+        // Convert to domain request
+        val useCaseRequest = BulkStatusRequest(
+            jobIds = requestDto.jobIds,
+            userId = userId
+        )
+
+        // Execute use case and convert response back to DTO
+        val result = bulkGetScreenshotStatusUseCase(useCaseRequest)
         call.respond(HttpStatusCode.OK, result.toDto())
     }
 

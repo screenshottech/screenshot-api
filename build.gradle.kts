@@ -86,6 +86,9 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation")
     implementation("io.ktor:ktor-client-serialization")
 
+    // Security (BCrypt for hashing)
+    implementation("org.mindrot:jbcrypt:0.4")
+
     // Monitoring
     implementation("io.ktor:ktor-server-metrics")
     implementation("io.ktor:ktor-server-metrics-micrometer")

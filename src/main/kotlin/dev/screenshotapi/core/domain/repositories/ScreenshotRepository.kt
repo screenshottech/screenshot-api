@@ -10,8 +10,11 @@ interface ScreenshotRepository {
     suspend fun findById(id: String): ScreenshotJob?
     suspend fun findByIdAndUserId(id: String, userId: String): ScreenshotJob?
     suspend fun findByUserId(userId: String, page: Int = 1, limit: Int = 20): List<ScreenshotJob>
+    suspend fun findByUserIdAndStatus(userId: String, status: dev.screenshotapi.core.domain.entities.ScreenshotStatus, page: Int = 1, limit: Int = 20): List<ScreenshotJob>
+    suspend fun findByIds(ids: List<String>, userId: String): List<ScreenshotJob>
     suspend fun update(job: ScreenshotJob): ScreenshotJob
     suspend fun countByUserId(userId: String): Long
+    suspend fun countByUserIdAndStatus(userId: String, status: dev.screenshotapi.core.domain.entities.ScreenshotStatus): Long
     suspend fun findPendingJobs(): List<ScreenshotJob>
     suspend fun getStatsByPeriod(
         startDate: Instant,

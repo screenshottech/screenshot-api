@@ -13,6 +13,7 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import org.koin.ktor.ext.inject
+import org.slf4j.LoggerFactory
 
 private const val REALM = "screenshotapi-api"
 
@@ -21,6 +22,7 @@ fun Application.configureSecurity() {
     val validateApiKeyUseCase by inject<ValidateApiKeyUseCase>()
     val authProviderFactory by inject<AuthProviderFactory>()
     val userRepository by inject<UserRepository>()
+    val logger = LoggerFactory.getLogger("Security")
 
     authentication {
         // JWT Authentication for admin routes
@@ -36,23 +38,21 @@ fun Application.configureSecurity() {
             validate { credential ->
                 if (credential.payload.audience.contains(authConfig.jwtAudience)) {
                     val userId = credential.payload.getClaim("userId")?.asString()
-                    println("JWT validation - userId from token: $userId")
-                    
+
                     if (userId != null) {
                         // First try to find user by direct ID (for local auth)
                         var user = userRepository.findById(userId)
-                        println("JWT validation - found user by ID: ${user?.id}")
-                        
+
                         // If not found, try to find by external ID (for multi-provider auth)
                         if (user == null) {
                             user = userRepository.findByExternalId(userId, "clerk")
                             println("JWT validation - found user by external ID: ${user?.id}")
                         }
-                        
+
                         if (user != null) {
                             UserPrincipal(
                                 userId = user.id, // Use internal ID
-                                email = user.email, 
+                                email = user.email,
                                 name = user.name,
                                 status = user.status,
                                 permissions = emptySet(), // TODO: Load actual permissions
@@ -60,15 +60,15 @@ fun Application.configureSecurity() {
                                 creditsRemaining = user.creditsRemaining
                             )
                         } else {
-                            println("JWT validation failed - user not found for ID: $userId")
+                            logger.warn("JWT validation failed - user not found for ID: $userId")
                             null
                         }
                     } else {
-                        println("JWT validation failed - no userId in token")
+                        logger.warn("JWT validation failed - no userId in token")
                         null
                     }
                 } else {
-                    println("JWT validation failed - audience mismatch")
+                    logger.warn("JWT validation failed - audience mismatch")
                     null
                 }
             }
@@ -93,18 +93,18 @@ fun Application.configureSecurity() {
                 }
             }
         }
-        
-        // Multi-provider authentication for dashboard routes  
+
+        // Multi-provider authentication for dashboard routes
         bearer("multi-provider") {
             realm = REALM
             authenticate { tokenCredential ->
                 val token = tokenCredential.token
                 val providerName = authConfig.defaultAuthProvider
-                
+
                 try {
                     val authProvider = authProviderFactory.getProvider(providerName) ?: return@authenticate null
                     val authResult = authProvider.validateToken(token) ?: return@authenticate null
-                    
+
                     MultiProviderPrincipal(
                         userId = authResult.userId,
                         email = authResult.email,

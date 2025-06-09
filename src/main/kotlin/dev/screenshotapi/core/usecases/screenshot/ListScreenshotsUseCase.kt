@@ -11,8 +11,16 @@ class ListScreenshotsUseCase(
     private val screenshotRepository: ScreenshotRepository
 ) {
     suspend operator fun invoke(request: Request): Response {
-        val jobs = screenshotRepository.findByUserId(request.userId, request.page, request.limit)
-        val total = screenshotRepository.countByUserId(request.userId)
+        val jobs = if (request.status != null) {
+            screenshotRepository.findByUserIdAndStatus(request.userId, request.status, request.page, request.limit)
+        } else {
+            screenshotRepository.findByUserId(request.userId, request.page, request.limit)
+        }
+        val total = if (request.status != null) {
+            screenshotRepository.countByUserIdAndStatus(request.userId, request.status)
+        } else {
+            screenshotRepository.countByUserId(request.userId)
+        }
         return Response(
             screenshots = jobs,
             page = request.page,

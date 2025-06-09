@@ -219,6 +219,11 @@ fun UsageTimelineSummary.toDto(): UsageTimelineSummaryDto = UsageTimelineSummary
 fun GetUserUsageTimelineResponse.toDto(): UsageTimelineResponseDto = UsageTimelineResponseDto(
     timeline = timeline.map { it.toDto() },
     summary = summary.toDto(),
-    period = period.name,
+    period = when(period) {
+        dev.screenshotapi.core.domain.entities.TimePeriod.SEVEN_DAYS -> "7d"
+        dev.screenshotapi.core.domain.entities.TimePeriod.THIRTY_DAYS -> "30d"
+        dev.screenshotapi.core.domain.entities.TimePeriod.NINETY_DAYS -> "90d"
+        dev.screenshotapi.core.domain.entities.TimePeriod.ONE_YEAR -> "1y"
+    },
     granularity = granularity.name
 )

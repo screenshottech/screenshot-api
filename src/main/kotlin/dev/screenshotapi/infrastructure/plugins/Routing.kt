@@ -52,6 +52,9 @@ fun Application.configureRouting() {
                 // Screenshot status by job ID
                 get("/screenshots/{jobId}") { screenshotController.getScreenshotStatus(call) }
                 
+                // Bulk screenshot status endpoint for efficient polling
+                post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
+                
                 // Screenshot listing (requires authentication)
                 get("/screenshots") { screenshotController.listScreenshots(call) }
 

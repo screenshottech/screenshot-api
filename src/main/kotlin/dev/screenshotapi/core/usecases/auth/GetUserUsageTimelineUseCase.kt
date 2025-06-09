@@ -54,7 +54,7 @@ class GetUserUsageTimelineUseCase(
         )
         
         // Calculate summary statistics
-        val summary = calculateSummary(timeline)
+        val summary = calculateSummary(timeline, request.period.days)
         
         return GetUserUsageTimelineResponse(
             timeline = timeline,
@@ -67,7 +67,7 @@ class GetUserUsageTimelineUseCase(
     /**
      * Calculate summary statistics from timeline data
      */
-    private fun calculateSummary(timeline: List<UsageTimelineEntry>): UsageTimelineSummary {
+    private fun calculateSummary(timeline: List<UsageTimelineEntry>, periodDays: Int): UsageTimelineSummary {
         if (timeline.isEmpty()) {
             return UsageTimelineSummary(
                 totalScreenshots = 0,
@@ -85,8 +85,8 @@ class GetUserUsageTimelineUseCase(
         val totalApiCalls = timeline.sumOf { it.apiCalls }
         val totalSuccessful = timeline.sumOf { it.successfulScreenshots }
         
-        val averageDaily = if (timeline.isNotEmpty()) {
-            totalScreenshots.toDouble() / timeline.size
+        val averageDaily = if (periodDays > 0) {
+            totalScreenshots.toDouble() / periodDays
         } else 0.0
         
         val successRate = if (totalScreenshots > 0) {

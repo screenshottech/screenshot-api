@@ -29,12 +29,24 @@ class InMemoryScreenshotRepository : ScreenshotRepository {
         return InMemoryDatabase.findScreenshotsByUser(userId, page, limit)
     }
 
+    override suspend fun findByUserIdAndStatus(userId: String, status: ScreenshotStatus, page: Int, limit: Int): List<ScreenshotJob> {
+        return InMemoryDatabase.findScreenshotsByUserAndStatus(userId, status, page, limit)
+    }
+
+    override suspend fun findByIds(ids: List<String>, userId: String): List<ScreenshotJob> {
+        return InMemoryDatabase.findScreenshotsByIds(ids, userId)
+    }
+
     override suspend fun update(job: ScreenshotJob): ScreenshotJob {
         return InMemoryDatabase.saveScreenshot(job)
     }
 
     override suspend fun countByUserId(userId: String): Long {
         return InMemoryDatabase.countScreenshotsByUser(userId)
+    }
+
+    override suspend fun countByUserIdAndStatus(userId: String, status: ScreenshotStatus): Long {
+        return InMemoryDatabase.countScreenshotsByUserAndStatus(userId, status)
     }
 
     override suspend fun findPendingJobs(): List<ScreenshotJob> {

@@ -9,6 +9,7 @@ import dev.screenshotapi.core.domain.repositories.UsageRepository
 import dev.screenshotapi.core.domain.repositories.UsageLogRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.ports.output.StorageOutputPort
+import dev.screenshotapi.core.ports.output.HashingPort
 import dev.screenshotapi.core.domain.services.RateLimitingService
 import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.domain.services.ScreenshotService
@@ -37,6 +38,7 @@ import dev.screenshotapi.core.usecases.billing.HandlePaymentUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.core.usecases.logging.GetUsageLogsUseCase
 import dev.screenshotapi.core.usecases.screenshot.GetScreenshotStatusUseCase
+import dev.screenshotapi.core.usecases.screenshot.BulkGetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.ListScreenshotsUseCase
 import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
 import dev.screenshotapi.infrastructure.adapters.input.rest.AdminController
@@ -61,6 +63,7 @@ import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.P
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.storage.StorageFactory
+import dev.screenshotapi.infrastructure.adapters.output.security.BCryptHashingAdapter
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
@@ -120,6 +123,7 @@ fun repositoryModule(config: AppConfig) = module {
     single<UsageRepository> { createUsageRepository(config, getOrNull()) }
     single<UsageLogRepository> { createUsageLogRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
+    single<HashingPort> { BCryptHashingAdapter() }
     if (!config.database.useInMemory) {
         single<Database> { createDatabase(config) }
     }
@@ -176,12 +180,13 @@ fun useCaseModule() = module {
     // Screenshot use cases - constructor injection
     single { TakeScreenshotUseCase(get(), get()) }
     single { GetScreenshotStatusUseCase(get()) }
+    single { BulkGetScreenshotStatusUseCase(get()) }
     single { ListScreenshotsUseCase(get()) }
 
     // Auth use cases - mixed injection patterns
     single { ValidateApiKeyUseCase(get(), get(), get<LogUsageUseCase>()) }
     single { ValidateApiKeyOwnershipUseCase(get<ApiKeyRepository>()) }
-    single { CreateApiKeyUseCase(get<ApiKeyRepository>(), get<UserRepository>()) }
+    single { CreateApiKeyUseCase(get<ApiKeyRepository>(), get<UserRepository>(), get<HashingPort>()) }
     single { UpdateApiKeyUseCase(get<ApiKeyRepository>()) }
     single { DeleteApiKeyUseCase(get<ApiKeyRepository>()) }
     single { ListApiKeysUseCase(get<ApiKeyRepository>(), get<UserRepository>()) }

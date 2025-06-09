@@ -99,6 +99,36 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
         }
     }
 
+    override suspend fun findByUserIdAndStatus(userId: String, status: ScreenshotStatus, page: Int, limit: Int): List<ScreenshotJob> {
+        return try {
+            newSuspendedTransaction(db = database) {
+                Screenshots.select { 
+                    (Screenshots.userId eq userId) and (Screenshots.status eq status.name)
+                }
+                    .orderBy(Screenshots.createdAt, SortOrder.DESC)
+                    .limit(limit, offset = ((page - 1) * limit).toLong())
+                    .map { row -> mapRowToScreenshotJob(row) }
+            }
+        } catch (e: Exception) {
+            logger.error("Error finding screenshot jobs for user: $userId with status: $status", e)
+            throw DatabaseException.OperationFailed("Failed to find screenshot jobs for user with status", e)
+        }
+    }
+
+    override suspend fun findByIds(ids: List<String>, userId: String): List<ScreenshotJob> {
+        return try {
+            newSuspendedTransaction(db = database) {
+                Screenshots.select {
+                    (Screenshots.id inList ids) and (Screenshots.userId eq userId)
+                }
+                    .map { row -> mapRowToScreenshotJob(row) }
+            }
+        } catch (e: Exception) {
+            logger.error("Error finding screenshot jobs by IDs: $ids for user: $userId", e)
+            throw DatabaseException.OperationFailed("Failed to find screenshot jobs by IDs", e)
+        }
+    }
+
     override suspend fun update(job: ScreenshotJob): ScreenshotJob {
         return try {
             newSuspendedTransaction(db = database) {
@@ -132,6 +162,19 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
         } catch (e: Exception) {
             logger.error("Error counting screenshot jobs for user: $userId", e)
             throw DatabaseException.OperationFailed("Failed to count screenshot jobs for user", e)
+        }
+    }
+
+    override suspend fun countByUserIdAndStatus(userId: String, status: ScreenshotStatus): Long {
+        return try {
+            newSuspendedTransaction(db = database) {
+                Screenshots.select { 
+                    (Screenshots.userId eq userId) and (Screenshots.status eq status.name)
+                }.count()
+            }
+        } catch (e: Exception) {
+            logger.error("Error counting screenshot jobs for user: $userId with status: $status", e)
+            throw DatabaseException.OperationFailed("Failed to count screenshot jobs for user with status", e)
         }
     }
 
