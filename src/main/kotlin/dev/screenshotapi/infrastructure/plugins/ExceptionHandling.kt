@@ -207,11 +207,22 @@ fun Application.configureExceptionHandling() {
         // Payment Exceptions
         exception<PaymentException.PaymentFailed> { call, cause ->
             call.respond(
-                HttpStatusCode.PaymentRequired,
+                HttpStatusCode.BadRequest,
                 ErrorResponseDto(
                     code = "PAYMENT_FAILED",
                     message = cause.message ?: "Payment failed",
                     details = mapOf("reason" to cause.reason)
+                )
+            )
+        }
+
+        exception<PaymentException.SubscriptionNotFound> { call, cause ->
+            call.respond(
+                HttpStatusCode.NotFound,
+                ErrorResponseDto(
+                    code = "SUBSCRIPTION_NOT_FOUND",
+                    message = cause.message ?: "Subscription not found",
+                    details = mapOf("subscriptionId" to cause.subscriptionId)
                 )
             )
         }

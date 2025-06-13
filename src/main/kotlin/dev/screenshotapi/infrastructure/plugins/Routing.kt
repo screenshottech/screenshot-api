@@ -1,7 +1,7 @@
 package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
-import dev.screenshotapi.infrastructure.adapters.input.rest.multiProviderAuthRoutes
+import dev.screenshotapi.infrastructure.adapters.input.rest.BillingController
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -15,6 +15,7 @@ import java.io.File
 fun Application.configureRouting() {
     val screenshotController by inject<ScreenshotController>()
     val authController by inject<AuthController>()
+    val billingController by inject<BillingController>()
     val adminController by inject<AdminController>()
     val healthController by inject<HealthController>()
     val authProviderFactory by inject<AuthProviderFactory>()
@@ -41,6 +42,22 @@ fun Application.configureRouting() {
             // Multi-provider auth routes
             multiProviderAuthRoutes(authProviderFactory)
 
+            // Billing and subscription routes
+            route("/billing") {
+                // Public endpoint - no authentication required
+                get("/plans") { billingController.getPlans(call) }
+
+                // Authenticated endpoints - require API key or JWT
+                authenticate("api-key", "jwt") {
+                    post("/checkout") { billingController.createCheckout(call) }
+                    get("/subscription") { billingController.getSubscription(call) }
+                    post("/portal") { billingController.createBillingPortal(call) }
+                }
+
+                // Webhook endpoint - no authentication (signature verification in controller)
+                post("/webhook") { billingController.handleWebhook(call) }
+            }
+
             // Screenshot endpoints with multiple authentication support
             // Supports both: JWT + X-API-Key header, or standalone API key
             authenticate("api-key", "jwt", optional = true) {
@@ -62,6 +79,12 @@ fun Application.configureRouting() {
                     get("/users") { adminController.listUsers(call) }
                     get("/users/{userId}") { adminController.getUser(call) }
                     get("/stats") { adminController.getStats(call) }
+                    
+                    // Subscription management
+                    get("/subscriptions") { adminController.listSubscriptions(call) }
+                    get("/subscriptions/{subscriptionId}") { adminController.getSubscriptionDetails(call) }
+                    post("/subscriptions/{subscriptionId}/provision-credits") { adminController.provisionSubscriptionCredits(call) }
+                    post("/users/{userId}/synchronize-plan") { adminController.synchronizeUserPlan(call) }
                 }
 
                 route("/user") {

@@ -18,6 +18,11 @@ object Plans : IdTable<String>("plans") {
     val currency = varchar("currency", 10).default("USD")
     val features = text("features").nullable() // JSONB stored as text
     val isActive = bool("is_active").default(true)
+    val stripeProductId = varchar("stripe_product_id", 100).nullable()
+    val stripePriceIdMonthly = varchar("stripe_price_id_monthly", 100).nullable()
+    val stripePriceIdAnnual = varchar("stripe_price_id_annual", 100).nullable()
+    val stripeMetadata = text("stripe_metadata").nullable()
+    val sortOrder = integer("sort_order").default(0)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 }

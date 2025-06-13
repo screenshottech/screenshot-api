@@ -11,6 +11,7 @@ data class User(
     val planName: String = "Free",
     val creditsRemaining: Int,
     val status: UserStatus = UserStatus.ACTIVE,
+    val roles: Set<UserRole> = setOf(UserRole.USER),
     val stripeCustomerId: String? = null,
     val lastActivity: Instant? = null,
     val authProvider: String = "local",
@@ -28,4 +29,39 @@ data class User(
 
     fun updateLastActivity(): User =
         copy(lastActivity = kotlinx.datetime.Clock.System.now())
+
+    // Role-based methods
+    fun hasRole(role: UserRole): Boolean = roles.contains(role)
+    
+    fun hasAnyRole(vararg targetRoles: UserRole): Boolean = 
+        targetRoles.any { roles.contains(it) }
+    
+    fun hasAllRoles(vararg targetRoles: UserRole): Boolean = 
+        targetRoles.all { roles.contains(it) }
+    
+    fun isAdmin(): Boolean = hasRole(UserRole.ADMIN)
+    
+    fun canAccessAdminPanel(): Boolean = 
+        hasAnyRole(UserRole.ADMIN, UserRole.BILLING_ADMIN, UserRole.SUPPORT, UserRole.MODERATOR)
+    
+    fun canManageUsers(): Boolean = 
+        hasAnyRole(UserRole.ADMIN, UserRole.SUPPORT)
+    
+    fun canManageBilling(): Boolean = 
+        hasAnyRole(UserRole.ADMIN, UserRole.BILLING_ADMIN)
+    
+    fun canModerateContent(): Boolean = 
+        hasAnyRole(UserRole.ADMIN, UserRole.MODERATOR)
+    
+    fun getHighestRole(): UserRole = 
+        roles.maxByOrNull { it.level } ?: UserRole.USER
+        
+    fun addRole(role: UserRole): User = 
+        copy(roles = roles + role)
+        
+    fun removeRole(role: UserRole): User = 
+        copy(roles = if (roles.size > 1) roles - role else setOf(UserRole.USER))
+        
+    fun replaceRoles(newRoles: Set<UserRole>): User = 
+        copy(roles = if (newRoles.isEmpty()) setOf(UserRole.USER) else newRoles)
 }

@@ -22,7 +22,7 @@ data class UserSummaryDto(
     val email: String,
     val name: String?,
     val status: String,
-    val planName: String,
+    val plan: PlanDetailDto,
     val creditsRemaining: Int,
     val totalScreenshots: Long,
     val lastActivity: String?,
@@ -42,6 +42,7 @@ data class UserDetailDto(
     val email: String,
     val name: String?,
     val status: String,
+    val roles: List<String>,
     val plan: PlanDetailDto,
     val creditsRemaining: Int,
     val totalScreenshots: Long,
@@ -187,7 +188,12 @@ fun ListUsersResponse.toDto() = UsersListResponseDto(
             email = user.email,
             name = user.name,
             status = user.status.name.lowercase(),
-            planName = user.planName,
+            plan = PlanDetailDto(
+                id = user.plan.id,
+                name = user.plan.name,
+                creditsPerMonth = user.plan.creditsPerMonth,
+                priceCents = user.plan.priceCents
+            ),
             creditsRemaining = user.creditsRemaining,
             totalScreenshots = user.totalScreenshots,
             lastActivity = user.lastActivity?.toString(),
@@ -210,6 +216,7 @@ fun GetUserDetailsResponse.toDto() = UserDetailsResponseDto(
         email = user.email,
         name = user.name,
         status = user.status.name.lowercase(),
+        roles = user.roles,
         plan = PlanDetailDto(
             id = user.plan.id,
             name = user.plan.name,
@@ -345,4 +352,187 @@ fun GetUserActivityResponse.toDto() = mapOf(
             timestamp = activity.timestamp.toString()
         )
     }
+)
+
+// Billing & Plan Synchronization DTOs - Following Hexagonal Architecture Principles
+@Serializable
+data class SynchronizeUserPlanResponseDto(
+    val userId: String,
+    val subscriptionId: String,
+    val previousPlanId: String,
+    val newPlanId: String,
+    val planUpdated: Boolean,
+    val creditsAdjusted: Boolean,
+    val newCreditBalance: Int,
+    val message: String,
+    val adminUserId: String,
+    val executedAt: String
+)
+
+@Serializable
+data class ProvisionCreditsResponseDto(
+    val subscriptionId: String,
+    val userId: String,
+    val planId: String,
+    val creditsProvisioned: Int,
+    val newCreditBalance: Int,
+    val userPlanUpdated: Boolean,
+    val processed: Boolean,
+    val message: String,
+    val adminUserId: String,
+    val executedAt: String
+)
+
+// Extension functions for domain -> DTO mapping (maintaining clean architecture)
+fun SynchronizeUserPlanAdminResponse.toDto() = SynchronizeUserPlanResponseDto(
+    userId = userId,
+    subscriptionId = subscriptionId ?: "",
+    previousPlanId = previousPlanId,
+    newPlanId = newPlanId,
+    planUpdated = planUpdated,
+    creditsAdjusted = creditsAdjusted,
+    newCreditBalance = newCreditBalance,
+    message = message,
+    adminUserId = adminUserId,
+    executedAt = executedAt.toString()
+)
+
+fun ProvisionSubscriptionCreditsAdminResponse.toDto() = ProvisionCreditsResponseDto(
+    subscriptionId = subscriptionId,
+    userId = userId,
+    planId = planId,
+    creditsProvisioned = creditsProvisioned,
+    newCreditBalance = newCreditBalance,
+    userPlanUpdated = userPlanUpdated,
+    processed = processed,
+    message = message,
+    adminUserId = adminUserId,
+    executedAt = executedAt.toString()
+)
+
+// Subscription Management DTOs
+@Serializable
+data class SubscriptionsListResponseDto(
+    val subscriptions: List<SubscriptionSummaryDto>,
+    val pagination: PaginationDto
+)
+
+@Serializable
+data class SubscriptionSummaryDto(
+    val id: String,
+    val userId: String,
+    val userEmail: String,
+    val userName: String?,
+    val planId: String,
+    val planName: String,
+    val status: String,
+    val stripeSubscriptionId: String?,
+    val stripeCustomerId: String?,
+    val currentPeriodStart: String?,
+    val currentPeriodEnd: String?,
+    val creditsUsed: Int,
+    val creditsLimit: Int,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+// Extension function for clean domain -> DTO conversion
+fun ListSubscriptionsResponse.toDto() = SubscriptionsListResponseDto(
+    subscriptions = subscriptions.map { subscription ->
+        SubscriptionSummaryDto(
+            id = subscription.id,
+            userId = subscription.userId,
+            userEmail = subscription.userEmail,
+            userName = subscription.userName,
+            planId = subscription.planId,
+            planName = subscription.planName,
+            status = subscription.status.name.lowercase(),
+            stripeSubscriptionId = subscription.stripeSubscriptionId,
+            stripeCustomerId = subscription.stripeCustomerId,
+            currentPeriodStart = subscription.currentPeriodStart?.toString(),
+            currentPeriodEnd = subscription.currentPeriodEnd?.toString(),
+            creditsUsed = subscription.creditsUsed,
+            creditsLimit = subscription.creditsLimit,
+            createdAt = subscription.createdAt.toString(),
+            updatedAt = subscription.updatedAt.toString()
+        )
+    },
+    pagination = PaginationDto(
+        page = page,
+        limit = limit,
+        total = total,
+        totalPages = ((total + limit - 1) / limit).toInt(),
+        hasNext = page * limit < total,
+        hasPrevious = page > 1
+    )
+)
+
+
+// === SUBSCRIPTION DETAILS ===
+
+@Serializable
+data class SubscriptionDetailDto(
+    // Core subscription info (reuses SubscriptionSummaryDto fields)
+    val id: String,
+    val userId: String,
+    val userEmail: String,
+    val userName: String?,
+    val planId: String,
+    val planName: String,
+    val status: String,
+    val stripeSubscriptionId: String?,
+    val stripeCustomerId: String?,
+    val currentPeriodStart: String?,
+    val currentPeriodEnd: String?,
+    val creditsUsed: Int,
+    val creditsLimit: Int,
+    val createdAt: String,
+    val updatedAt: String,
+    
+    // Extended detail fields
+    val billingCycle: String,
+    val cancelAtPeriodEnd: Boolean,
+    val plan: PlanDetailDto,
+    val isActive: Boolean,
+    val creditsForPeriod: Int,
+    val priceForPeriod: Int,
+    val totalScreenshots: Long,
+    val screenshotsLast30Days: Long,
+    val creditsRemaining: Int
+)
+
+// Extension function for clean domain -> DTO conversion (composition pattern)
+fun dev.screenshotapi.core.usecases.admin.GetSubscriptionDetailsResponse.toDto() = SubscriptionDetailDto(
+    // Map core fields from the subscription entity
+    id = subscription?.id ?: subscriptionId,
+    userId = userId,
+    userEmail = userEmail,
+    userName = userName,
+    planId = plan.id,
+    planName = plan.name,
+    status = subscription?.status?.name?.lowercase() ?: "unknown",
+    stripeSubscriptionId = subscription?.stripeSubscriptionId,
+    stripeCustomerId = subscription?.stripeCustomerId,
+    currentPeriodStart = subscription?.currentPeriodStart?.toString(),
+    currentPeriodEnd = subscription?.currentPeriodEnd?.toString(),
+    creditsUsed = 0, // Simplified: avoid negative numbers
+    creditsLimit = creditsRemaining, // Show actual remaining credits
+    createdAt = subscription?.createdAt?.toString() ?: "",
+    updatedAt = subscription?.updatedAt?.toString() ?: "",
+    
+    // Extended fields from the composed response
+    billingCycle = subscription?.billingCycle?.name?.lowercase() ?: "monthly",
+    cancelAtPeriodEnd = subscription?.cancelAtPeriodEnd ?: false,
+    plan = PlanDetailDto(
+        id = plan.id,
+        name = plan.name,
+        creditsPerMonth = plan.creditsPerMonth,
+        priceCents = plan.priceCentsMonthly
+    ),
+    isActive = isActive,
+    creditsForPeriod = creditsForPeriod,
+    priceForPeriod = priceForPeriod,
+    totalScreenshots = totalScreenshots, // Real usage data
+    screenshotsLast30Days = screenshotsLast30Days, // Real usage data
+    creditsRemaining = creditsRemaining // Real remaining credits from usage
 )

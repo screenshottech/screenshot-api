@@ -123,7 +123,9 @@ class AuthController : KoinComponent {
                     "userId" to response.userId,
                     "email" to response.email,
                     "name" to response.name,
-                    "status" to response.status.name.lowercase()
+                    "status" to response.status.name.lowercase(),
+                    "roles" to response.roles.map { it.name.lowercase() },
+                    "creditsRemaining" to response.creditsRemaining
                 )
             )
 

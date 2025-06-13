@@ -10,5 +10,6 @@ enum class UsageLogAction {
     API_KEY_CREATED,
     USER_REGISTERED,
     PLAN_UPGRADED,
+    PLAN_CHANGED,
     PAYMENT_PROCESSED
 }

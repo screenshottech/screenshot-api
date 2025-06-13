@@ -42,6 +42,11 @@ class PostgreSQLPlanRepository(private val database: Database) : PlanRepository 
             it[currency] = plan.currency
             it[features] = plan.features.joinToString(",")
             it[isActive] = plan.isActive
+            it[stripeProductId] = plan.stripeProductId
+            it[stripePriceIdMonthly] = plan.stripePriceIdMonthly
+            it[stripePriceIdAnnual] = plan.stripePriceIdAnnual
+            it[stripeMetadata] = plan.stripeMetadata
+            it[sortOrder] = plan.sortOrder
             it[createdAt] = plan.createdAt
             it[updatedAt] = now
         }
@@ -62,6 +67,11 @@ class PostgreSQLPlanRepository(private val database: Database) : PlanRepository 
             it[currency] = plan.currency
             it[features] = plan.features.joinToString(",")
             it[isActive] = plan.isActive
+            it[stripeProductId] = plan.stripeProductId
+            it[stripePriceIdMonthly] = plan.stripePriceIdMonthly
+            it[stripePriceIdAnnual] = plan.stripePriceIdAnnual
+            it[stripeMetadata] = plan.stripeMetadata
+            it[sortOrder] = plan.sortOrder
             it[updatedAt] = Clock.System.now()
         }
 

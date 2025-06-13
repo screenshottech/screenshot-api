@@ -7,7 +7,8 @@ data class AppConfig(
     val redis: RedisConfig,
     val storage: StorageConfig,
     val auth: AuthConfig,
-    val screenshot: ScreenshotConfig
+    val screenshot: ScreenshotConfig,
+    val billing: BillingConfig
 ) {
     companion object {
         fun load(): AppConfig {
@@ -20,7 +21,8 @@ data class AppConfig(
                 redis = RedisConfig.load(environment),
                 storage = StorageConfig.load(environment),
                 auth = AuthConfig.load(),
-                screenshot = ScreenshotConfig.load()
+                screenshot = ScreenshotConfig.load(),
+                billing = BillingConfig.load()
             )
         }
     }

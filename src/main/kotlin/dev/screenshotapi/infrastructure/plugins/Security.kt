@@ -6,6 +6,7 @@ import dev.screenshotapi.core.usecases.auth.ValidateApiKeyUseCase
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.infrastructure.auth.ApiKeyPrincipal
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
+import dev.screenshotapi.infrastructure.auth.JwtAuthProvider
 import dev.screenshotapi.infrastructure.auth.MultiProviderPrincipal
 import dev.screenshotapi.infrastructure.auth.UserPrincipal
 import dev.screenshotapi.infrastructure.config.AuthConfig
@@ -22,6 +23,7 @@ fun Application.configureSecurity() {
     val validateApiKeyUseCase by inject<ValidateApiKeyUseCase>()
     val authProviderFactory by inject<AuthProviderFactory>()
     val userRepository by inject<UserRepository>()
+    val jwtAuthProvider by inject<JwtAuthProvider>()
     val logger = LoggerFactory.getLogger("Security")
 
     authentication {
@@ -36,41 +38,8 @@ fun Application.configureSecurity() {
                     .build()
             )
             validate { credential ->
-                if (credential.payload.audience.contains(authConfig.jwtAudience)) {
-                    val userId = credential.payload.getClaim("userId")?.asString()
-
-                    if (userId != null) {
-                        // First try to find user by direct ID (for local auth)
-                        var user = userRepository.findById(userId)
-
-                        // If not found, try to find by external ID (for multi-provider auth)
-                        if (user == null) {
-                            user = userRepository.findByExternalId(userId, "clerk")
-                            println("JWT validation - found user by external ID: ${user?.id}")
-                        }
-
-                        if (user != null) {
-                            UserPrincipal(
-                                userId = user.id, // Use internal ID
-                                email = user.email,
-                                name = user.name,
-                                status = user.status,
-                                permissions = emptySet(), // TODO: Load actual permissions
-                                planId = user.planId,
-                                creditsRemaining = user.creditsRemaining
-                            )
-                        } else {
-                            logger.warn("JWT validation failed - user not found for ID: $userId")
-                            null
-                        }
-                    } else {
-                        logger.warn("JWT validation failed - no userId in token")
-                        null
-                    }
-                } else {
-                    logger.warn("JWT validation failed - audience mismatch")
-                    null
-                }
+                println("[Security] JWT validation - using JwtAuthProvider...")
+                jwtAuthProvider.validateJwt(credential)
             }
         }
 

@@ -11,6 +11,7 @@ val lettuce_version: String by project
 val skiko_version: String by project
 val cohort_ktor_version: String by project
 val ktor_rate_limiting_version: String by project
+val stripe_version: String by project
 
 plugins {
     kotlin("jvm") version "2.1.10"
@@ -88,6 +89,9 @@ dependencies {
 
     // Security (BCrypt for hashing)
     implementation("org.mindrot:jbcrypt:0.4")
+
+    // Stripe Payment Gateway
+    implementation("com.stripe:stripe-java:$stripe_version")
 
     // Monitoring
     implementation("io.ktor:ktor-server-metrics")

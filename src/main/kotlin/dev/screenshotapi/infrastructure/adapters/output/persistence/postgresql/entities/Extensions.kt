@@ -14,6 +14,7 @@ fun ResultRow.toUser(): User {
         planId = this[Users.planId].toString(),
         creditsRemaining = this[Users.creditsRemaining],
         status = UserStatus.valueOf(this[Users.status]),
+        roles = parseRolesFromPostgreSQL(this[Users.roles]),
         stripeCustomerId = this[Users.stripeCustomerId],
         lastActivity = this[Users.lastActivity],
         authProvider = this[Users.authProvider],
@@ -107,6 +108,11 @@ fun ResultRow.toPlan(): Plan {
         currency = this[Plans.currency],
         features = features,
         isActive = this[Plans.isActive],
+        stripeProductId = this[Plans.stripeProductId],
+        stripePriceIdMonthly = this[Plans.stripePriceIdMonthly],
+        stripePriceIdAnnual = this[Plans.stripePriceIdAnnual],
+        stripeMetadata = this[Plans.stripeMetadata],
+        sortOrder = this[Plans.sortOrder],
         createdAt = this[Plans.createdAt],
         updatedAt = this[Plans.updatedAt]
     )
@@ -116,3 +122,41 @@ fun ResultRow.toPlan(): Plan {
 fun Set<Permission>.toJson(): String = Json.encodeToString(this.map { it.name })
 fun ScreenshotRequest.toJson(): String = Json.encodeToString(this)
 fun List<String>.toJson(): String = Json.encodeToString(this)
+
+// Helper functions for PostgreSQL array handling
+fun parseRolesFromPostgreSQL(rolesString: String): Set<UserRole> {
+    // Parse PostgreSQL array format: {ADMIN,USER} -> Set<UserRole>
+    return try {
+        if (rolesString.startsWith("{") && rolesString.endsWith("}")) {
+            val cleanString = rolesString.substring(1, rolesString.length - 1)
+            if (cleanString.isBlank()) {
+                setOf(UserRole.USER)
+            } else {
+                cleanString.split(",")
+                    .map { it.trim() }
+                    .mapNotNull { 
+                        try { 
+                            UserRole.valueOf(it) 
+                        } catch (e: IllegalArgumentException) { 
+                            null 
+                        } 
+                    }
+                    .toSet()
+                    .takeIf { it.isNotEmpty() } ?: setOf(UserRole.USER)
+            }
+        } else {
+            setOf(UserRole.USER)
+        }
+    } catch (e: Exception) {
+        setOf(UserRole.USER)
+    }
+}
+
+fun Set<UserRole>.toPostgreSQLArray(): String {
+    // Convert Set<UserRole> to PostgreSQL array format: Set<UserRole> -> {ADMIN,USER}
+    return if (this.isEmpty()) {
+        "{USER}"
+    } else {
+        "{${this.joinToString(",") { it.name }}}"
+    }
+}

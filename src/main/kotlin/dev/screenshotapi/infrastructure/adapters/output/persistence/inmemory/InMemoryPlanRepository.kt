@@ -20,6 +20,11 @@ class InMemoryPlanRepository : PlanRepository {
             currency = "USD",
             features = listOf("Basic screenshots", "PNG/JPEG formats", "Standard support", "API access"),
             isActive = true,
+            stripeProductId = null, // Free plan has no Stripe product
+            stripePriceIdMonthly = null,
+            stripePriceIdAnnual = null,
+            stripeMetadata = null,
+            sortOrder = 1,
             createdAt = Clock.System.now(),
             updatedAt = Clock.System.now()
         )
@@ -80,27 +85,27 @@ class InMemoryPlanRepository : PlanRepository {
             Plan("plan_starter_monthly", "Starter Monthly", "12% cheaper than competitors + OCR included", 
                 2000, 1499, null, "monthly", "USD", 
                 listOf("All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks"), 
-                true, now, now),
+                true, "prod_starter", "price_starter_monthly", "price_starter_annual", null, 2, now, now),
             Plan("plan_starter_annual", "Starter Annual", "12% cheaper + OCR included + 10% annual savings", 
                 2000, 1499, 16200, "annual", "USD", 
                 listOf("All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks", "10% savings (2 months free)"), 
-                true, now, now),
+                true, "prod_starter", "price_starter_monthly", "price_starter_annual", null, 2, now, now),
             Plan("plan_pro_monthly", "Professional Monthly", "13% cheaper + batch processing + analytics dashboard", 
                 10000, 6900, null, "monthly", "USD", 
                 listOf("All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee"), 
-                true, now, now),
+                true, "prod_professional", "price_pro_monthly", "price_pro_annual", null, 3, now, now),
             Plan("plan_pro_annual", "Professional Annual", "13% cheaper + batch processing + analytics + 10% annual savings", 
                 10000, 6900, 74520, "annual", "USD", 
                 listOf("All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee", "10% savings (2 months free)"), 
-                true, now, now),
+                true, "prod_professional", "price_pro_monthly", "price_pro_annual", null, 3, now, now),
             Plan("plan_enterprise_monthly", "Enterprise Monthly", "12% cheaper + unlimited requests + white-label + on-premise", 
                 50000, 22900, null, "monthly", "USD", 
                 listOf("All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations"), 
-                true, now, now),
+                true, "prod_enterprise", "price_enterprise_monthly", "price_enterprise_annual", null, 4, now, now),
             Plan("plan_enterprise_annual", "Enterprise Annual", "12% cheaper + unlimited + white-label + on-premise + 10% annual savings", 
                 50000, 22900, 247320, "annual", "USD", 
                 listOf("All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations", "10% savings (2 months free)"), 
-                true, now, now)
+                true, "prod_enterprise", "price_enterprise_monthly", "price_enterprise_annual", null, 4, now, now)
         )
 
         defaultPlans.forEach { plan ->

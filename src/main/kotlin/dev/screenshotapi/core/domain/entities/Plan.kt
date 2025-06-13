@@ -13,6 +13,11 @@ data class Plan(
     val currency: String = "USD",
     val features: List<String> = emptyList(),
     val isActive: Boolean = true,
+    val stripeProductId: String? = null,
+    val stripePriceIdMonthly: String? = null,
+    val stripePriceIdAnnual: String? = null,
+    val stripeMetadata: String? = null,
+    val sortOrder: Int = 0,
     val createdAt: Instant,
     val updatedAt: Instant
 )

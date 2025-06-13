@@ -27,7 +27,8 @@ class LocalAuthProvider(
     override suspend fun validateToken(token: String): AuthResult? {
         return try {
             val jwt = verifier.verify(token)
-            val userId = jwt.getClaim("userId")?.asString() ?: return null
+            // Try standard JWT subject claim first, then fallback to custom userId claim
+            val userId = jwt.subject ?: jwt.getClaim("userId")?.asString() ?: return null
             
             val user = userRepository.findById(userId) ?: return null
             
@@ -49,11 +50,19 @@ class LocalAuthProvider(
         return validateToken(token)
     }
     
-    fun createToken(userId: String): String {
+    suspend fun createToken(userId: String): String {
+        // Get user data to include roles in JWT
+        val user = userRepository.findById(userId)
+        val userRoles = user?.roles?.map { it.name } ?: listOf("USER")
+        
         return JWT.create()
             .withAudience(jwtAudience)
             .withIssuer(jwtIssuer)
-            .withClaim("userId", userId)
+            .withSubject(userId) // Use standard JWT subject claim
+            .withClaim("userId", userId) // Keep for backward compatibility
+            .withClaim("roles", userRoles) // Add roles to JWT
+            .withClaim("email", user?.email) // Add email for convenience
+            .withIssuedAt(java.util.Date()) // Add issued at time
             .withExpiresAt(java.util.Date(System.currentTimeMillis() + 24 * 60 * 60 * 1000)) // 24 hours
             .sign(algorithm)
     }

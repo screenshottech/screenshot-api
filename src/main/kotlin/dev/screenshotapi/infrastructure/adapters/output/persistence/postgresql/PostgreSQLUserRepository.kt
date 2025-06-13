@@ -31,6 +31,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[planId] = user.planId
                 it[creditsRemaining] = user.creditsRemaining
                 it[status] = user.status.name
+                it[roles] = user.roles.toPostgreSQLArray()
                 it[stripeCustomerId] = user.stripeCustomerId
                 it[lastActivity] = user.lastActivity
                 it[authProvider] = user.authProvider
@@ -54,6 +55,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[planId] = user.planId
                 it[creditsRemaining] = user.creditsRemaining
                 it[status] = user.status.name
+                it[roles] = user.roles.toPostgreSQLArray()
                 it[stripeCustomerId] = user.stripeCustomerId
                 it[lastActivity] = user.lastActivity
                 it[authProvider] = user.authProvider
@@ -94,6 +96,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
             it[planId] = user.planId
             it[creditsRemaining] = user.creditsRemaining
             it[status] = user.status.name
+            it[roles] = user.roles.toPostgreSQLArray()
             it[stripeCustomerId] = user.stripeCustomerId
             it[lastActivity] = user.lastActivity
             it[authProvider] = user.authProvider

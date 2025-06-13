@@ -9,6 +9,7 @@ object InMemoryDatabase {
     private val users = mutableMapOf<String, User>()
     private val apiKeys = mutableMapOf<String, ApiKey>()
     private val screenshots = mutableMapOf<String, ScreenshotJob>()
+    private val subscriptions = mutableMapOf<String, Subscription>()
     private val queue = mutableListOf<ScreenshotJob>()
 
     init {
@@ -46,6 +47,7 @@ object InMemoryDatabase {
             planId = freePlan.id,
             planName = freePlan.name,
             creditsRemaining = freePlan.creditsPerMonth,
+            roles = setOf(UserRole.USER), // Default user role
             stripeCustomerId = null,
             createdAt = Clock.System.now(),
             updatedAt = Clock.System.now()
@@ -58,6 +60,14 @@ object InMemoryDatabase {
             planId = starterPlan.id,
             planName = starterPlan.name,
             creditsRemaining = starterPlan.creditsPerMonth
+        )
+
+        val adminUser = freeUser.copy(
+            id = "user_admin_1",
+            email = "admin@test.com",
+            name = "Admin User",
+            roles = setOf(UserRole.ADMIN), // Admin role
+            creditsRemaining = 1000000 // High credits for admin
         )
 
         // Create initial API keys
@@ -91,11 +101,43 @@ object InMemoryDatabase {
             createdAt = Clock.System.now()
         )
 
-        // Initialize database with default users and API keys
+        // Create initial subscriptions
+        val freeSubscription = Subscription(
+            id = "sub_free_1",
+            userId = freeUser.id,
+            planId = freePlan.id,
+            billingCycle = BillingCycle.MONTHLY,
+            status = SubscriptionStatus.ACTIVE,
+            stripeSubscriptionId = null,
+            stripeCustomerId = null,
+            currentPeriodStart = Clock.System.now().minus(15, DateTimeUnit.DAY, TimeZone.UTC),
+            currentPeriodEnd = Clock.System.now().plus(15, DateTimeUnit.DAY, TimeZone.UTC),
+            createdAt = Clock.System.now().minus(15, DateTimeUnit.DAY, TimeZone.UTC),
+            updatedAt = Clock.System.now()
+        )
+
+        val starterSubscription = Subscription(
+            id = "sub_starter_1",
+            userId = starterUser.id,
+            planId = starterPlan.id,
+            billingCycle = BillingCycle.MONTHLY,
+            status = SubscriptionStatus.ACTIVE,
+            stripeSubscriptionId = "sub_stripe_starter_123",
+            stripeCustomerId = "cus_stripe_starter_123",
+            currentPeriodStart = Clock.System.now().minus(10, DateTimeUnit.DAY, TimeZone.UTC),
+            currentPeriodEnd = Clock.System.now().plus(20, DateTimeUnit.DAY, TimeZone.UTC),
+            createdAt = Clock.System.now().minus(10, DateTimeUnit.DAY, TimeZone.UTC),
+            updatedAt = Clock.System.now()
+        )
+
+        // Initialize database with default users, API keys, and subscriptions
         users[freeUser.id] = freeUser
         users[starterUser.id] = starterUser
+        users[adminUser.id] = adminUser
         apiKeys[freeApiKey.id] = freeApiKey
         apiKeys[starterApiKey.id] = starterApiKey
+        subscriptions[freeSubscription.id] = freeSubscription
+        subscriptions[starterSubscription.id] = starterSubscription
     }
 
     // Thread-safe operations
@@ -192,6 +234,7 @@ object InMemoryDatabase {
         synchronized(users) { users.clear() }
         synchronized(apiKeys) { apiKeys.clear() }
         synchronized(screenshots) { screenshots.clear() }
+        synchronized(subscriptions) { subscriptions.clear() }
         synchronized(queue) { queue.clear() }
     }
 
@@ -317,6 +360,173 @@ object InMemoryDatabase {
             return screenshots.values.filter { job ->
                 ids.contains(job.id) && job.userId == userId
             }
+        }
+    }
+
+    // === SUBSCRIPTION METHODS ===
+
+    fun saveSubscription(subscription: Subscription): Subscription {
+        synchronized(subscriptions) {
+            subscriptions[subscription.id] = subscription
+            return subscription
+        }
+    }
+
+    fun findSubscriptionById(id: String): Subscription? {
+        synchronized(subscriptions) {
+            return subscriptions[id]
+        }
+    }
+
+    fun findSubscriptionsByUserId(userId: String): List<Subscription> {
+        synchronized(subscriptions) {
+            return subscriptions.values
+                .filter { it.userId == userId }
+                .sortedByDescending { it.createdAt }
+        }
+    }
+
+    fun findActiveSubscriptionByUserId(userId: String): Subscription? {
+        synchronized(subscriptions) {
+            return subscriptions.values
+                .filter { it.userId == userId && it.status == SubscriptionStatus.ACTIVE }
+                .maxByOrNull { it.createdAt }
+        }
+    }
+
+    fun findSubscriptionByStripeSubscriptionId(stripeSubscriptionId: String): Subscription? {
+        synchronized(subscriptions) {
+            return subscriptions.values
+                .firstOrNull { it.stripeSubscriptionId == stripeSubscriptionId }
+        }
+    }
+
+    fun findSubscriptionsByStripeCustomerId(stripeCustomerId: String): List<Subscription> {
+        synchronized(subscriptions) {
+            return subscriptions.values
+                .filter { it.stripeCustomerId == stripeCustomerId }
+                .sortedByDescending { it.createdAt }
+        }
+    }
+
+    fun findSubscriptionsByStatus(status: SubscriptionStatus): List<Subscription> {
+        synchronized(subscriptions) {
+            return subscriptions.values
+                .filter { it.status == status }
+                .sortedByDescending { it.createdAt }
+        }
+    }
+
+    fun findSubscriptionsToRenewSoon(beforeDate: kotlinx.datetime.Instant): List<Subscription> {
+        synchronized(subscriptions) {
+            return subscriptions.values
+                .filter { 
+                    it.currentPeriodEnd <= beforeDate && 
+                    it.status == SubscriptionStatus.ACTIVE 
+                }
+                .sortedBy { it.currentPeriodEnd }
+        }
+    }
+
+    fun deleteSubscription(id: String) {
+        synchronized(subscriptions) {
+            subscriptions.remove(id)
+        }
+    }
+
+    fun getAllSubscriptions(): List<Subscription> {
+        synchronized(subscriptions) {
+            return subscriptions.values
+                .sortedByDescending { it.createdAt }
+        }
+    }
+
+    fun countAllSubscriptions(): Long {
+        synchronized(subscriptions) {
+            return subscriptions.size.toLong()
+        }
+    }
+
+    fun findSubscriptionsWithPagination(
+        page: Int,
+        limit: Int,
+        searchQuery: String?,
+        statusFilter: SubscriptionStatus?,
+        planIdFilter: String?
+    ): List<Subscription> {
+        synchronized(subscriptions) {
+            var filtered = subscriptions.values.asSequence()
+
+            // Apply filters
+            if (!searchQuery.isNullOrBlank()) {
+                val query = searchQuery.lowercase()
+                filtered = filtered.filter { subscription ->
+                    // Search in user email/name by looking up the user
+                    val user = findUser(subscription.userId)
+                    val userMatch = user?.let { 
+                        it.email.lowercase().contains(query) || 
+                        it.name?.lowercase()?.contains(query) == true 
+                    } ?: false
+                    
+                    // Search in subscription fields
+                    userMatch ||
+                    subscription.id.lowercase().contains(query) ||
+                    subscription.planId.lowercase().contains(query) ||
+                    subscription.stripeSubscriptionId?.lowercase()?.contains(query) == true
+                }
+            }
+
+            if (statusFilter != null) {
+                filtered = filtered.filter { it.status == statusFilter }
+            }
+
+            if (!planIdFilter.isNullOrBlank()) {
+                filtered = filtered.filter { it.planId == planIdFilter }
+            }
+
+            // Sort by creation date (newest first)
+            val sorted = filtered.sortedByDescending { it.createdAt }
+
+            // Apply pagination
+            val startIndex = (page - 1) * limit
+            return sorted.drop(startIndex).take(limit).toList()
+        }
+    }
+
+    fun countSubscriptionsWithFilters(
+        searchQuery: String?,
+        statusFilter: SubscriptionStatus?,
+        planIdFilter: String?
+    ): Long {
+        synchronized(subscriptions) {
+            var filtered = subscriptions.values.asSequence()
+
+            // Apply same filters as pagination method
+            if (!searchQuery.isNullOrBlank()) {
+                val query = searchQuery.lowercase()
+                filtered = filtered.filter { subscription ->
+                    val user = findUser(subscription.userId)
+                    val userMatch = user?.let { 
+                        it.email.lowercase().contains(query) || 
+                        it.name?.lowercase()?.contains(query) == true 
+                    } ?: false
+                    
+                    userMatch ||
+                    subscription.id.lowercase().contains(query) ||
+                    subscription.planId.lowercase().contains(query) ||
+                    subscription.stripeSubscriptionId?.lowercase()?.contains(query) == true
+                }
+            }
+
+            if (statusFilter != null) {
+                filtered = filtered.filter { it.status == statusFilter }
+            }
+
+            if (!planIdFilter.isNullOrBlank()) {
+                filtered = filtered.filter { it.planId == planIdFilter }
+            }
+
+            return filtered.count().toLong()
         }
     }
 }

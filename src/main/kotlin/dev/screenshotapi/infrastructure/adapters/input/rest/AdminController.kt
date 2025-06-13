@@ -4,6 +4,8 @@ import dev.screenshotapi.core.domain.entities.StatsBreakdown
 import dev.screenshotapi.core.domain.entities.StatsGroupBy
 import dev.screenshotapi.core.domain.entities.StatsPeriod
 import dev.screenshotapi.core.domain.entities.UserStatus
+import dev.screenshotapi.core.domain.entities.SubscriptionStatus
+import dev.screenshotapi.core.domain.exceptions.AuthorizationException
 import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
 import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.usecases.admin.*
@@ -24,17 +26,37 @@ class AdminController : KoinComponent {
     private val updateUserStatusUseCase: UpdateUserStatusUseCase by inject()
     private val getUserActivityUseCase: GetUserActivityUseCase by inject()
     private val getScreenshotStatsUseCase: GetScreenshotStatsUseCase by inject()
+    private val provisionSubscriptionCreditsAdminUseCase: ProvisionSubscriptionCreditsAdminUseCase by inject()
+    private val synchronizeUserPlanAdminUseCase: SynchronizeUserPlanAdminUseCase by inject()
+    private val listSubscriptionsUseCase: ListSubscriptionsUseCase by inject()
+    private val getSubscriptionDetailsUseCase: GetSubscriptionDetailsUseCase by inject()
 
     suspend fun listUsers(call: ApplicationCall) {
         try {
+            println("[AdminController] Extracting principal from call...")
             val principal = call.principal<UserPrincipal>()!!
-            if (!isAdmin(principal)) {
+            println("[AdminController] Principal extracted successfully")
+
+            // Debug logging
+            println("[AdminController] listUsers - User: ${principal.email}")
+            println("[AdminController] listUsers - Status: ${principal.status}")
+            println("[AdminController] listUsers - Roles: ${principal.roles.map { it.name }}")
+            println("[AdminController] listUsers - canManageUsers(): ${principal.canManageUsers()}")
+
+            // Let's also check the raw Authorization header
+            val authHeader = call.request.headers["Authorization"]
+            println("[AdminController] Authorization header: ${authHeader?.take(50)}...")
+
+            if (!principal.canManageUsers()) {
+                println("[AdminController] listUsers - Access denied for user ${principal.email}")
                 call.respond(
                     HttpStatusCode.Forbidden,
-                    ErrorResponseDto.forbidden("Admin access required")
+                    ErrorResponseDto.forbidden("User management access required")
                 )
                 return
             }
+
+            println("[AdminController] listUsers - Access granted for user ${principal.email}")
 
             val page = call.parameters["page"]?.toIntOrNull() ?: 1
             val limit = call.parameters["limit"]?.toIntOrNull()?.coerceAtMost(100) ?: 20
@@ -68,10 +90,10 @@ class AdminController : KoinComponent {
     suspend fun getUser(call: ApplicationCall) {
         try {
             val principal = call.principal<UserPrincipal>()!!
-            if (!isAdmin(principal)) {
+            if (!principal.canManageUsers()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
-                    ErrorResponseDto.forbidden("Admin access required")
+                    ErrorResponseDto.forbidden("User management access required")
                 )
                 return
             }
@@ -106,10 +128,10 @@ class AdminController : KoinComponent {
     suspend fun getStats(call: ApplicationCall) {
         try {
             val principal = call.principal<UserPrincipal>()!!
-            if (!isAdmin(principal)) {
+            if (!principal.canViewSystemStats()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
-                    ErrorResponseDto.forbidden("Admin access required")
+                    ErrorResponseDto.forbidden("System statistics access required")
                 )
                 return
             }
@@ -142,10 +164,10 @@ class AdminController : KoinComponent {
     suspend fun updateUserStatus(call: ApplicationCall) {
         try {
             val principal = call.principal<UserPrincipal>()!!
-            if (!isAdmin(principal)) {
+            if (!principal.canManageUsers()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
-                    ErrorResponseDto.forbidden("Admin access required")
+                    ErrorResponseDto.forbidden("User management access required")
                 )
                 return
             }
@@ -185,10 +207,10 @@ class AdminController : KoinComponent {
     suspend fun getUserActivity(call: ApplicationCall) {
         try {
             val principal = call.principal<UserPrincipal>()!!
-            if (!isAdmin(principal)) {
+            if (!principal.canManageUsers()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
-                    ErrorResponseDto.forbidden("Admin access required")
+                    ErrorResponseDto.forbidden("User management access required")
                 )
                 return
             }
@@ -223,10 +245,10 @@ class AdminController : KoinComponent {
     suspend fun getScreenshotStats(call: ApplicationCall) {
         try {
             val principal = call.principal<UserPrincipal>()!!
-            if (!isAdmin(principal)) {
+            if (!principal.canViewSystemStats()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
-                    ErrorResponseDto.forbidden("Admin access required")
+                    ErrorResponseDto.forbidden("System statistics access required")
                 )
                 return
             }
@@ -298,7 +320,12 @@ class AdminController : KoinComponent {
                     email = user.email,
                     name = user.name,
                     status = user.status.name.lowercase(),
-                    planName = user.planName,
+                    plan = PlanDetailDto(
+                        id = user.plan.id,
+                        name = user.plan.name,
+                        creditsPerMonth = user.plan.creditsPerMonth,
+                        priceCents = user.plan.priceCents
+                    ),
                     creditsRemaining = user.creditsRemaining,
                     totalScreenshots = user.totalScreenshots,
                     lastActivity = user.lastActivity?.toString(),
@@ -330,6 +357,7 @@ class AdminController : KoinComponent {
                     creditsPerMonth = response.user.plan.creditsPerMonth,
                     priceCents = response.user.plan.priceCents
                 ),
+                roles = response.user.roles,
                 creditsRemaining = response.user.creditsRemaining,
                 totalScreenshots = response.user.totalScreenshots,
                 successfulScreenshots = response.user.successfulScreenshots,
@@ -396,6 +424,143 @@ class AdminController : KoinComponent {
             }
         )
     }
+
+    suspend fun listSubscriptions(call: ApplicationCall) {
+        val principal = call.principal<UserPrincipal>()!!
+        if (!principal.canManageBilling()) {
+            throw AuthorizationException.InsufficientPermissions("Billing management access required")
+        }
+
+        val page = call.parameters["page"]?.toIntOrNull() ?: 1
+        val limit = call.parameters["limit"]?.toIntOrNull()?.coerceAtMost(100) ?: 20
+        val search = call.parameters["search"]
+        val status = call.parameters["status"]
+        val planId = call.parameters["planId"]
+
+        val request = ListSubscriptionsRequest(
+            page = page,
+            limit = limit,
+            searchQuery = search,
+            statusFilter = status?.let { 
+                try {
+                    SubscriptionStatus.valueOf(it.uppercase())
+                } catch (e: IllegalArgumentException) {
+                    throw ValidationException("Invalid status parameter: $it", "status")
+                }
+            },
+            planIdFilter = planId
+        )
+
+        val response = listSubscriptionsUseCase(request)
+        call.respond(HttpStatusCode.OK, response.toDto())
+    }
+
+    suspend fun getSubscriptionDetails(call: ApplicationCall) {
+        val principal = call.principal<UserPrincipal>()!!
+        if (!principal.canManageBilling()) {
+            throw AuthorizationException.InsufficientPermissions("Billing management access required")
+        }
+
+        val subscriptionId = call.parameters["subscriptionId"]
+            ?: throw ValidationException("Subscription ID is required", "subscriptionId")
+
+        val request = GetSubscriptionDetailsRequest(subscriptionId = subscriptionId)
+        val response = getSubscriptionDetailsUseCase(request)
+        call.respond(HttpStatusCode.OK, response.toDto())
+    }
+
+    suspend fun provisionSubscriptionCredits(call: ApplicationCall) {
+        try {
+            val principal = call.principal<UserPrincipal>()!!
+            if (!principal.canManageBilling()) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    ErrorResponseDto.forbidden("Billing management access required")
+                )
+                return
+            }
+
+            val subscriptionId = call.parameters["subscriptionId"]
+                ?: throw ValidationException("Subscription ID is required", "subscriptionId")
+
+            val body = call.receive<Map<String, String>>()
+            val reason = body["reason"] ?: "admin_manual_provision"
+
+            val request = ProvisionSubscriptionCreditsAdminRequest(
+                subscriptionId = subscriptionId,
+                reason = reason,
+                adminUserId = principal.userId
+            )
+
+            val response = provisionSubscriptionCreditsAdminUseCase(request)
+            call.respond(HttpStatusCode.OK, response.toDto())
+
+        } catch (e: ResourceNotFoundException) {
+            call.respond(
+                HttpStatusCode.NotFound,
+                ErrorResponseDto.notFound("Subscription", call.parameters["subscriptionId"] ?: "unknown")
+            )
+        } catch (e: ValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponseDto.validation(e.message ?: "Invalid request", e.field)
+            )
+        } catch (e: Exception) {
+            call.application.log.error("Provision subscription credits error", e)
+            call.respond(
+                HttpStatusCode.InternalServerError,
+                ErrorResponseDto.internal("Failed to provision credits")
+            )
+        }
+    }
+
+    suspend fun synchronizeUserPlan(call: ApplicationCall) {
+        try {
+            val principal = call.principal<UserPrincipal>()!!
+            if (!principal.canManageBilling()) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    ErrorResponseDto.forbidden("Billing management access required")
+                )
+                return
+            }
+
+            val userId = call.parameters["userId"]
+                ?: throw ValidationException("User ID is required", "userId")
+
+            val body = call.receive<Map<String, String>>()
+            val subscriptionId = body["subscriptionId"] // Optional
+            val reason = body["reason"] ?: "admin_manual_sync"
+
+            val request = SynchronizeUserPlanAdminRequest(
+                userId = userId,
+                subscriptionId = subscriptionId,
+                adminUserId = principal.userId,
+                reason = reason
+            )
+
+            val response = synchronizeUserPlanAdminUseCase(request)
+            call.respond(HttpStatusCode.OK, response.toDto())
+
+        } catch (e: ResourceNotFoundException) {
+            call.respond(
+                HttpStatusCode.NotFound,
+                ErrorResponseDto.notFound("User or Subscription", call.parameters["userId"] ?: "unknown")
+            )
+        } catch (e: ValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponseDto.validation(e.message ?: "Invalid request", e.field)
+            )
+        } catch (e: Exception) {
+            call.application.log.error("Synchronize user plan error", e)
+            call.respond(
+                HttpStatusCode.InternalServerError,
+                ErrorResponseDto.internal("Failed to synchronize user plan")
+            )
+        }
+    }
+
 
     private fun convertToScreenshotStatsDto(response: GetScreenshotStatsResponse): Map<String, Any> {
         return mapOf(

@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS plans (
     currency VARCHAR(10) NOT NULL DEFAULT 'USD',
     features TEXT NULL, -- Was JSONB, Kotlin schema uses text("features").nullable() for JSON storage
     is_active BOOLEAN NOT NULL DEFAULT true,
+    stripe_product_id VARCHAR(100) NULL,
+    stripe_price_id_monthly VARCHAR(100) NULL,
+    stripe_price_id_annual VARCHAR(100) NULL,
+    stripe_metadata TEXT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     );
@@ -23,13 +28,16 @@ CREATE TABLE IF NOT EXISTS plans (
 CREATE TABLE IF NOT EXISTS users (
                                      id VARCHAR(255) PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NULL, -- Changed to nullable for external auth providers
     name VARCHAR(255), -- Was NOT NULL, Kotlin schema has nullable()
     credits_remaining INTEGER NOT NULL DEFAULT 0, -- Was DEFAULT 100, Kotlin schema has default(0)
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', -- Was VARCHAR(50), Kotlin schema has VARCHAR(20)
     plan_id VARCHAR(255) REFERENCES plans(id), -- Added explicit foreign key reference
+    roles VARCHAR(500) NOT NULL DEFAULT '{USER}', -- User roles in array string format
     stripe_customer_id VARCHAR(100) NULL, -- Added from Kotlin schema
     last_activity TIMESTAMP WITH TIME ZONE NULL, -- Added from Kotlin schema
+    auth_provider VARCHAR(50) NOT NULL DEFAULT 'local', -- Authentication provider (local, clerk, etc.)
+    external_id VARCHAR(255) NULL, -- External provider user ID
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
     );
@@ -161,21 +169,27 @@ CREATE INDEX IF NOT EXISTS "activitiesTimestampIndex" ON activities(timestamp); 
 CREATE INDEX IF NOT EXISTS idx_stripe_customers_user_id_explicit_for_non_warn ON stripe_customers(user_id); -- Added this to address the specific warning if you don't change Kotlin, ensure it's unique if it should be.
 
 
-INSERT INTO plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, created_at, updated_at) VALUES
-                                                                                                                                     ('plan_free', 'Free Forever', '3x more generous than competitors - perfect for developers', 300, 0, NULL, 'monthly', 'USD',
-                                                                                                                                      '["Basic screenshots", "PNG/JPEG formats", "Standard support", "API access"]', true, NOW(), NOW()),
-                                                                                                                                     ('plan_starter_monthly', 'Starter Monthly', '12% cheaper than competitors + OCR included', 2000, 1499, NULL, 'monthly', 'USD',
-                                                                                                                                      '["All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks"]', true, NOW(), NOW()),
-                                                                                                                                     ('plan_starter_annual', 'Starter Annual', '12% cheaper + OCR included + 10% annual savings', 2000, 1499, 16200, 'annual', 'USD',
-                                                                                                                                      '["All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks", "10% savings (2 months free)"]', true, NOW(), NOW()),
-                                                                                                                                     ('plan_pro_monthly', 'Professional Monthly', '13% cheaper + batch processing + analytics dashboard', 10000, 6900, NULL, 'monthly', 'USD',
-                                                                                                                                      '["All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee"]', true, NOW(), NOW()),
-                                                                                                                                     ('plan_pro_annual', 'Professional Annual', '13% cheaper + batch processing + analytics + 10% annual savings', 10000, 6900, 74520, 'annual', 'USD',
-                                                                                                                                      '["All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee", "10% savings (2 months free)"]', true, NOW(), NOW()),
-                                                                                                                                     ('plan_enterprise_monthly', 'Enterprise Monthly', '12% cheaper + unlimited requests + white-label + on-premise', 50000, 22900, NULL, 'monthly', 'USD',
-                                                                                                                                      '["All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations"]', true, NOW(), NOW()),
-                                                                                                                                     ('plan_enterprise_annual', 'Enterprise Annual', '12% cheaper + unlimited + white-label + on-premise + 10% annual savings', 50000, 22900, 247320, 'annual', 'USD',
-                                                                                                                                      '["All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations", "10% savings (2 months free)"]', true, NOW(), NOW())
+-- Insert plans with Stripe integration mapping
+-- Stripe Structure:
+-- - Free Plan: No Stripe product (NULL values for Stripe fields)
+-- - Paid Plans: Each has a Stripe Product with Monthly and Annual Price IDs
+-- - Multiple database plans can share the same Stripe Product (e.g., starter_monthly + starter_annual)
+-- - Price IDs are placeholders and should be updated with real Stripe Price IDs after product creation
+INSERT INTO plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES
+    ('plan_free', 'Free Forever', '3x more generous than competitors - perfect for developers', 300, 0, NULL, 'monthly', 'USD',
+     '["Basic screenshots", "PNG/JPEG formats", "Standard support", "API access"]', true, NULL, NULL, NULL, NULL, 1, NOW(), NOW()),
+    ('plan_starter_monthly', 'Starter Monthly', '12% cheaper than competitors + OCR included', 2000, 1499, NULL, 'monthly', 'USD',
+     '["All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks"]', true, 'prod_starter', 'price_starter_monthly', 'price_starter_annual', NULL, 2, NOW(), NOW()),
+    ('plan_starter_annual', 'Starter Annual', '12% cheaper + OCR included + 10% annual savings', 2000, 1499, 16200, 'annual', 'USD',
+     '["All Basic features", "OCR text extraction", "PDF format support", "Priority support", "Webhooks", "10% savings (2 months free)"]', true, 'prod_starter', 'price_starter_monthly', 'price_starter_annual', NULL, 2, NOW(), NOW()),
+    ('plan_pro_monthly', 'Professional Monthly', '13% cheaper + batch processing + analytics dashboard', 10000, 6900, NULL, 'monthly', 'USD',
+     '["All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee"]', true, 'prod_professional', 'price_pro_monthly', 'price_pro_annual', NULL, 3, NOW(), NOW()),
+    ('plan_pro_annual', 'Professional Annual', '13% cheaper + batch processing + analytics + 10% annual savings', 10000, 6900, 74520, 'annual', 'USD',
+     '["All Starter features", "Batch processing", "Analytics dashboard", "Custom dimensions", "Multiple formats", "SLA guarantee", "10% savings (2 months free)"]', true, 'prod_professional', 'price_pro_monthly', 'price_pro_annual', NULL, 3, NOW(), NOW()),
+    ('plan_enterprise_monthly', 'Enterprise Monthly', '12% cheaper + unlimited requests + white-label + on-premise', 50000, 22900, NULL, 'monthly', 'USD',
+     '["All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations"]', true, 'prod_enterprise', 'price_enterprise_monthly', 'price_enterprise_annual', NULL, 4, NOW(), NOW()),
+    ('plan_enterprise_annual', 'Enterprise Annual', '12% cheaper + unlimited + white-label + on-premise + 10% annual savings', 50000, 22900, 247320, 'annual', 'USD',
+     '["All Professional features", "Unlimited concurrent requests", "White-label solution", "On-premise deployment", "Dedicated support", "Custom integrations", "10% savings (2 months free)"]', true, 'prod_enterprise', 'price_enterprise_monthly', 'price_enterprise_annual', NULL, 4, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING;
 
 -- Insert development user
@@ -202,6 +216,28 @@ RETURN NEW;
 END;
 $$ language 'plpgsql';
 
+-- Subscriptions table (billing system)
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id VARCHAR(255) PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plan_id VARCHAR(255) NOT NULL REFERENCES plans(id),
+    billing_cycle VARCHAR(20) NOT NULL, -- "monthly" or "annual"
+    status VARCHAR(50) NOT NULL,
+    stripe_subscription_id VARCHAR(255) NULL,
+    stripe_customer_id VARCHAR(255) NULL,
+    current_period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    current_period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+    cancel_at_period_end BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for subscriptions table
+CREATE INDEX IF NOT EXISTS "subscriptionsUserIdIndex" ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS "subscriptionsStripeSubscriptionIdIndex" ON subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS "subscriptionsStripeCustomerIdIndex" ON subscriptions(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS "subscriptionsStatusIndex" ON subscriptions(status);
+
 -- Create triggers to automatically update updated_at
 -- Only apply to tables that have an 'updated_at' column in their Kotlin schema
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
@@ -215,4 +251,56 @@ CREATE TRIGGER update_usage_tracking_updated_at BEFORE UPDATE ON usage_tracking
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_stripe_customers_updated_at BEFORE UPDATE ON stripe_customers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_subscriptions_updated_at BEFORE UPDATE ON subscriptions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- Activities and UsageLogs do not have an 'updated_at' field in their Kotlin schemas (they use 'timestamp')
+
+-- Role helper functions for string-based role checking
+CREATE OR REPLACE FUNCTION user_has_role(user_roles_str VARCHAR, target_role VARCHAR)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN user_roles_str ~ target_role;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION user_can_access_admin(user_roles_str VARCHAR)
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN user_roles_str ~ '(SUPPORT|MODERATOR|BILLING_ADMIN|ADMIN)';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- Insert admin user if it doesn't exist
+INSERT INTO users (
+    id, 
+    email, 
+    name, 
+    password_hash,
+    status, 
+    plan_id, 
+    credits_remaining,
+    roles,
+    auth_provider,
+    created_at,
+    updated_at
+) 
+SELECT 
+    'admin_' || extract(epoch from now())::bigint,
+    'screenshotapi.dev@gmail.com',
+    'Screenshot API Admin',
+    NULL, -- No password for admin user initially
+    'ACTIVE',
+    'plan_free',
+    1000000,
+    '{ADMIN}',
+    'local',
+    now(),
+    now()
+WHERE NOT EXISTS (
+    SELECT 1 FROM users WHERE email = 'screenshotapi.dev@gmail.com'
+);
+
+-- Add helpful comments
+COMMENT ON COLUMN users.roles IS 'User roles in PostgreSQL array string format: {ADMIN,USER}. Parsed by application layer.';
+COMMENT ON FUNCTION user_has_role(VARCHAR, VARCHAR) IS 'Check if user has specific role using string matching.';
+COMMENT ON FUNCTION user_can_access_admin(VARCHAR) IS 'Check if user can access admin panel based on roles.';

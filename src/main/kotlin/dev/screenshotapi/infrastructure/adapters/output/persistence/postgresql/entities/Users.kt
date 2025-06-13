@@ -1,5 +1,6 @@
 package dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities
 
+import dev.screenshotapi.core.domain.entities.UserRole
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.Column
@@ -15,6 +16,7 @@ object Users : IdTable<String>("users") {
     val planId = reference("plan_id", Plans)
     val creditsRemaining = integer("credits_remaining").default(0)
     val status = varchar("status", 20).default("ACTIVE")
+    val roles = varchar("roles", 500).default("{USER}") // PostgreSQL array as string representation
     val stripeCustomerId = varchar("stripe_customer_id", 100).nullable()
     val lastActivity = timestamp("last_activity").nullable()
     val authProvider = varchar("auth_provider", 50).default("local")

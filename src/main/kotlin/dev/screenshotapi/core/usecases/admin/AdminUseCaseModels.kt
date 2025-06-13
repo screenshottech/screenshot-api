@@ -23,7 +23,8 @@ data class UserSummary(
     val email: String,
     val name: String?,
     val status: UserStatus,
-    val planName: String,
+    val roles: List<String>,
+    val plan: PlanInfo,
     val creditsRemaining: Int,
     val totalScreenshots: Long,
     val lastActivity: Instant?,
@@ -48,6 +49,7 @@ data class UserDetail(
     val email: String,
     val name: String?,
     val status: UserStatus,
+    val roles: List<String>,
     val plan: PlanInfo,
     val creditsRemaining: Int,
     val totalScreenshots: Long,
@@ -212,4 +214,79 @@ data class ScreenshotStatItem(
     val failed: Long,
     val averageProcessingTime: Long?,
     val formats: Map<String, Long>? = null
+)
+
+// === PROVISION SUBSCRIPTION CREDITS (ADMIN) ===
+data class ProvisionSubscriptionCreditsAdminRequest(
+    val subscriptionId: String,
+    val reason: String = "admin_manual_provision",
+    val adminUserId: String
+)
+
+data class ProvisionSubscriptionCreditsAdminResponse(
+    val subscriptionId: String,
+    val userId: String,
+    val planId: String,
+    val creditsProvisioned: Int,
+    val newCreditBalance: Int,
+    val userPlanUpdated: Boolean,
+    val processed: Boolean,
+    val message: String,
+    val adminUserId: String,
+    val executedAt: Instant
+)
+
+// === SYNCHRONIZE USER PLAN (ADMIN) ===
+data class SynchronizeUserPlanAdminRequest(
+    val userId: String,
+    val subscriptionId: String? = null, // If null, finds active subscription
+    val adminUserId: String,
+    val reason: String = "admin_manual_sync"
+)
+
+data class SynchronizeUserPlanAdminResponse(
+    val userId: String,
+    val subscriptionId: String?,
+    val previousPlanId: String,
+    val newPlanId: String,
+    val planUpdated: Boolean,
+    val creditsAdjusted: Boolean,
+    val newCreditBalance: Int,
+    val message: String,
+    val adminUserId: String,
+    val executedAt: Instant
+)
+
+// === LIST SUBSCRIPTIONS (ADMIN) ===
+data class ListSubscriptionsRequest(
+    val page: Int = 1,
+    val limit: Int = 20,
+    val searchQuery: String? = null,
+    val statusFilter: SubscriptionStatus? = null,
+    val planIdFilter: String? = null
+)
+
+data class ListSubscriptionsResponse(
+    val subscriptions: List<SubscriptionSummary>,
+    val page: Int,
+    val limit: Int,
+    val total: Long
+)
+
+data class SubscriptionSummary(
+    val id: String,
+    val userId: String,
+    val userEmail: String,
+    val userName: String?,
+    val planId: String,
+    val planName: String,
+    val status: SubscriptionStatus,
+    val stripeSubscriptionId: String?,
+    val stripeCustomerId: String?,
+    val currentPeriodStart: Instant?,
+    val currentPeriodEnd: Instant?,
+    val creditsUsed: Int,
+    val creditsLimit: Int,
+    val createdAt: Instant,
+    val updatedAt: Instant
 )
