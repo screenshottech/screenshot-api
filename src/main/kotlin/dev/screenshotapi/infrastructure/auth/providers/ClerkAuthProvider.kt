@@ -17,6 +17,7 @@ import kotlinx.serialization.json.Json
 import java.security.KeyFactory
 import java.security.interfaces.RSAPublicKey
 import java.util.*
+import org.slf4j.LoggerFactory
 
 @Serializable
 private data class ClerkJWKSResponse(
@@ -39,6 +40,7 @@ class ClerkAuthProvider(
     private val clerkDomain: String? = null
 ) : AuthProvider {
 
+    private val logger = LoggerFactory.getLogger(ClerkAuthProvider::class.java)
     override val providerName: String = "clerk"
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -46,29 +48,52 @@ class ClerkAuthProvider(
     private var keysLastFetched: Long = 0
     private val keysCacheDuration = 60 * 60 * 1000L // 1 hour
 
+    init {
+        logger.info("ClerkAuthProvider initialized with domain: ${clerkDomain ?: "default"}")
+    }
+
     override suspend fun validateToken(token: String): AuthResult? {
         return try {
+            logger.debug("Validating Clerk token...")
             val jwt = JWT.decode(token)
-            val kid = jwt.keyId ?: return null
+            logger.debug("JWT decoded - Subject: ${jwt.subject}, KeyId: ${jwt.keyId}")
+            
+            val kid = jwt.keyId ?: run {
+                logger.error("No key ID found in JWT")
+                return null
+            }
 
-            val publicKey = getPublicKey(kid) ?: return null
+            val publicKey = getPublicKey(kid) ?: run {
+                logger.error("Failed to get public key for kid: $kid")
+                return null
+            }
+            
             val algorithm = Algorithm.RSA256(publicKey, null)
-
             val verifier = JWT.require(algorithm).build()
             val verifiedJwt = verifier.verify(token)
+            logger.info("JWT verified successfully")
 
-            val userId = verifiedJwt.subject ?: return null
-            val email = verifiedJwt.getClaim("email")?.asString() ?: return null
+            val userId = verifiedJwt.subject ?: run {
+                logger.error("No subject in verified JWT")
+                return null
+            }
+            val email = verifiedJwt.getClaim("email")?.asString() ?: run {
+                logger.error("No email claim in verified JWT")
+                return null
+            }
             val name = verifiedJwt.getClaim("name")?.asString()
 
-            AuthResult(
+            val result = AuthResult(
                 userId = userId,
                 email = email,
                 name = name,
                 providerId = userId,
                 providerName = providerName
             )
+            logger.info("Auth result created for user: $email")
+            result
         } catch (e: Exception) {
+            logger.error("Error validating Clerk token", e)
             null
         }
     }
@@ -123,8 +148,10 @@ class ClerkAuthProvider(
             } else {
                 "https://clerk.dev/.well-known/jwks.json"
             }
-
+            
+            logger.info("Fetching JWKS from: $jwksUrl")
             val response: ClerkJWKSResponse = httpClient.get(jwksUrl).body()
+            logger.info("JWKS response received with ${response.keys.size} keys")
 
             val keys = mutableMapOf<String, RSAPublicKey>()
             for (jwk in response.keys) {
@@ -132,15 +159,17 @@ class ClerkAuthProvider(
                     val publicKey = buildRSAPublicKey(jwk.n, jwk.e)
                     if (publicKey != null) {
                         keys[jwk.kid] = publicKey
+                        logger.debug("Added public key with kid: ${jwk.kid}")
                     }
                 }
             }
 
             cachedKeys = keys
             keysLastFetched = System.currentTimeMillis()
+            logger.info("JWKS cache refreshed with ${keys.size} keys")
         } catch (e: Exception) {
-            // Log error in production
-            println("Failed to refresh Clerk JWKS: ${e.message}")
+            logger.error("Failed to refresh Clerk JWKS", e)
+            throw e // Re-throw to propagate the error
         }
     }
 
