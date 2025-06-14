@@ -18,7 +18,22 @@ class AuthProviderFactory(
     private val providers = mutableMapOf<String, AuthProvider>()
     
     init {
-        initializeProviders()
+        println("[AuthProviderFactory] Starting initialization...")
+        println("[AuthProviderFactory] JWT Secret length: ${authConfig.jwtSecret.length}")
+        println("[AuthProviderFactory] JWT Issuer: ${authConfig.jwtIssuer}")
+        println("[AuthProviderFactory] JWT Audience: ${authConfig.jwtAudience}")
+        println("[AuthProviderFactory] Default Auth Provider: ${authConfig.defaultAuthProvider}")
+        println("[AuthProviderFactory] Enabled Auth Providers: ${authConfig.enabledAuthProviders}")
+        println("[AuthProviderFactory] Clerk Domain: ${authConfig.clerkDomain}")
+        
+        try {
+            initializeProviders()
+            println("[AuthProviderFactory] Successfully initialized providers: ${providers.keys}")
+        } catch (e: Exception) {
+            println("[AuthProviderFactory] ERROR during initialization: ${e.message}")
+            e.printStackTrace()
+            throw e
+        }
     }
     
     fun getProvider(providerName: String): AuthProvider? {
