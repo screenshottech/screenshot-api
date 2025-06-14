@@ -10,7 +10,10 @@ import dev.screenshotapi.infrastructure.config.StorageConfig
 object StorageFactory {
     fun create(config: StorageConfig): StorageOutputPort {
         return if (config.useLocal) {
-            LocalStorageAdapter(config.localPath)
+            LocalStorageAdapter(
+                basePath = config.localPath,
+                baseUrl = "${config.localPublicUrl}/files"
+            )
         } else {
             createS3StorageAdapter(config)
         }

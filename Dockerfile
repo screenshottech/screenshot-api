@@ -72,9 +72,11 @@ COPY --from=builder /app/build/libs/*-all.jar app.jar
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright \
     DEBIAN_FRONTEND=noninteractive
 
-# Create cache directory with correct permissions BEFORE switching user
+# Create directories with correct permissions BEFORE switching user
 RUN mkdir -p /app/.cache/ms-playwright && \
-    chown -R appuser:appuser /app/.cache
+    mkdir -p /app/screenshots && \
+    mkdir -p /app/logs && \
+    chown -R appuser:appuser /app/.cache /app/screenshots /app/logs
 
 # Switch to non-root user
 USER appuser

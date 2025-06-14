@@ -60,6 +60,7 @@ data class RedisConfig(
 data class StorageConfig(
     val useLocal: Boolean,
     val localPath: String,
+    val localPublicUrl: String,
     val s3Bucket: String?,
     val s3Region: String?,
     val awsAccessKey: String?,
@@ -71,6 +72,7 @@ data class StorageConfig(
         fun load(environment: Environment) = StorageConfig(
             useLocal = System.getenv("STORAGE_USE_LOCAL")?.toBoolean() ?: environment.isLocal,
             localPath = System.getenv("STORAGE_LOCAL_PATH") ?: "./screenshots",
+            localPublicUrl = System.getenv("PUBLIC_API_URL") ?: "http://localhost:8080",
             s3Bucket = System.getenv("S3_BUCKET"),
             s3Region = System.getenv("S3_REGION"),
             awsAccessKey = System.getenv("AWS_ACCESS_KEY_ID"),
