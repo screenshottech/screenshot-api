@@ -72,13 +72,19 @@ class ClerkAuthProvider(
             val verifier = JWT.require(algorithm).build()
             val verifiedJwt = verifier.verify(token)
             logger.info("JWT verified successfully")
+            
+            // Log all claims for debugging
+            logger.debug("JWT Claims: ${verifiedJwt.claims.keys}")
+            verifiedJwt.claims.forEach { (key, claim) ->
+                logger.debug("Claim $key: ${claim.asString() ?: claim.toString()}")
+            }
 
             val userId = verifiedJwt.subject ?: run {
                 logger.error("No subject in verified JWT")
                 return null
             }
             val email = verifiedJwt.getClaim("email")?.asString() ?: run {
-                logger.error("No email claim in verified JWT")
+                logger.error("No email claim in verified JWT - available claims: ${verifiedJwt.claims.keys}")
                 return null
             }
             val name = verifiedJwt.getClaim("name")?.asString()
@@ -99,17 +105,28 @@ class ClerkAuthProvider(
     }
 
     override suspend fun createUserFromToken(token: String): AuthResult? {
-        val authResult = validateToken(token) ?: return null
+        logger.info("Creating user from Clerk token...")
+        val authResult = validateToken(token) ?: run {
+            logger.error("Failed to validate token in createUserFromToken")
+            return null
+        }
+        logger.info("Token validated, checking for existing user: ${authResult.email}")
 
         // Check if user already exists
         val existingUser = userRepository.findByEmail(authResult.email)
         if (existingUser != null) {
+            logger.info("User already exists with ID: ${existingUser.id}")
             // Return AuthResult with internal user ID for existing users
             return authResult.copy(userId = existingUser.id)
         }
 
+        logger.info("User not found, creating new user...")
         // Create new user with free plan
-        val freePlan = planRepository.findById("plan_free") ?: return null
+        val freePlan = planRepository.findById("plan_free") ?: run {
+            logger.error("Free plan not found in database!")
+            return null
+        }
+        logger.info("Found free plan: ${freePlan.name}")
 
         val newUser = User(
             id = generateUserId(),
@@ -125,7 +142,10 @@ class ClerkAuthProvider(
             updatedAt = Clock.System.now()
         )
 
+        logger.info("Saving new user: ${newUser.email}")
         val savedUser = userRepository.save(newUser)
+        logger.info("User created successfully with ID: ${savedUser.id}")
+        
         // Return AuthResult with internal user ID for new users
         return authResult.copy(userId = savedUser.id)
     }
