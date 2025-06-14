@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Docker Compose configuration optimized for Dokploy deployment
 # This is a streamlined version focused on the main application service
 # PostgreSQL and Redis will be managed by Dokploy UI
@@ -12,35 +10,35 @@ services:
       dockerfile: Dockerfile
     container_name: screenshot-api
     restart: unless-stopped
-    
+
     # Environment variables will be set via Dokploy UI
     environment:
       # Core application settings
       ENVIRONMENT: ${ENVIRONMENT:-PRODUCTION}
-      
+
       # Server configuration
       HOST: 0.0.0.0
       PORT: 8080
       DEVELOPMENT: false
-      
+
       # Database configuration (Dokploy managed)
       DATABASE_USE_IN_MEMORY: false
       DATABASE_URL: ${DATABASE_URL}
       DATABASE_USERNAME: ${DATABASE_USERNAME}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-30}
-      
+
       # Redis configuration (Dokploy managed)
       REDIS_USE_IN_MEMORY: false
       REDIS_URL: ${REDIS_URL}
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-30}
-      
+
       # JWT configuration
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: ${JWT_ISSUER:-screenshotapi-production}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-screenshotapi-production-users}
       JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
-      
+
       # Storage configuration
       STORAGE_USE_LOCAL: ${STORAGE_USE_LOCAL:-false}
       STORAGE_LOCAL_PATH: /app/screenshots
@@ -50,7 +48,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL}
       AWS_PUBLIC_ENDPOINT_URL: ${AWS_PUBLIC_ENDPOINT_URL}
-      
+
       # Screenshot service configuration (optimized for VPS)
       ENABLE_PDF_GENERATION: ${ENABLE_PDF_GENERATION:-true}
       BROWSER_POOL_SIZE: ${BROWSER_POOL_SIZE:-3}
@@ -59,36 +57,36 @@ services:
       SCREENSHOT_MAX_HEIGHT: ${SCREENSHOT_MAX_HEIGHT:-1080}
       SCREENSHOT_DEFAULT_TIMEOUT: ${SCREENSHOT_DEFAULT_TIMEOUT:-30000}
       SCREENSHOT_MAX_TIMEOUT: ${SCREENSHOT_MAX_TIMEOUT:-60000}
-      
+
       # Rate limiting (production optimized)
       RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}
       RATE_LIMIT_CAPACITY: ${RATE_LIMIT_CAPACITY:-1000}
       RATE_LIMIT_RATE_SECONDS: ${RATE_LIMIT_RATE_SECONDS:-60}
-      
+
       # Stripe configuration
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      
+
       # Clerk authentication
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
-      
+
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      
+
       # Security headers
       ENABLE_SECURITY_HEADERS: ${ENABLE_SECURITY_HEADERS:-true}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       CORS_MAX_AGE: ${CORS_MAX_AGE:-3600}
-      
+
       # Monitoring
       SENTRY_DSN: ${SENTRY_DSN}
-      
+
     # Expose port for Dokploy
     ports:
       - "8080:8080"
-    
+
     # Volumes for persistent data
     volumes:
       # Screenshots storage (persistent)
@@ -97,7 +95,7 @@ services:
       - app_logs:/app/logs
       # Browser cache (for performance)
       - browser_cache:/app/.cache
-    
+
     # Health check configuration
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
@@ -105,7 +103,7 @@ services:
       timeout: 10s
       start_period: 60s
       retries: 3
-      
+
     # Resource limits (adjust based on your VPS specs)
     deploy:
       resources:
@@ -116,11 +114,11 @@ services:
         reservations:
           memory: 1G
           cpus: '0.5'
-    
+
     # Security settings
     security_opt:
       - no-new-privileges:true
-    
+
     # Logging configuration
     logging:
       driver: "json-file"
