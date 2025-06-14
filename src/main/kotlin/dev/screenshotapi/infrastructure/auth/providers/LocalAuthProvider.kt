@@ -6,6 +6,7 @@ import com.auth0.jwt.algorithms.Algorithm
 import dev.screenshotapi.core.domain.entities.AuthResult
 import dev.screenshotapi.core.domain.services.AuthProvider
 import dev.screenshotapi.core.domain.repositories.UserRepository
+import org.slf4j.LoggerFactory
 
 class LocalAuthProvider(
     private val userRepository: UserRepository,
@@ -14,15 +15,37 @@ class LocalAuthProvider(
     private val jwtAudience: String
 ) : AuthProvider {
     
+    private val logger = LoggerFactory.getLogger(LocalAuthProvider::class.java)
     override val providerName: String = "local"
     
-    private val algorithm = Algorithm.HMAC256(jwtSecret)
+    init {
+        logger.info("Initializing LocalAuthProvider")
+        logger.debug("JWT Secret length: ${jwtSecret.length}")
+        logger.debug("JWT Issuer: $jwtIssuer")
+        logger.debug("JWT Audience: $jwtAudience")
+    }
     
-    private val verifier: JWTVerifier = JWT
-        .require(algorithm)
-        .withAudience(jwtAudience)
-        .withIssuer(jwtIssuer)
-        .build()
+    private val algorithm = try {
+        logger.debug("Creating HMAC256 algorithm...")
+        Algorithm.HMAC256(jwtSecret).also {
+            logger.info("HMAC256 algorithm created successfully")
+        }
+    } catch (e: Exception) {
+        logger.error("Failed to create HMAC256 algorithm", e)
+        throw e
+    }
+    
+    private val verifier: JWTVerifier = try {
+        JWT.require(algorithm)
+            .withAudience(jwtAudience)
+            .withIssuer(jwtIssuer)
+            .build().also {
+                logger.info("JWT verifier created successfully")
+            }
+    } catch (e: Exception) {
+        logger.error("Failed to create JWT verifier", e)
+        throw e
+    }
     
     override suspend fun validateToken(token: String): AuthResult? {
         return try {

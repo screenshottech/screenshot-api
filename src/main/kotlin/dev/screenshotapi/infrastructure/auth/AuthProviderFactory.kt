@@ -7,6 +7,7 @@ import dev.screenshotapi.infrastructure.auth.providers.ClerkAuthProvider
 import dev.screenshotapi.infrastructure.auth.providers.LocalAuthProvider
 import dev.screenshotapi.infrastructure.config.AuthConfig
 import io.ktor.client.*
+import org.slf4j.LoggerFactory
 
 class AuthProviderFactory(
     private val userRepository: UserRepository,
@@ -15,23 +16,23 @@ class AuthProviderFactory(
     private val authConfig: AuthConfig
 ) {
     
+    private val logger = LoggerFactory.getLogger(AuthProviderFactory::class.java)
     private val providers = mutableMapOf<String, AuthProvider>()
     
     init {
-        println("[AuthProviderFactory] Starting initialization...")
-        println("[AuthProviderFactory] JWT Secret length: ${authConfig.jwtSecret.length}")
-        println("[AuthProviderFactory] JWT Issuer: ${authConfig.jwtIssuer}")
-        println("[AuthProviderFactory] JWT Audience: ${authConfig.jwtAudience}")
-        println("[AuthProviderFactory] Default Auth Provider: ${authConfig.defaultAuthProvider}")
-        println("[AuthProviderFactory] Enabled Auth Providers: ${authConfig.enabledAuthProviders}")
-        println("[AuthProviderFactory] Clerk Domain: ${authConfig.clerkDomain}")
+        logger.info("Starting AuthProviderFactory initialization...")
+        logger.debug("JWT Secret length: ${authConfig.jwtSecret.length}")
+        logger.debug("JWT Issuer: ${authConfig.jwtIssuer}")
+        logger.debug("JWT Audience: ${authConfig.jwtAudience}")
+        logger.info("Default Auth Provider: ${authConfig.defaultAuthProvider}")
+        logger.info("Enabled Auth Providers: ${authConfig.enabledAuthProviders}")
+        logger.info("Clerk Domain: ${authConfig.clerkDomain ?: "Not configured"}")
         
         try {
             initializeProviders()
-            println("[AuthProviderFactory] Successfully initialized providers: ${providers.keys}")
+            logger.info("Successfully initialized providers: ${providers.keys}")
         } catch (e: Exception) {
-            println("[AuthProviderFactory] ERROR during initialization: ${e.message}")
-            e.printStackTrace()
+            logger.error("ERROR during AuthProviderFactory initialization", e)
             throw e
         }
     }
