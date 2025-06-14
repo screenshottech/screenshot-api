@@ -70,9 +70,11 @@ COPY --from=builder /app/build/libs/*-all.jar app.jar
 
 # Set environment variables
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright \
-    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
-    CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage" \
     DEBIAN_FRONTEND=noninteractive
+
+# Create cache directory with correct permissions BEFORE switching user
+RUN mkdir -p /app/.cache/ms-playwright && \
+    chown -R appuser:appuser /app/.cache
 
 # Switch to non-root user
 USER appuser
