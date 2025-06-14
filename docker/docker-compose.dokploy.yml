@@ -17,9 +17,9 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-PRODUCTION}
 
       # Server configuration
-      HOST: 0.0.0.0
-      PORT: 8080
-      DEVELOPMENT: false
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8080}
+      DEVELOPMENT: ${DEVELOPMENT:-false}
 
       # Database configuration (Dokploy managed)
       DATABASE_USE_IN_MEMORY: false
@@ -71,6 +71,11 @@ services:
       # Clerk authentication
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
+      CLERK_DOMAIN: ${CLERK_DOMAIN}
+      
+      # Auth provider configuration (CRITICAL for AuthProviderFactory)
+      DEFAULT_AUTH_PROVIDER: ${DEFAULT_AUTH_PROVIDER:-local}
+      ENABLED_AUTH_PROVIDERS: ${ENABLED_AUTH_PROVIDERS:-local}
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
