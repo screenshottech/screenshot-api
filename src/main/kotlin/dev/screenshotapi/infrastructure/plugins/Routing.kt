@@ -3,6 +3,7 @@ package dev.screenshotapi.infrastructure.plugins
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.BillingController
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
+import dev.screenshotapi.infrastructure.config.AppConfig
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.http.content.*
@@ -19,18 +20,19 @@ fun Application.configureRouting() {
     val adminController by inject<AdminController>()
     val healthController by inject<HealthController>()
     val authProviderFactory by inject<AuthProviderFactory>()
+    val appConfig by inject<AppConfig>()
 
     routing {
-        // Health checks
-        get("/health") { healthController.health(call) }
+        // Health checks (using Cohort at /health)
+        get("/status") { healthController.health(call) }  // Moved from /health to /status
         get("/ready") { healthController.ready(call) }
         get("/metrics") { healthController.metrics(call) }
 
         // Test endpoint for screenshot generation
         get("/test-screenshot") { healthController.testScreenshot(call) }
 
-        // Static file serving for screenshots
-        staticFiles("/files", File("./screenshots"))
+        // Static file serving for screenshots (uses same path as storage)
+        staticFiles("/files", File(appConfig.storage.localPath))
 
         // API routes
         route("/api/v1") {

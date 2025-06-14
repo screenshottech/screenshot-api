@@ -9,7 +9,6 @@ import kotlinx.datetime.Instant
 import org.slf4j.LoggerFactory
 import java.io.File
 
-// infrastructure/adapters/output/storage/local/LocalStorageAdapter.kt
 class LocalStorageAdapter(
     private val basePath: String,
     private val baseUrl: String = "http://localhost:8080/files"
@@ -18,7 +17,6 @@ class LocalStorageAdapter(
     private val logger = LoggerFactory.getLogger(this::class.java)
 
     init {
-        // Crear directorio base si no existe
         val baseDir = File(basePath)
         if (!baseDir.exists()) {
             baseDir.mkdirs()
@@ -36,7 +34,6 @@ class LocalStorageAdapter(
                 val sanitizedFilename = sanitizeFilename(filename)
                 val file = File(basePath, sanitizedFilename)
 
-                // Crear directorios padre si no existen
                 file.parentFile?.mkdirs()
 
                 file.writeBytes(data)
@@ -93,8 +90,6 @@ class LocalStorageAdapter(
     }
 
     override suspend fun getPresignedUrl(filename: String, expirationMinutes: Int): String {
-        // Para local storage, simplemente retornamos la URL normal
-        // En un escenario real podrías implementar tokens temporales
         return getUrl(filename)
     }
 
@@ -136,13 +131,12 @@ class LocalStorageAdapter(
     }
 
     private fun sanitizeFilename(filename: String): String {
-        // Remover caracteres peligrosos y paths relativos
         return filename
             .replace("..", "")
             .replace("/", "_")
             .replace("\\", "_")
             .replace(" ", "_")
-            .take(255) // Límite de longitud de archivos
+            .take(255)
     }
 
     private fun detectContentType(filename: String): String {
