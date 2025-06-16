@@ -68,6 +68,12 @@ fun Application.configureMonitoring() {
         callIdMdc("call-id")
     }
     routing {
+        // Support HEAD requests for health check (used by load balancers and monitoring systems)
+        head("/health") {
+            val status = healthchecks.status()
+            call.respond(if (status.healthy) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable)
+        }
+
         get("/metrics-micrometer") {
             call.respond(appMicrometerRegistry.scrape())
         }
