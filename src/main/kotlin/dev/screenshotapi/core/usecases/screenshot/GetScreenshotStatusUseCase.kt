@@ -29,6 +29,7 @@ class GetScreenshotStatusUseCase(
             createdAt = job.createdAt.toString(),
             completedAt = job.completedAt?.toString(),
             processingTimeMs = job.processingTimeMs,
+            fileSizeBytes = job.fileSizeBytes,
             errorMessage = job.errorMessage,
             request = job.request
         )
@@ -45,6 +46,7 @@ class GetScreenshotStatusUseCase(
         val createdAt: String,
         val completedAt: String?,
         val processingTimeMs: Long?,
+        val fileSizeBytes: Long?,
         val errorMessage: String?,
         val request: dev.screenshotapi.core.domain.entities.ScreenshotRequest
     )

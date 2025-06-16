@@ -149,18 +149,31 @@ class S3StorageAdapter(
     }
 
     private fun generateKey(filename: String): String {
-        val timestamp = System.currentTimeMillis()
-        val cleanFilename = filename.substringAfterLast("/")
-        return "screenshots/$timestamp-$cleanFilename"
+        // Simply use the filename as provided by the caller
+        // The caller is responsible for the full path structure
+        return filename
     }
 
     private fun extractKeyFromFilename(filename: String): String {
-        return if (filename.startsWith("https://")) {
-            filename.substringAfterLast("/")
-        } else if (filename.startsWith("screenshots/")) {
-            filename
-        } else {
-            "screenshots/$filename"
+        return when {
+            filename.startsWith("https://") || filename.startsWith("http://") -> {
+                // For URLs, extract the full key path after the domain/bucket
+                val urlWithoutProtocol = filename.substringAfter("://")
+                val pathStart = urlWithoutProtocol.indexOf("/")
+                if (pathStart != -1) {
+                    val fullPath = urlWithoutProtocol.substring(pathStart + 1)
+                    // If URL includes bucket name in path (S3 style), skip it
+                    if (includeBucketInUrl && fullPath.startsWith("$bucketName/")) {
+                        fullPath.substringAfter("$bucketName/")
+                    } else {
+                        fullPath
+                    }
+                } else {
+                    filename
+                }
+            }
+            // For non-URLs, return as-is
+            else -> filename
         }
     }
 }

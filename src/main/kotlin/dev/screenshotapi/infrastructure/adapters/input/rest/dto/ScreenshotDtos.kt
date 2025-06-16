@@ -38,6 +38,7 @@ data class GetScreenshotStatusResponseDto(
     val createdAt: String,
     val completedAt: String?,
     val processingTimeMs: Long?,
+    val fileSizeBytes: Long?,
     val errorMessage: String?,
     val request: ScreenshotRequestDto
 )
@@ -56,6 +57,7 @@ data class ScreenshotResponseDto(
     val createdAt: String,
     val completedAt: String?,
     val processingTimeMs: Long?,
+    val fileSizeBytes: Long?,
     val errorMessage: String?,
     val request: ScreenshotRequestDto
 )
@@ -93,6 +95,7 @@ data class BulkStatusJobResponseDto(
     val status: String,
     val resultUrl: String? = null,
     val processingTimeMs: Long? = null,
+    val fileSizeBytes: Long? = null,
     val completedAt: String? = null,
     val errorMessage: String? = null
 )
@@ -120,6 +123,7 @@ fun GetScreenshotStatusUseCase.Response.toDto() = GetScreenshotStatusResponseDto
     createdAt = createdAt.toString(),
     completedAt = completedAt?.toString(),
     processingTimeMs = processingTimeMs,
+    fileSizeBytes = fileSizeBytes,
     errorMessage = errorMessage,
     request = request.toDto()
 )
@@ -143,6 +147,7 @@ fun BulkStatusResponse.toDto() = BulkStatusResponseDto(
             status = job.status,
             resultUrl = job.resultUrl,
             processingTimeMs = job.processingTimeMs,
+            fileSizeBytes = job.fileSizeBytes,
             completedAt = job.completedAt?.toString(),
             errorMessage = job.errorMessage
         )
@@ -203,6 +208,7 @@ fun ScreenshotJob.toResponseDto() = ScreenshotResponseDto(
     createdAt = createdAt.toString(),
     completedAt = completedAt?.toString(),
     processingTimeMs = processingTimeMs,
+    fileSizeBytes = fileSizeBytes,
     errorMessage = errorMessage,
     request = request.toDto()
 )

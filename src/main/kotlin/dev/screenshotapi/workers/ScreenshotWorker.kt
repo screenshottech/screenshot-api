@@ -1,6 +1,7 @@
 package dev.screenshotapi.workers
 
 import dev.screenshotapi.core.domain.entities.ScreenshotJob
+import dev.screenshotapi.core.domain.entities.ScreenshotResult
 import dev.screenshotapi.core.domain.entities.ScreenshotStatus
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
@@ -183,11 +184,11 @@ class ScreenshotWorker(
             validateUserAndCredits(job)
 
             // 3. Take screenshot with retries
-            val resultUrl = takeScreenshotWithRetry(job)
+            val screenshotResult = takeScreenshotWithRetry(job)
             val processingTime = System.currentTimeMillis() - startTime
 
             // 4. Update status to "completed"
-            val completedJob = job.markAsCompleted(resultUrl, processingTime)
+            val completedJob = job.markAsCompleted(screenshotResult.url, processingTime, screenshotResult.fileSizeBytes)
             screenshotRepository.update(completedJob)
             logger.info("Job state transition: jobId={}, from=PROCESSING, to=COMPLETED, userId={}, processingTime={}ms", 
                 job.id, job.userId, processingTime)
@@ -203,7 +204,8 @@ class ScreenshotWorker(
                     "url" to job.request.url,
                     "format" to job.request.format.name,
                     "processingTime" to processingTime.toString(),
-                    "resultUrl" to resultUrl
+                    "resultUrl" to screenshotResult.url,
+                    "fileSizeBytes" to screenshotResult.fileSizeBytes.toString()
                 )
             ))
 
@@ -227,7 +229,7 @@ class ScreenshotWorker(
             recordSuccessMetrics(processingTime)
 
             logger.info("Job completed successfully: jobId={}, userId={}, processingTime={}ms, resultUrl={}", 
-                job.id, job.userId, processingTime, resultUrl)
+                job.id, job.userId, processingTime, screenshotResult.url)
 
         } catch (e: Exception) {
             handleJobFailure(job, e, System.currentTimeMillis() - startTime)
@@ -246,7 +248,7 @@ class ScreenshotWorker(
         }
     }
 
-    private suspend fun takeScreenshotWithRetry(job: ScreenshotJob): String {
+    private suspend fun takeScreenshotWithRetry(job: ScreenshotJob): ScreenshotResult {
         var lastException: Exception? = null
 
         repeat(config.retryAttempts) { attempt ->

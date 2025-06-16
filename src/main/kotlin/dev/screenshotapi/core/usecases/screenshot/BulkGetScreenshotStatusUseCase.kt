@@ -38,6 +38,7 @@ class BulkGetScreenshotStatusUseCase(
                 status = job.status.name,
                 resultUrl = job.resultUrl,
                 processingTimeMs = job.processingTimeMs,
+                fileSizeBytes = job.fileSizeBytes,
                 completedAt = job.completedAt,
                 errorMessage = job.errorMessage
             )
@@ -68,6 +69,7 @@ data class BulkStatusJobResponse(
     val status: String,
     val resultUrl: String? = null,
     val processingTimeMs: Long? = null,
+    val fileSizeBytes: Long? = null,
     val completedAt: Instant? = null,
     val errorMessage: String? = null
 )

@@ -17,6 +17,7 @@ data class ScreenshotJob(
     val resultUrl: String? = null,
     val errorMessage: String? = null,
     val processingTimeMs: Long? = null,
+    val fileSizeBytes: Long? = null, // New field for file size
     val webhookUrl: String? = null,
     val webhookSent: Boolean = false,
     val createdAt: Instant,
@@ -28,10 +29,11 @@ data class ScreenshotJob(
         updatedAt = Clock.System.now()
     )
 
-    fun markAsCompleted(url: String, processingTime: Long): ScreenshotJob = copy(
+    fun markAsCompleted(url: String, processingTime: Long, fileSize: Long? = null): ScreenshotJob = copy(
         status = ScreenshotStatus.COMPLETED,
         resultUrl = url,
         processingTimeMs = processingTime,
+        fileSizeBytes = fileSize,
         completedAt = Clock.System.now(),
         updatedAt = Clock.System.now()
     )

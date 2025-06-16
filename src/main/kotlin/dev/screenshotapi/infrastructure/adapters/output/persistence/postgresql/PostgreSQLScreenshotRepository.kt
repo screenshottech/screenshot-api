@@ -40,6 +40,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     it[resultUrl] = job.resultUrl
                     it[options] = json.encodeToString(ScreenshotRequestDto.serializer(), requestDto)
                     it[processingTimeMs] = job.processingTimeMs
+                    it[fileSizeBytes] = job.fileSizeBytes
                     it[errorMessage] = job.errorMessage
                     it[webhookUrl] = job.webhookUrl
                     it[webhookSent] = job.webhookSent
@@ -136,6 +137,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     it[status] = job.status.name
                     it[resultUrl] = job.resultUrl
                     it[processingTimeMs] = job.processingTimeMs
+                    it[fileSizeBytes] = job.fileSizeBytes
                     it[errorMessage] = job.errorMessage
                     it[webhookSent] = job.webhookSent
                     it[updatedAt] = Clock.System.now()
@@ -421,6 +423,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
             resultUrl = row[Screenshots.resultUrl],
             errorMessage = row[Screenshots.errorMessage],
             processingTimeMs = row[Screenshots.processingTimeMs],
+            fileSizeBytes = row[Screenshots.fileSizeBytes],
             webhookUrl = row[Screenshots.webhookUrl],
             webhookSent = row[Screenshots.webhookSent],
             createdAt = row[Screenshots.createdAt],

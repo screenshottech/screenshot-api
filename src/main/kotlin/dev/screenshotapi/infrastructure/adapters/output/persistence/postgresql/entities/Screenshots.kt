@@ -16,6 +16,7 @@ object Screenshots : IdTable<String>("screenshots") {
     val resultUrl = text("result_url").nullable()
     val options = text("options") // JSON with screenshotapi parameters
     val processingTimeMs = long("processing_time_ms").nullable()
+    val fileSizeBytes = long("file_size_bytes").nullable()
     val errorMessage = text("error_message").nullable()
     val webhookUrl = text("webhook_url").nullable()
     val webhookSent = bool("webhook_sent").default(false)

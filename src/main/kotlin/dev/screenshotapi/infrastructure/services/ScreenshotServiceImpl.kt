@@ -7,6 +7,7 @@ import com.microsoft.playwright.options.LoadState
 import com.microsoft.playwright.options.ScreenshotType
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest
+import dev.screenshotapi.core.domain.entities.ScreenshotResult
 import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.StorageOutputPort
@@ -17,6 +18,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.slf4j.LoggerFactory
@@ -36,7 +39,7 @@ class ScreenshotServiceImpl(
     // Very limited concurrency to prevent resource exhaustion
     private val concurrencySemaphore = Semaphore(min(config.maxConcurrentRequests, 10))
 
-    override suspend fun takeScreenshot(request: ScreenshotRequest): String = withContext(Dispatchers.IO) {
+    override suspend fun takeScreenshot(request: ScreenshotRequest): ScreenshotResult = withContext(Dispatchers.IO) {
         validateRequest(request)
 
         // Limit concurrency
@@ -45,7 +48,7 @@ class ScreenshotServiceImpl(
         }
     }
 
-    private suspend fun executeScreenshotWithIsolatedPlaywright(request: ScreenshotRequest): String {
+    private suspend fun executeScreenshotWithIsolatedPlaywright(request: ScreenshotRequest): ScreenshotResult {
         // Each request gets completely isolated resources
         return withTimeout(config.maxTimeoutDuration.inWholeMilliseconds) {
 
@@ -74,7 +77,7 @@ class ScreenshotServiceImpl(
         }
     }
 
-    private suspend fun takeImageScreenshot(page: Page, request: ScreenshotRequest): String {
+    private suspend fun takeImageScreenshot(page: Page, request: ScreenshotRequest): ScreenshotResult {
         // Simple page configuration
         page.setViewportSize(request.width, request.height)
         page.setDefaultTimeout(15000.0)
@@ -124,10 +127,13 @@ class ScreenshotServiceImpl(
         // Upload and return
         val filename = generateFilename(request)
         val contentType = getContentType(request.format)
-        return storagePort.upload(finalBytes, filename, contentType)
+        val url = storagePort.upload(finalBytes, filename, contentType)
+        val fileSizeBytes = finalBytes.size.toLong()
+        
+        return ScreenshotResult(url, fileSizeBytes)
     }
 
-    private suspend fun takePdfScreenshot(page: Page, request: ScreenshotRequest): String {
+    private suspend fun takePdfScreenshot(page: Page, request: ScreenshotRequest): ScreenshotResult {
         if (!config.enablePdfGeneration) {
             throw ScreenshotException.UnsupportedFormat("PDF generation is disabled")
         }
@@ -165,7 +171,10 @@ class ScreenshotServiceImpl(
 
         // Upload and return
         val filename = generateFilename(request, "pdf")
-        return storagePort.upload(pdfBytes, filename, "application/pdf")
+        val url = storagePort.upload(pdfBytes, filename, "application/pdf")
+        val fileSizeBytes = pdfBytes.size.toLong()
+        
+        return ScreenshotResult(url, fileSizeBytes)
     }
 
     private fun getSimpleBrowserArgs(): List<String> {
@@ -203,11 +212,17 @@ class ScreenshotServiceImpl(
     }
 
     private fun generateFilename(request: ScreenshotRequest, extension: String? = null): String {
-        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val now = Clock.System.now()
+        val instant = now.toLocalDateTime(TimeZone.UTC)
+        val year = instant.year
+        val month = instant.monthNumber.toString().padStart(2, '0')
+        
+        val timestamp = now.toEpochMilliseconds()
         val urlHash = request.url.hashCode().toString().takeLast(8)
         val ext = extension ?: request.format.name.lowercase()
         val dimensions = "${request.width}x${request.height}"
-        return "screenshots/${timestamp}_${urlHash}_${dimensions}.$ext"
+        
+        return "screenshots/$year/$month/${timestamp}_${urlHash}_${dimensions}.$ext"
     }
 
     private fun getContentType(format: ScreenshotFormat): String {
