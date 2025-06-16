@@ -10,7 +10,6 @@ import dev.screenshotapi.core.ports.output.FileMetadata
 import dev.screenshotapi.core.ports.output.StorageOutputPort
 import dev.screenshotapi.core.ports.output.UploadFailedException
 import kotlinx.datetime.Instant
-import org.slf4j.LoggerFactory
 import java.io.File
 
 class S3StorageAdapter(
@@ -22,16 +21,6 @@ class S3StorageAdapter(
     private val includeBucketInUrl: Boolean = true // false para R2, true para S3
 ) : StorageOutputPort {
 
-    private val logger = LoggerFactory.getLogger(this::class.java)
-
-    init {
-        logger.info("S3StorageAdapter initialized:")
-        logger.info("  bucketName: $bucketName")
-        logger.info("  region: $region")
-        logger.info("  endpointUrl: $endpointUrl")
-        logger.info("  publicEndpointUrl: $publicEndpointUrl")
-        logger.info("  includeBucketInUrl: $includeBucketInUrl")
-    }
 
     override suspend fun upload(data: ByteArray, filename: String): String {
         return upload(data, filename, "application/octet-stream")
@@ -40,8 +29,6 @@ class S3StorageAdapter(
     override suspend fun upload(data: ByteArray, filename: String, contentType: String): String {
         return try {
             val key = generateKey(filename)
-            logger.info("Uploading file: filename=$filename, key=$key, contentType=$contentType, size=${data.size} bytes")
-
             val request = PutObjectRequest {
                 bucket = bucketName
                 this.key = key
@@ -50,13 +37,8 @@ class S3StorageAdapter(
             }
 
             s3Client.putObject(request)
-            logger.info("Upload successful for key: $key")
-
-            val url = getUrl(key)
-            logger.info("Generated URL after upload: $url")
-            url
+            getUrl(key)
         } catch (e: Exception) {
-            logger.error("Upload failed for filename: $filename", e)
             throw UploadFailedException(filename, e)
         }
     }
@@ -108,27 +90,16 @@ class S3StorageAdapter(
 
     override suspend fun getUrl(filename: String): String {
         val key = extractKeyFromFilename(filename)
-        logger.info("getUrl called with filename: $filename, extracted key: $key")
-
-        val finalUrl = if (endpointUrl != null) {
+        return if (endpointUrl != null) {
             val baseUrl = publicEndpointUrl ?: endpointUrl
             if (includeBucketInUrl) {
-                val url = "$baseUrl/$bucketName/$key"
-                logger.info("Using endpoint with bucket in URL: $url")
-                url
+                "$baseUrl/$bucketName/$key"
             } else {
-                val url = "$baseUrl/$key"
-                logger.info("Using endpoint without bucket in URL: $url")
-                url
+                "$baseUrl/$key"
             }
         } else {
-            val url = "https://$bucketName.s3.$region.amazonaws.com/$key"
-            logger.info("Using AWS S3 URL: $url")
-            url
+            "https://$bucketName.s3.$region.amazonaws.com/$key"
         }
-
-        logger.info("Final generated URL: $finalUrl")
-        return finalUrl
     }
 
     override suspend fun getPresignedUrl(filename: String, expirationMinutes: Int): String {
