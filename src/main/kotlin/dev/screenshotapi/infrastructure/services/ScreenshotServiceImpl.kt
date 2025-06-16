@@ -127,9 +127,12 @@ class ScreenshotServiceImpl(
         // Upload and return
         val filename = generateFilename(request)
         val contentType = getContentType(request.format)
+        logger.info("Taking screenshot - uploading to storage: filename=$filename, contentType=$contentType, size=${finalBytes.size} bytes")
+        
         val url = storagePort.upload(finalBytes, filename, contentType)
         val fileSizeBytes = finalBytes.size.toLong()
         
+        logger.info("Screenshot completed: url=$url, fileSizeBytes=$fileSizeBytes")
         return ScreenshotResult(url, fileSizeBytes)
     }
 
@@ -171,9 +174,12 @@ class ScreenshotServiceImpl(
 
         // Upload and return
         val filename = generateFilename(request, "pdf")
+        logger.info("Taking PDF screenshot - uploading to storage: filename=$filename, size=${pdfBytes.size} bytes")
+        
         val url = storagePort.upload(pdfBytes, filename, "application/pdf")
         val fileSizeBytes = pdfBytes.size.toLong()
         
+        logger.info("PDF screenshot completed: url=$url, fileSizeBytes=$fileSizeBytes")
         return ScreenshotResult(url, fileSizeBytes)
     }
 
