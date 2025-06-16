@@ -80,7 +80,11 @@ data class StorageConfig(
             awsSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY"),
             awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL"),
             awsPublicEndpointUrl = System.getenv("AWS_PUBLIC_ENDPOINT_URL"),
-            includeBucketInUrl = System.getenv("AWS_INCLUDE_BUCKET_IN_URL")?.toBoolean() ?: true
+            includeBucketInUrl = run {
+                val rawValue = System.getenv("AWS_INCLUDE_BUCKET_IN_URL")
+                println("DEBUG: AWS_INCLUDE_BUCKET_IN_URL raw value: '$rawValue'")
+                rawValue?.toBoolean() ?: true
+            }
         )
     }
 }
