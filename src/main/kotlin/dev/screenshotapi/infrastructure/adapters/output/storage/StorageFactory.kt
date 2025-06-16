@@ -31,6 +31,13 @@ object StorageFactory {
             }
         }
         
-        return S3StorageAdapter(s3Client, config.s3Bucket, config.s3Region, config.awsEndpointUrl, config.awsPublicEndpointUrl)
+        return S3StorageAdapter(
+            s3Client = s3Client, 
+            bucketName = config.s3Bucket, 
+            region = config.s3Region, 
+            endpointUrl = config.awsEndpointUrl, 
+            publicEndpointUrl = config.awsPublicEndpointUrl,
+            includeBucketInUrl = config.includeBucketInUrl
+        )
     }
 }

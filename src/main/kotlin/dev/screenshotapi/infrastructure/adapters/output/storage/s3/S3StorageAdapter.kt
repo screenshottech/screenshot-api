@@ -17,7 +17,8 @@ class S3StorageAdapter(
     private val bucketName: String,
     private val region: String,
     private val endpointUrl: String? = null,
-    private val publicEndpointUrl: String? = null
+    private val publicEndpointUrl: String? = null,
+    private val includeBucketInUrl: Boolean = true // false para R2, true para S3
 ) : StorageOutputPort {
 
     override suspend fun upload(data: ByteArray, filename: String): String {
@@ -91,7 +92,12 @@ class S3StorageAdapter(
         return if (endpointUrl != null) {
             // Use public endpoint if available, otherwise fall back to internal endpoint
             val baseUrl = publicEndpointUrl ?: endpointUrl
-            "$baseUrl/$bucketName/$key"
+            if (includeBucketInUrl) {
+                "$baseUrl/$bucketName/$key"
+            } else {
+                // For R2, bucket name should not be included in the public URL
+                "$baseUrl/$key"
+            }
         } else {
             // AWS S3
             "https://$bucketName.s3.$region.amazonaws.com/$key"

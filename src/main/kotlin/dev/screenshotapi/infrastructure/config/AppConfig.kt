@@ -66,7 +66,8 @@ data class StorageConfig(
     val awsAccessKey: String?,
     val awsSecretKey: String?,
     val awsEndpointUrl: String?,
-    val awsPublicEndpointUrl: String?
+    val awsPublicEndpointUrl: String?,
+    val includeBucketInUrl: Boolean
 ) {
     companion object {
         fun load(environment: Environment) = StorageConfig(
@@ -78,7 +79,8 @@ data class StorageConfig(
             awsAccessKey = System.getenv("AWS_ACCESS_KEY_ID"),
             awsSecretKey = System.getenv("AWS_SECRET_ACCESS_KEY"),
             awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL"),
-            awsPublicEndpointUrl = System.getenv("AWS_PUBLIC_ENDPOINT_URL")
+            awsPublicEndpointUrl = System.getenv("AWS_PUBLIC_ENDPOINT_URL"),
+            includeBucketInUrl = System.getenv("AWS_INCLUDE_BUCKET_IN_URL")?.toBoolean() ?: true
         )
     }
 }
