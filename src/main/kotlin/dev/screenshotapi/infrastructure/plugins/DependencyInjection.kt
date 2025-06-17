@@ -6,6 +6,7 @@ import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.HashingPort
 import dev.screenshotapi.core.ports.output.PaymentGatewayPort
 import dev.screenshotapi.core.ports.output.StorageOutputPort
+import dev.screenshotapi.core.ports.output.UrlSecurityPort
 import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.usecases.admin.*
 import dev.screenshotapi.core.usecases.auth.*
@@ -24,6 +25,7 @@ import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.*
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.BCryptHashingAdapter
+import dev.screenshotapi.infrastructure.adapters.output.security.UrlSecurityAdapter
 import dev.screenshotapi.infrastructure.adapters.output.storage.StorageFactory
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.JwtAuthProvider
@@ -84,6 +86,7 @@ fun repositoryModule(config: AppConfig) = module {
     single<UsageLogRepository> { createUsageLogRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
+    single<UrlSecurityPort> { UrlSecurityAdapter() }
     single<PaymentGatewayPort> { StripePaymentGatewayAdapter(get<StripeConfig>(), get<PlanRepository>()) }
     if (!config.database.useInMemory) {
         single<Database> { createDatabase(config) }
@@ -191,7 +194,7 @@ fun useCaseModule() = module {
 }
 
 fun serviceModule() = module {
-    single<ScreenshotService> { ScreenshotServiceImpl(get(), get()) }
+    single<ScreenshotService> { ScreenshotServiceImpl(get(), get(), get<UrlSecurityPort>()) }
     single { BrowserPoolManager(get<ScreenshotConfig>()) }
     single { NotificationService() }
     single { MetricsService() }

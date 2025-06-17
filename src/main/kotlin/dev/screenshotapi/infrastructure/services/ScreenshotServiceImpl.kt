@@ -11,6 +11,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotResult
 import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.StorageOutputPort
+import dev.screenshotapi.core.ports.output.UrlSecurityPort
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -31,7 +32,8 @@ import kotlin.math.min
  */
 class ScreenshotServiceImpl(
     private val storagePort: StorageOutputPort,
-    private val config: ScreenshotConfig
+    private val config: ScreenshotConfig,
+    private val urlSecurityPort: UrlSecurityPort
 ) : ScreenshotService {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -40,9 +42,19 @@ class ScreenshotServiceImpl(
     private val concurrencySemaphore = Semaphore(min(config.maxConcurrentRequests, 10))
 
     override suspend fun takeScreenshot(request: ScreenshotRequest): ScreenshotResult = withContext(Dispatchers.IO) {
+        // Step 1: Validate request format
         validateRequest(request)
+        
+        // Step 2: SSRF Protection - Validate URL security
+        val urlValidation = urlSecurityPort.validateUrl(request.url)
+        if (!urlValidation.isValid) {
+            logger.warn("SSRF protection blocked URL: ${request.url} - ${urlValidation.reason}")
+            throw ScreenshotException.InvalidUrl("URL blocked for security reasons: ${urlValidation.reason}")
+        }
+        
+        logger.info("URL security validation passed: ${request.url} -> ${urlValidation.resolvedIp}")
 
-        // Limit concurrency
+        // Step 3: Limit concurrency
         concurrencySemaphore.withPermit {
             executeScreenshotWithIsolatedPlaywright(request)
         }
