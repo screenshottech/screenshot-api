@@ -148,7 +148,7 @@ fun useCaseModule() = module {
     single { ListScreenshotsUseCase(get()) }
 
     // Auth use cases - mixed injection patterns
-    single { ValidateApiKeyUseCase(get(), get(), get<LogUsageUseCase>()) }
+    single { ValidateApiKeyUseCase(get(), get(), get<LogUsageUseCase>(), get<HashingPort>()) }
     single { ValidateApiKeyOwnershipUseCase(get<ApiKeyRepository>()) }
     single { CreateApiKeyUseCase(get<ApiKeyRepository>(), get<UserRepository>(), get<HashingPort>()) }
     single { UpdateApiKeyUseCase(get<ApiKeyRepository>()) }

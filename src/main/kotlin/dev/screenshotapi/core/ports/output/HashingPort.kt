@@ -6,11 +6,18 @@ package dev.screenshotapi.core.ports.output
  */
 interface HashingPort {
     /**
-     * Hash a plaintext value securely
+     * Hash a plaintext value securely for storage (uses BCrypt - non-deterministic)
      * @param plaintext The value to hash
      * @return The secure hash
      */
     fun hashSecure(plaintext: String): String
+    
+    /**
+     * Create a deterministic hash for lookups (uses SHA-256 - deterministic)
+     * @param plaintext The value to hash
+     * @return The deterministic hash for database lookups
+     */
+    fun hashForLookup(plaintext: String): String
     
     /**
      * Verify if a plaintext value matches a hash

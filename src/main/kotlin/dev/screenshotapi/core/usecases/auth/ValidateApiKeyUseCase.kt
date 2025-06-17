@@ -3,13 +3,15 @@ package dev.screenshotapi.core.usecases.auth
 import dev.screenshotapi.core.domain.repositories.ApiKeyRepository
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.core.domain.entities.UsageLogAction
+import dev.screenshotapi.core.ports.output.HashingPort
 import dev.screenshotapi.infrastructure.config.AppConfig
 import org.slf4j.LoggerFactory
 
 class ValidateApiKeyUseCase(
     private val apiKeyRepository: ApiKeyRepository,
     private val config: AppConfig,
-    private val logUsageUseCase: LogUsageUseCase
+    private val logUsageUseCase: LogUsageUseCase,
+    private val hashingPort: HashingPort
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
 
@@ -20,8 +22,8 @@ class ValidateApiKeyUseCase(
                 return developmentValidation(apiKey)
             }
             
-            // Production: lookup API key in database by hash
-            val keyHash = apiKey.hashCode().toString()
+            // Production: lookup API key in database by secure hash
+            val keyHash = hashingPort.hashForLookup(apiKey)
             val dbApiKey = apiKeyRepository.findByKeyHash(keyHash)
             
             if (dbApiKey != null && dbApiKey.isActive) {

@@ -29,7 +29,7 @@ class CreateApiKeyUseCase(
         
         // Generate secure API key
         val keyValue = "sk_${UUID.randomUUID().toString().replace("-", "")}"
-        val keyHash = hashingPort.hashSecure(keyValue)
+        val keyHash = hashingPort.hashForLookup(keyValue)
         
         val apiKey = ApiKey(
             id = "key_${System.currentTimeMillis()}",
