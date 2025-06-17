@@ -24,9 +24,11 @@ data class AuthConfig(
     val clerkDomain: String?
 ) {
     companion object {
-        fun load(): AuthConfig = AuthConfig(
-            jwtSecret = System.getenv("JWT_SECRET")
-                ?: "development-jwt-secret-key-for-local-testing-only-change-in-production",
+        fun load(): AuthConfig {
+            val environment = Environment.current()
+            
+            return AuthConfig(
+                jwtSecret = loadJwtSecret(environment),
             jwtIssuer = System.getenv("JWT_ISSUER")
                 ?: "screenshotapi-api",
             jwtAudience = System.getenv("JWT_AUDIENCE")
@@ -58,7 +60,57 @@ data class AuthConfig(
             enabledAuthProviders = System.getenv("ENABLED_AUTH_PROVIDERS")?.split(",")?.map { it.trim() }
                 ?: listOf("local"),
             clerkDomain = System.getenv("CLERK_DOMAIN")
-        )
+            )
+        }
+        
+        /**
+         * Load JWT secret with environment-specific validation
+         * Requires JWT_SECRET environment variable in production for security
+         * 
+         * For production deployment, generate a secure secret using:
+         * openssl rand -base64 32
+         * or
+         * head -c 32 /dev/urandom | base64
+         */
+        private fun loadJwtSecret(environment: Environment): String {
+            val jwtSecret = System.getenv("JWT_SECRET")
+            
+            return when {
+                // Production: JWT_SECRET is mandatory with strict validation
+                environment.isProduction -> {
+                    if (jwtSecret.isNullOrBlank()) {
+                        throw IllegalStateException(
+                            "JWT_SECRET environment variable is required in production. " +
+                            "Generate a strong secret with: openssl rand -base64 32"
+                        )
+                    }
+                    
+                    // Validate secret strength in production
+                    if (jwtSecret.length < 32) {
+                        throw IllegalStateException(
+                            "JWT_SECRET must be at least 32 characters long in production. " +
+                            "Current length: ${jwtSecret.length}. " +
+                            "Generate a new one with: openssl rand -base64 32"
+                        )
+                    }
+                    
+                    // Additional entropy validation
+                    if (jwtSecret.matches(Regex("^[a-zA-Z0-9]{32}$"))) {
+                        throw IllegalStateException(
+                            "JWT_SECRET appears to be low entropy. " +
+                            "Use a cryptographically secure generator: openssl rand -base64 32"
+                        )
+                    }
+                    
+                    jwtSecret
+                }
+                
+                // Development/Staging: Use provided secret or safe default
+                else -> {
+                    jwtSecret ?: "development-jwt-secret-key-for-local-testing-only-change-in-production-32chars"
+                }
+            }
+        }
     }
 
     // Computed properties
