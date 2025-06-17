@@ -84,7 +84,7 @@ class RateLimitingServiceImpl(
         // Check hourly limit
         if (shortTermUsage.hourlyRequests >= rateLimitInfo.requestsPerHour) {
             val resetTime = shortTermUsage.hourlyTimestamp.plus(1.hours)
-            val retryAfter = (resetTime.toEpochMilliseconds() - now.toEpochMilliseconds()) / 1000
+            val retryAfter = maxOf(0L, (resetTime.toEpochMilliseconds() - now.toEpochMilliseconds()) / 1000)
 
             metricsService?.recordRateLimitCheck(userId, false, planType)
             return RateLimitResult(
@@ -131,8 +131,8 @@ class RateLimitingServiceImpl(
         return RateLimitResult(
             allowed = true,
             remainingRequests = minOf(
-                rateLimitInfo.requestsPerHour - shortTermUsage.hourlyRequests - 1,
-                rateLimitInfo.requestsPerMinute - shortTermUsage.minutelyRequests - 1,
+                rateLimitInfo.requestsPerHour - shortTermUsage.hourlyRequests,
+                rateLimitInfo.requestsPerMinute - shortTermUsage.minutelyRequests,
                 remainingCredits
             ),
             resetTimeSeconds = 0,
@@ -140,8 +140,8 @@ class RateLimitingServiceImpl(
             remainingCredits = remainingCredits,
             requestsPerHour = rateLimitInfo.requestsPerHour,
             requestsPerMinute = rateLimitInfo.requestsPerMinute,
-            remainingHourly = rateLimitInfo.requestsPerHour - shortTermUsage.hourlyRequests - 1,
-            remainingMinutely = rateLimitInfo.requestsPerMinute - shortTermUsage.minutelyRequests - 1,
+            remainingHourly = rateLimitInfo.requestsPerHour - shortTermUsage.hourlyRequests,
+            remainingMinutely = rateLimitInfo.requestsPerMinute - shortTermUsage.minutelyRequests,
             resetTimeHourly = shortTermUsage.hourlyTimestamp.plus(1.hours),
             resetTimeMinutely = shortTermUsage.minutelyTimestamp.plus(1.minutes),
             retryAfterSeconds = 0
@@ -222,8 +222,8 @@ class RateLimitingServiceImpl(
         return RateLimitStatus(
             isAllowed = true,
             remainingRequests = minOf(
-                rateLimitInfo.requestsPerHour - shortTermUsage.hourlyRequests - 1,
-                rateLimitInfo.requestsPerMinute - shortTermUsage.minutelyRequests - 1,
+                rateLimitInfo.requestsPerHour - shortTermUsage.hourlyRequests,
+                rateLimitInfo.requestsPerMinute - shortTermUsage.minutelyRequests,
                 remainingCredits
             ),
             resetTimeHourly = shortTermUsage.hourlyTimestamp.plus(1.hours),

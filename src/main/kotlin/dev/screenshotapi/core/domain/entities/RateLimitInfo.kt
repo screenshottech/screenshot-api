@@ -19,11 +19,11 @@ data class RateLimitInfo(
             }*/
 
             val (requestsPerMinute, requestsPerHour, concurrentRequests, requestsPerDay) = when {
-                planId.contains("free") -> arrayOf(3, 60, 2, 100)           // Free: 3/min, 60/hour, 2 concurrent, 100/day
-                planId.contains("starter") -> arrayOf(10, 200, 5, 500)        // Starter: 10/min, 200/hour, 5 concurrent, 500/day
-                planId.contains("professional") -> arrayOf(20, 1200, 15, 5000)    // Professional: 20/min, 1200/hour, 15 concurrent, 5000/day
+                planId.contains("free") -> arrayOf(10, 300, 5, 500)           // Free: 10/min, 300/hour, 5 concurrent, 500/day - allows full 300 credit usage
+                planId.contains("starter") -> arrayOf(15, 400, 8, 1000)        // Starter: 15/min, 400/hour, 8 concurrent, 1000/day
+                planId.contains("professional") -> arrayOf(25, 1500, 20, 8000)    // Professional: 25/min, 1500/hour, 20 concurrent, 8000/day
                 planId.contains("enterprise") -> arrayOf(100, 6000, Int.MAX_VALUE, 25000)           // Enterprise: 100/min, 6000/hour, unlimited concurrent, 25000/day
-                else -> arrayOf(0, 0, 0, 0) // Default case if plan doesn't match
+                else -> arrayOf(10, 300, 5, 500) // Default to free plan limits
             }
 
             return RateLimitInfo(
