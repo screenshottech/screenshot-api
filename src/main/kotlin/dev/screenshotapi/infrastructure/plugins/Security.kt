@@ -38,7 +38,6 @@ fun Application.configureSecurity() {
                     .build()
             )
             validate { credential ->
-                println("[Security] JWT validation - using JwtAuthProvider...")
                 jwtAuthProvider.validateJwt(credential)
             }
         }
@@ -51,13 +50,18 @@ fun Application.configureSecurity() {
                 try {
                     val result = validateApiKeyUseCase(apiKey)
                     if (result.isValid && result.userId != null && result.keyId != null) {
+                        logger.info("API key authentication successful: userId=${result.userId}, keyId=${result.keyId}")
                         ApiKeyPrincipal(
                             keyId = result.keyId,
                             userId = result.userId,
                             name = "API Key"
                         )
-                    } else null
-                } catch (_: Exception) {
+                    } else {
+                        logger.warn("API key authentication failed: invalid or inactive key")
+                        null
+                    }
+                } catch (e: Exception) {
+                    logger.error("API key authentication error: ${e.message}", e)
                     null
                 }
             }

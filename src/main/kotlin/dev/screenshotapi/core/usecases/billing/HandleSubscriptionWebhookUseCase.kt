@@ -206,10 +206,7 @@ class HandleSubscriptionWebhookUseCase(
         val providerSubscriptionId = event.objectId
         val subscriptionData = event.data
         
-        // Debug logging to see what data we're actually receiving
-        println("DEBUG: Subscription updated event data: $subscriptionData")
-        println("DEBUG: Provider subscription ID: $providerSubscriptionId")
-        println("DEBUG: Available keys: ${subscriptionData.keys}")
+        logger.debug("Processing subscription update for provider ID: $providerSubscriptionId")
         
         // Find existing subscription
         val existingSubscription = subscriptionRepository.findByStripeSubscriptionId(providerSubscriptionId)

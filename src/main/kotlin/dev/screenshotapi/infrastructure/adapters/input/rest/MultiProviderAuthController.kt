@@ -9,8 +9,10 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.slf4j.LoggerFactory
 
 fun Route.multiProviderAuthRoutes(authProviderFactory: AuthProviderFactory) {
+    val logger = LoggerFactory.getLogger("MultiProviderAuth")
     
     route("/auth") {
         
@@ -47,20 +49,23 @@ fun Route.multiProviderAuthRoutes(authProviderFactory: AuthProviderFactory) {
             )
             
             try {
-                println("Received login request for provider: $providerName")
+                logger.debug("Received login request for provider: $providerName")
                 
                 val request = call.receive<AuthProviderLoginRequestDto>()
-                println("Token received: ${request.token.take(50)}...")
                 
                 // For external providers, create user if needed; for local, just validate
                 val authResult = if (providerName == "local") {
                     authProvider.validateToken(request.token)
                 } else {
-                    println("Creating user from token for provider: $providerName")
+                    logger.debug("Creating user from token for provider: $providerName")
                     authProvider.createUserFromToken(request.token)
                 }
                 
-                println("Auth result: $authResult")
+                if (authResult == null) {
+                    logger.warn("Authentication failed for provider: $providerName")
+                } else {
+                    logger.debug("Authentication successful for provider: $providerName")
+                }
                 
                 if (authResult == null) {
                     call.respond(

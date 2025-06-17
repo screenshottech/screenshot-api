@@ -52,7 +52,7 @@ class ScreenshotServiceImpl(
             throw ScreenshotException.InvalidUrl("URL blocked for security reasons: ${urlValidation.reason}")
         }
         
-        logger.info("URL security validation passed: ${request.url} -> ${urlValidation.resolvedIp}")
+        logger.debug("URL security validation passed: ${request.url} -> ${urlValidation.resolvedIp}")
 
         // Step 3: Limit concurrency
         concurrencySemaphore.withPermit {
