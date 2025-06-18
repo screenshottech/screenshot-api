@@ -27,6 +27,7 @@ class ScreenshotController : KoinComponent {
     private val getScreenshotStatusUseCase: GetScreenshotStatusUseCase by inject()
     private val bulkGetScreenshotStatusUseCase: BulkGetScreenshotStatusUseCase by inject()
     private val listScreenshotsUseCase: ListScreenshotsUseCase by inject()
+    private val manualRetryScreenshotUseCase: ManualRetryScreenshotUseCase by inject()
     private val validateApiKeyUseCase: ValidateApiKeyUseCase by inject()
     private val validateApiKeyOwnershipUseCase: ValidateApiKeyOwnershipUseCase by inject()
     private val logUsageUseCase: LogUsageUseCase by inject()
@@ -235,6 +236,33 @@ class ScreenshotController : KoinComponent {
 
         // Execute use case and convert response back to DTO
         val result = bulkGetScreenshotStatusUseCase(useCaseRequest)
+        call.respond(HttpStatusCode.OK, result.toDto())
+    }
+
+    suspend fun retryScreenshot(call: ApplicationCall) {
+        val jobId = call.parameters["jobId"]!!
+        
+        // Extract authentication info with the same priority handling as takeScreenshot
+        val authResult = extractAuthenticationInfo(call)
+        
+        // Determine the request source for audit logging
+        val requestedBy = when {
+            call.request.headers["X-API-Key"] != null -> authResult.apiKeyId
+            call.request.headers["X-API-Key-ID"] != null -> authResult.apiKeyId
+            call.principal<ApiKeyPrincipal>() != null -> authResult.apiKeyId
+            call.principal<UserPrincipal>() != null -> "web"
+            else -> "unknown"
+        }
+
+        // Convert to domain request
+        val useCaseRequest = ManualRetryScreenshotUseCase.Request(
+            jobId = jobId,
+            userId = authResult.userId,
+            requestedBy = requestedBy
+        )
+
+        // Execute use case and convert response back to DTO
+        val result = manualRetryScreenshotUseCase(useCaseRequest)
         call.respond(HttpStatusCode.OK, result.toDto())
     }
 

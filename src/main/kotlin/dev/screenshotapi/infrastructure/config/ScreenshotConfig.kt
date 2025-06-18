@@ -44,7 +44,8 @@ data class ScreenshotConfig(
     val cleanupOldScreenshots: Boolean,
     val screenshotRetentionDays: Int,
     val selectorTimeoutDuration: Duration = 10.seconds,
-    val maxConcurrentRequests: Int
+    val maxConcurrentRequests: Int,
+    val retrySchedulerEnabled: Boolean
 ) {
     companion object {
         fun load(): ScreenshotConfig = ScreenshotConfig(
@@ -120,7 +121,9 @@ data class ScreenshotConfig(
             screenshotRetentionDays = System.getenv("SCREENSHOT_RETENTION_DAYS")?.toInt()
                 ?: 30,
             maxConcurrentRequests = System.getenv("MAX_CONCURRENT_REQUESTS")?.toInt()
-                ?: 10
+                ?: 10,
+            retrySchedulerEnabled = System.getenv("RETRY_SCHEDULER_ENABLED")?.toBoolean()
+                ?: true
         )
     }
 

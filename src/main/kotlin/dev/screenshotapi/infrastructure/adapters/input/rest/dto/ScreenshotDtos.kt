@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotJob
 import dev.screenshotapi.core.usecases.screenshot.GetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.ListScreenshotsUseCase
 import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
+import dev.screenshotapi.core.usecases.screenshot.ManualRetryScreenshotUseCase
 import dev.screenshotapi.core.usecases.screenshot.BulkStatusResponse
 import kotlinx.serialization.Serializable
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat as DomainFormat
@@ -108,6 +109,13 @@ data class BulkStatusResponseDto(
     val foundJobs: Int
 )
 
+@Serializable
+data class RetryScreenshotResponseDto(
+    val jobId: String,
+    val message: String,
+    val queuePosition: Int
+)
+
 // Mapping functions for domain -> DTO
 fun TakeScreenshotUseCase.Response.toDto() = TakeScreenshotResponseDto(
     jobId = jobId,
@@ -155,6 +163,12 @@ fun BulkStatusResponse.toDto() = BulkStatusResponseDto(
     requestedAt = requestedAt.toString(),
     totalJobs = totalJobs,
     foundJobs = foundJobs
+)
+
+fun ManualRetryScreenshotUseCase.Response.toDto() = RetryScreenshotResponseDto(
+    jobId = jobId,
+    message = message,
+    queuePosition = queuePosition
 )
 
 // Mapping functions for DTO -> domain

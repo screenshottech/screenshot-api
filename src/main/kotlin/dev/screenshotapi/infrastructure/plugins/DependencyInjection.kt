@@ -2,6 +2,7 @@ package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.core.domain.repositories.*
 import dev.screenshotapi.core.domain.services.RateLimitingService
+import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.HashingPort
 import dev.screenshotapi.core.ports.output.PaymentGatewayPort
@@ -16,6 +17,9 @@ import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.core.usecases.screenshot.BulkGetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.GetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.ListScreenshotsUseCase
+import dev.screenshotapi.core.usecases.screenshot.ManualRetryScreenshotUseCase
+import dev.screenshotapi.core.usecases.screenshot.ProcessFailedRetryableJobsUseCase
+import dev.screenshotapi.core.usecases.screenshot.ProcessStuckJobsUseCase
 import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
@@ -33,6 +37,7 @@ import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
 import dev.screenshotapi.infrastructure.services.*
+import dev.screenshotapi.workers.JobRetryScheduler
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -149,6 +154,11 @@ fun useCaseModule() = module {
     single { GetScreenshotStatusUseCase(get()) }
     single { BulkGetScreenshotStatusUseCase(get()) }
     single { ListScreenshotsUseCase(get()) }
+    
+    // Retry use cases
+    single { ManualRetryScreenshotUseCase(get(), get(), get(), get()) }
+    single { ProcessStuckJobsUseCase(get(), get(), get(), get()) }
+    single { ProcessFailedRetryableJobsUseCase(get(), get(), get(), get()) }
 
     // Auth use cases - mixed injection patterns
     single { ValidateApiKeyUseCase(get(), get(), get<LogUsageUseCase>(), get<HashingPort>()) }
@@ -169,7 +179,7 @@ fun useCaseModule() = module {
     single { GetUsageLogsUseCase(get<UsageLogRepository>()) }
 
     // Billing use cases - mixed injection patterns
-    single { CheckCreditsUseCase() }
+    single { CheckCreditsUseCase(get()) }
     single { DeductCreditsUseCase(get<UserRepository>(), get<LogUsageUseCase>()) }
     single { AddCreditsUseCase(get<UserRepository>()) }
     single { HandlePaymentUseCase(get<UserRepository>(), get<AddCreditsUseCase>()) }
@@ -198,6 +208,8 @@ fun serviceModule() = module {
     single { BrowserPoolManager(get<ScreenshotConfig>()) }
     single { NotificationService() }
     single { MetricsService() }
+    single<RetryPolicy> { DefaultRetryPolicyImpl() }
+    single { JobRetryScheduler(get(), get(), get()) }
     single<UsageTrackingPort> {
         UsageTrackingServiceImpl(
             userRepository = get(),
@@ -242,6 +254,8 @@ fun serviceModule() = module {
             logUsageUseCase = get(),
             notificationService = get(),
             metricsService = get(),
+            retryPolicy = get(),
+            jobRetryScheduler = get(),
             config = get()
         )
     }

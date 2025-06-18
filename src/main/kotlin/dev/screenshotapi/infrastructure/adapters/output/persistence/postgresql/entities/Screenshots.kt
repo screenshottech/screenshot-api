@@ -23,4 +23,14 @@ object Screenshots : IdTable<String>("screenshots") {
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
     val completedAt = timestamp("completed_at").nullable()
+    
+    // Retry fields
+    val retryCount = integer("retry_count").default(0)
+    val maxRetries = integer("max_retries").default(3)
+    val nextRetryAt = timestamp("next_retry_at").nullable()
+    val lastFailureReason = text("last_failure_reason").nullable()
+    val isRetryable = bool("is_retryable").default(true)
+    val retryType = varchar("retry_type", 20).default("AUTOMATIC") // AUTOMATIC, MANUAL
+    val lockedBy = varchar("locked_by", 255).nullable()
+    val lockedAt = timestamp("locked_at").nullable()
 }

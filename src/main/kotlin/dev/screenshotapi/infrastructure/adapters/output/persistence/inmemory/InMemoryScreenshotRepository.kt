@@ -8,9 +8,13 @@ import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.usecases.admin.ScreenshotStatItem
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
 
 class InMemoryScreenshotRepository : ScreenshotRepository {
+    
+    private val locks = ConcurrentHashMap<String, String>()
 
     override suspend fun save(job: ScreenshotJob): ScreenshotJob {
         return InMemoryDatabase.saveScreenshot(job)
@@ -254,5 +258,53 @@ class InMemoryScreenshotRepository : ScreenshotRepository {
                     formats = mapOf(format to jobs.size.toLong())
                 )
             }
+    }
+
+    override suspend fun tryLockJob(jobId: String, lockOwner: String): ScreenshotJob? {
+        val job = findById(jobId) ?: return null
+        
+        if (job.isLocked()) {
+            return null
+        }
+        
+        if (locks.putIfAbsent(jobId, lockOwner) == null) {
+            val lockedJob = job.lock(lockOwner)
+            update(lockedJob)
+            return lockedJob
+        }
+        
+        return null
+    }
+
+    override suspend fun findStuckJobs(stuckAfterMinutes: Int, limit: Int): List<ScreenshotJob> {
+        val cutoffTime = Clock.System.now().minus(stuckAfterMinutes.minutes)
+        return InMemoryDatabase.getAllScreenshots()
+            .filter { job ->
+                job.status == ScreenshotStatus.PROCESSING && 
+                job.updatedAt < cutoffTime
+            }
+            .take(limit)
+    }
+
+    override suspend fun findFailedRetryableJobs(limit: Int): List<ScreenshotJob> {
+        return InMemoryDatabase.getAllScreenshots()
+            .filter { job ->
+                job.status == ScreenshotStatus.FAILED && 
+                job.isRetryable && 
+                job.canRetry()
+            }
+            .take(limit)
+    }
+
+    override suspend fun findJobsReadyForRetry(limit: Int): List<ScreenshotJob> {
+        val currentTime = Clock.System.now()
+        return InMemoryDatabase.getAllScreenshots()
+            .filter { job ->
+                job.status == ScreenshotStatus.QUEUED &&
+                job.isRetryable &&
+                job.nextRetryAt != null &&
+                job.nextRetryAt <= currentTime
+            }
+            .take(limit)
     }
 }

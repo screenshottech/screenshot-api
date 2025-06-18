@@ -12,4 +12,7 @@ sealed class AuthorizationException(message: String, cause: Throwable? = null) :
     class ApiKeyNotOwned : AuthorizationException("API key does not belong to authenticated user")
     class RateLimitExceeded(val resetTime: Instant) :
         AuthorizationException("Rate limit exceeded. Reset at: $resetTime")
+    
+    class JobNotAuthorized(message: String = "Not authorized to access this job") :
+        AuthorizationException(message)
 }

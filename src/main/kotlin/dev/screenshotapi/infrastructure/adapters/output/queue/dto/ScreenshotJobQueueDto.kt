@@ -1,5 +1,6 @@
 package dev.screenshotapi.infrastructure.adapters.output.queue.dto
 
+import dev.screenshotapi.core.domain.entities.RetryType
 import dev.screenshotapi.core.domain.entities.ScreenshotJob
 import dev.screenshotapi.infrastructure.adapters.output.persistence.dto.ScreenshotRequestDto
 import dev.screenshotapi.infrastructure.adapters.output.persistence.dto.ScreenshotStatusDto
@@ -20,7 +21,16 @@ data class ScreenshotJobQueueDto(
     val webhookSent: Boolean = false,
     val createdAt: Instant,
     val updatedAt: Instant,
-    val completedAt: Instant? = null
+    val completedAt: Instant? = null,
+    // Retry fields
+    val retryCount: Int = 0,
+    val maxRetries: Int = 3,
+    val nextRetryAt: Instant? = null,
+    val lastFailureReason: String? = null,
+    val isRetryable: Boolean = true,
+    val retryType: String = "AUTOMATIC", // Serialized as string for JSON compatibility
+    val lockedBy: String? = null,
+    val lockedAt: Instant? = null
 ) {
     fun toDomain(): ScreenshotJob = ScreenshotJob(
         id = id,
@@ -35,7 +45,16 @@ data class ScreenshotJobQueueDto(
         webhookSent = webhookSent,
         createdAt = createdAt,
         updatedAt = updatedAt,
-        completedAt = completedAt
+        completedAt = completedAt,
+        // Retry fields
+        retryCount = retryCount,
+        maxRetries = maxRetries,
+        nextRetryAt = nextRetryAt,
+        lastFailureReason = lastFailureReason,
+        isRetryable = isRetryable,
+        retryType = RetryType.valueOf(retryType),
+        lockedBy = lockedBy,
+        lockedAt = lockedAt
     )
 
     companion object {
@@ -52,7 +71,16 @@ data class ScreenshotJobQueueDto(
             webhookSent = job.webhookSent,
             createdAt = job.createdAt,
             updatedAt = job.updatedAt,
-            completedAt = job.completedAt
+            completedAt = job.completedAt,
+            // Retry fields
+            retryCount = job.retryCount,
+            maxRetries = job.maxRetries,
+            nextRetryAt = job.nextRetryAt,
+            lastFailureReason = job.lastFailureReason,
+            isRetryable = job.isRetryable,
+            retryType = job.retryType.name,
+            lockedBy = job.lockedBy,
+            lockedAt = job.lockedAt
         )
     }
 }

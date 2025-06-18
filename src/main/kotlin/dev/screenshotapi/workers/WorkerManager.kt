@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.infrastructure.config.AppConfig
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.minutes
 
 class WorkerManager(
     private val queueRepository: QueueRepository,
@@ -25,6 +27,8 @@ class WorkerManager(
     private val logUsageUseCase: LogUsageUseCase,
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
+    private val retryPolicy: RetryPolicy,
+    private val jobRetryScheduler: JobRetryScheduler,
     private val config: AppConfig
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -39,6 +43,20 @@ class WorkerManager(
     fun start() {
         if (isRunning.compareAndSet(false, true)) {
             logger.info("Starting WorkerManager with min=$minWorkers, max=$maxWorkers workers")
+
+            // Start job retry scheduler first (if enabled)
+            if (config.screenshot.retrySchedulerEnabled) {
+                scope.launch {
+                    try {
+                        jobRetryScheduler.start()
+                        logger.info("Job retry scheduler started successfully")
+                    } catch (e: Exception) {
+                        logger.error("Failed to start job retry scheduler", e)
+                    }
+                }
+            } else {
+                logger.warn("Job retry scheduler is DISABLED by configuration (RETRY_SCHEDULER_ENABLED=false)")
+            }
 
             // Init min workers
             repeat(minWorkers) {
@@ -57,7 +75,7 @@ class WorkerManager(
                 healthMonitor()
             }
 
-            logger.info("WorkerManager started with ${workers.size} workers")
+            logger.info("WorkerManager started with ${workers.size} workers and job retry scheduler")
         } else {
             logger.warn("WorkerManager is already running")
         }
@@ -66,6 +84,21 @@ class WorkerManager(
     fun shutdown() {
         if (isRunning.compareAndSet(true, false)) {
             logger.info("Shutting down WorkerManager...")
+
+            // Stop job retry scheduler first (if enabled)
+            if (config.screenshot.retrySchedulerEnabled) {
+                runBlocking {
+                    try {
+                        withTimeout(10_000) {
+                            jobRetryScheduler.shutdown()
+                        }
+                    } catch (e: TimeoutCancellationException) {
+                        logger.warn("Job retry scheduler shutdown timeout")
+                    } catch (e: Exception) {
+                        logger.error("Error shutting down job retry scheduler", e)
+                    }
+                }
+            }
 
             // Cancel coroutine scope
             scope.cancel()
@@ -110,6 +143,7 @@ class WorkerManager(
             logUsageUseCase = logUsageUseCase,
             notificationService = notificationService,
             metricsService = metricsService,
+            retryPolicy = retryPolicy,
             config = config.screenshot
         )
 
@@ -185,7 +219,7 @@ class WorkerManager(
                     }
 
                     ScalingAction.NO_ACTION -> {
-                        // No hacer nada
+                        // No action needed
                     }
                 }
 
@@ -313,7 +347,25 @@ class WorkerManager(
             overview = getStatus(),
             workers = workerStatuses,
             queueSize = runBlocking { queueRepository.size() },
-            totalJobsProcessed = workerStatuses.sumOf { it.jobsProcessed }
+            totalJobsProcessed = workerStatuses.sumOf { it.jobsProcessed },
+            retrySchedulerStats = if (config.screenshot.retrySchedulerEnabled) {
+                jobRetryScheduler.getStatistics()
+            } else {
+                JobRetrySchedulerStatistics(
+                    isRunning = false,
+                    stuckJobsProcessed = 0,
+                    retryJobsProcessed = 0,
+                    delayedJobsProcessed = 0,
+                    lastStuckJobsRun = null,
+                    lastRetryJobsRun = null,
+                    lastDelayedJobsRun = null,
+                    intervalConfig = IntervalConfig(
+                        stuckJobsInterval = 0.minutes,
+                        retryJobsInterval = 0.minutes,
+                        delayedJobsInterval = 0.minutes
+                    )
+                )
+            }
         )
     }
 
@@ -360,7 +412,8 @@ data class DetailedWorkerStatus(
     val overview: WorkerStatus,
     val workers: List<WorkerInfo>,
     val queueSize: Long,
-    val totalJobsProcessed: Long
+    val totalJobsProcessed: Long,
+    val retrySchedulerStats: JobRetrySchedulerStatistics
 )
 
 data class WorkerInfo(

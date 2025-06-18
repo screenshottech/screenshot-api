@@ -310,6 +310,23 @@ components:
           nullable: true
           description: Last usage timestamp
 
+    # Retry response schema
+    RetryScreenshotResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          description: The job identifier that was retried
+          example: "job_1749294000_abc12345"
+        message:
+          type: string
+          description: Success message
+          example: "Job queued for manual retry"
+        queuePosition:
+          type: integer
+          description: Position in the processing queue
+          example: 2
+
     # Usage and analytics schemas
     UsageTimelineEntry:
       type: object
@@ -899,6 +916,103 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/screenshots/{jobId}/retry:
+    post:
+      tags: [Screenshots]
+      summary: Retry a failed screenshot
+      description: |
+        Manually retry a failed or stuck screenshot job. This endpoint allows users to retry jobs that have failed 
+        or are stuck in processing. The retry will:
+        - Validate job ownership and status
+        - Check available credits
+        - Reset retry count for manual retries
+        - Queue the job for processing with high priority
+        
+        Supported authentication methods:
+        1. API Key in X-API-Key header
+        2. API Key ID in X-API-Key-ID header with JWT authentication
+        3. JWT authentication for web interface
+      security:
+        - apiKey: []
+        - apiKeyId: []
+          bearerAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Screenshot job identifier to retry
+          example: "job_1749294000_abc12345"
+      responses:
+        '200':
+          description: Screenshot job successfully queued for retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetryScreenshotResponse'
+              example:
+                jobId: "job_1749294000_abc12345"
+                message: "Job queued for manual retry"
+                queuePosition: 2
+        '400':
+          description: Invalid request - Job cannot be retried
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "VALIDATION_ERROR"
+                message: "Job must be in FAILED status or stuck (>30 min processing). Current status: COMPLETED"
+                status: 400
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied - Job belongs to different user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "AUTHORIZATION_ERROR"
+                message: "Not authorized to retry this job"
+                status: 403
+        '402':
+          description: Insufficient credits for retry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "INSUFFICIENT_CREDITS"
+                message: "Insufficient credits for retry"
+                status: 402
+        '404':
+          description: Job not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "RESOURCE_NOT_FOUND"
+                message: "Job not found: job_1749294000_abc12345"
+                status: 404
+        '409':
+          description: Job is currently being processed by another worker
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "CONCURRENT_MODIFICATION"
+                message: "Job is currently being processed by another worker"
+                status: 409
 
   # Health check endpoint
   /health:

@@ -134,7 +134,15 @@ create table public.screenshots
     webhook_sent       boolean default false not null,
     created_at         timestamp             not null,
     updated_at         timestamp             not null,
-    completed_at       timestamp with time zone
+    completed_at       timestamp with time zone,
+    retry_count        integer default 0     not null,
+    max_retries        integer default 3     not null,
+    next_retry_at      timestamp with time zone,
+    last_failure_reason text,
+    is_retryable       boolean default true  not null,
+    retry_type         varchar(20) default 'AUTOMATIC' not null,
+    locked_by          varchar(255),
+    locked_at          timestamp with time zone
 );
 
 alter table public.screenshots
@@ -150,6 +158,11 @@ create index "screenshotCreatedAtIndex"
     on public.screenshots (created_at);
 
 CREATE INDEX IF NOT EXISTS "idx_screenshots_user_created" ON screenshots(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS "idx_screenshots_retry_ready" ON screenshots(next_retry_at) WHERE status = 'QUEUED' AND is_retryable = true AND next_retry_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS "idx_screenshots_stuck_jobs" ON screenshots(status, updated_at) WHERE status = 'PROCESSING';
+CREATE INDEX IF NOT EXISTS "idx_screenshots_failed_retryable" ON screenshots(status, is_retryable, retry_count, max_retries) WHERE status = 'FAILED' AND is_retryable = true;
+CREATE INDEX IF NOT EXISTS "idx_screenshots_locked_jobs" ON screenshots(locked_by, locked_at) WHERE locked_by IS NOT NULL;
 
 create trigger update_screenshots_updated_at
     before update

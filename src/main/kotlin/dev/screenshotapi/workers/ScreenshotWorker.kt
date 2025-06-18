@@ -7,6 +7,7 @@ import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.usecases.billing.DeductCreditsRequest
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
@@ -34,6 +35,7 @@ class ScreenshotWorker(
     private val logUsageUseCase: LogUsageUseCase,
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
+    private val retryPolicy: RetryPolicy,
     private val config: ScreenshotConfig
 ) {
     private val logger = LoggerFactory.getLogger("${this::class.simpleName}-$id")
@@ -302,32 +304,74 @@ class ScreenshotWorker(
 
     private suspend fun handleJobFailure(job: ScreenshotJob, error: Exception, processingTime: Long) {
         try {
-            // 1. Update job status to failed
-            val failedJob = job.markAsFailed(error.message ?: "Unknown error", processingTime)
-            screenshotRepository.update(failedJob)
-            logger.info("Job state transition: jobId={}, from=PROCESSING, to=FAILED, userId={}, processingTime={}ms", 
-                job.id, job.userId, processingTime)
+            val errorMessage = error.message ?: "Unknown error"
+            val shouldRetry = job.canRetry() && retryPolicy.shouldRetry(error)
+            
+            if (shouldRetry) {
+                val delay = retryPolicy.calculateDelay(job.retryCount)
+                val retryJob = job.scheduleRetry(errorMessage, delay)
+                
+                screenshotRepository.update(retryJob)
+                queueRepository.enqueueDelayed(retryJob, delay)
+                
+                logUsageUseCase.invoke(LogUsageUseCase.Request(
+                    userId = job.userId,
+                    action = UsageLogAction.SCREENSHOT_CREATED,
+                    creditsUsed = 0,
+                    apiKeyId = job.apiKeyId,
+                    screenshotId = job.id,
+                    metadata = mapOf(
+                        "retryType" to "AUTOMATIC",
+                        "retryCount" to job.retryCount.toString(),
+                        "delaySeconds" to delay.inWholeSeconds.toString(),
+                        "originalError" to errorMessage,
+                        "errorType" to (error::class.simpleName ?: "Exception")
+                    )
+                ))
+                
+                logger.warn("Job failed but scheduled for retry: jobId={}, retryCount={}, delay={}s, error={}", 
+                    job.id, job.retryCount, delay.inWholeSeconds, errorMessage)
+                
+            } else {
+                val failedJob = if (!job.canRetry()) {
+                    job.markAsFailed(errorMessage, processingTime)
+                } else {
+                    job.markAsNonRetryable(errorMessage).copy(
+                        status = ScreenshotStatus.FAILED,
+                        processingTimeMs = processingTime,
+                        completedAt = Clock.System.now()
+                    )
+                }
+                
+                screenshotRepository.update(failedJob)
+                
+                val reason = if (!job.canRetry()) "Max retries exceeded" else "Non-retryable error"
+                logger.info("Job state transition: jobId={}, from=PROCESSING, to=FAILED, userId={}, reason={}, processingTime={}ms", 
+                    job.id, job.userId, reason, processingTime)
 
-            // 2. Log screenshot failure in usage logs
-            logUsageUseCase.invoke(LogUsageUseCase.Request(
-                userId = job.userId,
-                action = UsageLogAction.SCREENSHOT_FAILED,
-                creditsUsed = 0, // No credits deducted for failed attempts
-                apiKeyId = job.apiKeyId,
-                screenshotId = job.id,
-                metadata = mapOf(
-                    "url" to job.request.url,
-                    "format" to job.request.format.name,
-                    "processingTime" to processingTime.toString(),
-                    "errorMessage" to (error.message ?: "Unknown error"),
-                    "errorType" to (error::class.simpleName ?: "Exception")
-                )
-            ))
+                logUsageUseCase.invoke(LogUsageUseCase.Request(
+                    userId = job.userId,
+                    action = UsageLogAction.SCREENSHOT_FAILED,
+                    creditsUsed = 0,
+                    apiKeyId = job.apiKeyId,
+                    screenshotId = job.id,
+                    metadata = mapOf(
+                        "url" to job.request.url,
+                        "format" to job.request.format.name,
+                        "processingTime" to processingTime.toString(),
+                        "errorMessage" to errorMessage,
+                        "errorType" to (error::class.simpleName ?: "Exception"),
+                        "retryCount" to job.retryCount.toString(),
+                        "maxRetries" to job.maxRetries.toString(),
+                        "failureReason" to reason
+                    )
+                ))
 
-            // 3. Record failure metrics
-            recordFailureMetrics(processingTime, error)
-            logger.error("Job failed: jobId={}, userId={}, processingTime={}ms, errorType={}, errorMessage={}", 
-                job.id, job.userId, processingTime, error::class.simpleName, error.message, error)
+                recordFailureMetrics(processingTime, error)
+                logger.error("Job permanently failed: jobId={}, userId={}, retryCount={}, processingTime={}ms, reason={}, errorType={}, errorMessage={}", 
+                    job.id, job.userId, job.retryCount, processingTime, reason, error::class.simpleName, errorMessage, error)
+            }
+            
         } catch (e: Exception) {
             logger.error("Failed to handle job failure for ${job.id}", e)
         }

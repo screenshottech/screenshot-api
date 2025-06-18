@@ -28,6 +28,12 @@ interface ScreenshotRepository {
     suspend fun getAverageProcessingTime(): Long
     suspend fun getSuccessRate(): Double
     suspend fun countCreatedToday(): Long
+    
+    // Retry-related methods
+    suspend fun tryLockJob(jobId: String, workerId: String): ScreenshotJob?
+    suspend fun findStuckJobs(stuckAfterMinutes: Int = 30, limit: Int = 100): List<ScreenshotJob>
+    suspend fun findJobsReadyForRetry(limit: Int = 100): List<ScreenshotJob>
+    suspend fun findFailedRetryableJobs(limit: Int = 100): List<ScreenshotJob>
 }
 
 

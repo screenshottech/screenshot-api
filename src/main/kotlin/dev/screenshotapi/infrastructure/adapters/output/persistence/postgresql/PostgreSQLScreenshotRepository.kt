@@ -15,6 +15,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.slf4j.LoggerFactory
 import java.util.*
+import kotlin.time.Duration.Companion.minutes
 
 class PostgreSQLScreenshotRepository(private val database: Database) : ScreenshotRepository {
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -47,6 +48,15 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     it[createdAt] = job.createdAt
                     it[updatedAt] = job.updatedAt
                     it[completedAt] = job.completedAt
+                    // Retry fields
+                    it[retryCount] = job.retryCount
+                    it[maxRetries] = job.maxRetries
+                    it[nextRetryAt] = job.nextRetryAt
+                    it[lastFailureReason] = job.lastFailureReason
+                    it[isRetryable] = job.isRetryable
+                    it[retryType] = job.retryType.name
+                    it[lockedBy] = job.lockedBy
+                    it[lockedAt] = job.lockedAt
                 }
 
                 job.copy(id = insertedId.value.toString())
@@ -142,6 +152,15 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     it[webhookSent] = job.webhookSent
                     it[updatedAt] = Clock.System.now()
                     it[completedAt] = job.completedAt
+                    // Retry fields
+                    it[retryCount] = job.retryCount
+                    it[maxRetries] = job.maxRetries
+                    it[nextRetryAt] = job.nextRetryAt
+                    it[lastFailureReason] = job.lastFailureReason
+                    it[isRetryable] = job.isRetryable
+                    it[retryType] = job.retryType.name
+                    it[lockedBy] = job.lockedBy
+                    it[lockedAt] = job.lockedAt
                 }
 
                 if (updatedRows == 0) {
@@ -406,6 +425,100 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
         }
     }
 
+    // Retry-related methods implementation
+    override suspend fun tryLockJob(jobId: String, workerId: String): ScreenshotJob? {
+        return try {
+            newSuspendedTransaction(db = database) {
+                // First try to find and lock the job atomically
+                val job = Screenshots.select { Screenshots.id eq jobId }
+                    .singleOrNull()
+                    ?.let { row -> mapRowToScreenshotJob(row) }
+                    ?: return@newSuspendedTransaction null
+
+                // Check if job is already locked or recently locked
+                if (job.isLocked()) {
+                    return@newSuspendedTransaction null
+                }
+
+                // Try to acquire lock
+                val updatedRows = Screenshots.update({ Screenshots.id eq jobId }) {
+                    it[lockedBy] = workerId
+                    it[lockedAt] = Clock.System.now()
+                }
+
+                if (updatedRows > 0) {
+                    job.lock(workerId)
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Error trying to lock job: $jobId for worker: $workerId", e)
+            throw DatabaseException.OperationFailed("Failed to lock job", e)
+        }
+    }
+
+    override suspend fun findStuckJobs(stuckAfterMinutes: Int, limit: Int): List<ScreenshotJob> {
+        return try {
+            newSuspendedTransaction(db = database) {
+                val stuckThreshold = Clock.System.now().minus(stuckAfterMinutes.minutes)
+                
+                Screenshots.select {
+                    (Screenshots.status eq ScreenshotStatus.PROCESSING.name) and
+                    (Screenshots.updatedAt less stuckThreshold) and
+                    (Screenshots.lockedBy.isNull() or (Screenshots.lockedAt less stuckThreshold.minus(5.minutes)))
+                }
+                .orderBy(Screenshots.updatedAt, SortOrder.ASC)
+                .limit(limit)
+                .map { row -> mapRowToScreenshotJob(row) }
+            }
+        } catch (e: Exception) {
+            logger.error("Error finding stuck jobs", e)
+            throw DatabaseException.OperationFailed("Failed to find stuck jobs", e)
+        }
+    }
+
+    override suspend fun findJobsReadyForRetry(limit: Int): List<ScreenshotJob> {
+        return try {
+            newSuspendedTransaction(db = database) {
+                val now = Clock.System.now()
+                
+                Screenshots.select {
+                    (Screenshots.status eq ScreenshotStatus.QUEUED.name) and
+                    (Screenshots.nextRetryAt.isNotNull()) and
+                    (Screenshots.nextRetryAt lessEq now) and
+                    (Screenshots.isRetryable eq true) and
+                    (Screenshots.lockedBy.isNull())
+                }
+                .orderBy(Screenshots.nextRetryAt, SortOrder.ASC)
+                .limit(limit)
+                .map { row -> mapRowToScreenshotJob(row) }
+            }
+        } catch (e: Exception) {
+            logger.error("Error finding jobs ready for retry", e)
+            throw DatabaseException.OperationFailed("Failed to find jobs ready for retry", e)
+        }
+    }
+
+    override suspend fun findFailedRetryableJobs(limit: Int): List<ScreenshotJob> {
+        return try {
+            newSuspendedTransaction(db = database) {
+                Screenshots.select {
+                    (Screenshots.status eq ScreenshotStatus.FAILED.name) and
+                    (Screenshots.isRetryable eq true) and
+                    (Screenshots.retryCount less Screenshots.maxRetries) and
+                    (Screenshots.lockedBy.isNull())
+                }
+                .orderBy(Screenshots.updatedAt, SortOrder.ASC)
+                .limit(limit)
+                .map { row -> mapRowToScreenshotJob(row) }
+            }
+        } catch (e: Exception) {
+            logger.error("Error finding failed retryable jobs", e)
+            throw DatabaseException.OperationFailed("Failed to find failed retryable jobs", e)
+        }
+    }
+
     private fun mapRowToScreenshotJob(row: ResultRow): ScreenshotJob {
         val requestDto = try {
             json.decodeFromString(ScreenshotRequestDto.serializer(), row[Screenshots.options])
@@ -428,7 +541,16 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
             webhookSent = row[Screenshots.webhookSent],
             createdAt = row[Screenshots.createdAt],
             updatedAt = row[Screenshots.updatedAt],
-            completedAt = row[Screenshots.completedAt]
+            completedAt = row[Screenshots.completedAt],
+            // Retry fields
+            retryCount = row[Screenshots.retryCount],
+            maxRetries = row[Screenshots.maxRetries],
+            nextRetryAt = row[Screenshots.nextRetryAt],
+            lastFailureReason = row[Screenshots.lastFailureReason],
+            isRetryable = row[Screenshots.isRetryable],
+            retryType = RetryType.valueOf(row[Screenshots.retryType]),
+            lockedBy = row[Screenshots.lockedBy],
+            lockedAt = row[Screenshots.lockedAt]
         )
     }
 }

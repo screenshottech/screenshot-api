@@ -58,6 +58,10 @@ services:
       SCREENSHOT_MAX_HEIGHT: ${SCREENSHOT_MAX_HEIGHT:-1080}
       SCREENSHOT_DEFAULT_TIMEOUT: ${SCREENSHOT_DEFAULT_TIMEOUT:-30000}
       SCREENSHOT_MAX_TIMEOUT: ${SCREENSHOT_MAX_TIMEOUT:-60000}
+      
+      # Retry scheduler configuration
+      # Set to false to disable automatic retry processing (useful for debugging)
+      RETRY_SCHEDULER_ENABLED: ${RETRY_SCHEDULER_ENABLED:-true}
 
       # Rate limiting (production optimized)
       RATE_LIMITING_ENABLED: ${RATE_LIMITING_ENABLED:-true}

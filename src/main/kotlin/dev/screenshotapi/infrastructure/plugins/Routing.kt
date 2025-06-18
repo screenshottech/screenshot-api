@@ -76,6 +76,9 @@ fun Application.configureRouting() {
                 
                 // Screenshot listing (requires authentication)
                 get("/screenshots") { screenshotController.listScreenshots(call) }
+                
+                // Manual retry endpoint for failed/stuck jobs
+                post("/screenshots/{jobId}/retry") { screenshotController.retryScreenshot(call) }
 
                 route("/admin") {
                     get("/users") { adminController.listUsers(call) }

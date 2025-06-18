@@ -1,20 +1,28 @@
 package dev.screenshotapi.core.usecases.billing
 
-class CheckCreditsUseCase {
+import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
+import dev.screenshotapi.core.domain.repositories.UserRepository
+
+class CheckCreditsUseCase(
+    private val userRepository: UserRepository
+) {
     suspend operator fun invoke(request: CheckCreditsRequest): CheckCreditsResponse {
+        val user = userRepository.findById(request.userId)
+            ?: throw ResourceNotFoundException("User", request.userId)
+        
         return CheckCreditsResponse(
-            hasCredits = true,
-            creditsRemaining = 100
+            hasEnoughCredits = user.hasCredits(request.requiredCredits),
+            availableCredits = user.creditsRemaining
         )
     }
 }
 
 data class CheckCreditsRequest(
     val userId: String,
-    val requiredAmount: Int = 1
+    val requiredCredits: Int = 1
 )
 
 data class CheckCreditsResponse(
-    val hasCredits: Boolean,
-    val creditsRemaining: Int
+    val hasEnoughCredits: Boolean,
+    val availableCredits: Int
 )
