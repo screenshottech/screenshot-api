@@ -5,6 +5,7 @@ import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
 import dev.screenshotapi.core.domain.repositories.ApiKeyRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.usecases.common.UseCase
+import kotlinx.datetime.Instant
 
 class ListApiKeysUseCase(
     private val apiKeyRepository: ApiKeyRepository,
@@ -26,6 +27,7 @@ class ListApiKeysUseCase(
         id = id,
         name = name,
         isActive = isActive,
+        isDefault = isDefault,
         maskedKey = "sk_***${keyHash.takeLast(4)}",
         usageCount = usageCount,
         createdAt = createdAt,
@@ -49,8 +51,9 @@ data class ApiKeySummary(
     val id: String,
     val name: String,
     val isActive: Boolean,
+    val isDefault: Boolean,
     val maskedKey: String,
     val usageCount: Long,
-    val createdAt: kotlinx.datetime.Instant,
-    val lastUsedAt: kotlinx.datetime.Instant?
+    val createdAt: Instant,
+    val lastUsedAt: Instant?
 )

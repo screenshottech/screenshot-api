@@ -27,7 +27,47 @@ fun Application.configureSecurity() {
     val logger = LoggerFactory.getLogger("Security")
 
     authentication {
-        // JWT Authentication for admin routes
+        // JWT Authentication for user management routes
+        jwt("jwt-auth") {
+            realm = REALM
+            verifier(
+                JWT
+                    .require(Algorithm.HMAC256(authConfig.jwtSecret))
+                    .withAudience(authConfig.jwtAudience)
+                    .withIssuer(authConfig.jwtIssuer)
+                    .build()
+            )
+            validate { credential ->
+                jwtAuthProvider.validateJwt(credential)
+            }
+        }
+
+        // API Key Authentication for operational routes
+        bearer("api-key-auth") {
+            realm = REALM
+            authenticate { tokenCredential ->
+                val apiKey = tokenCredential.token
+                try {
+                    val result = validateApiKeyUseCase(apiKey)
+                    if (result.isValid && result.userId != null && result.keyId != null) {
+                        logger.info("API key authentication successful: userId=${result.userId}, keyId=${result.keyId}")
+                        ApiKeyPrincipal(
+                            keyId = result.keyId,
+                            userId = result.userId,
+                            name = "API Key"
+                        )
+                    } else {
+                        logger.warn("API key authentication failed: invalid or inactive key")
+                        null
+                    }
+                } catch (e: Exception) {
+                    logger.error("API key authentication error: ${e.message}", e)
+                    null
+                }
+            }
+        }
+
+        // Legacy JWT for backwards compatibility (admin routes)
         jwt("jwt") {
             realm = REALM
             verifier(
@@ -42,7 +82,7 @@ fun Application.configureSecurity() {
             }
         }
 
-        // API Key Authentication for API routes
+        // Legacy API Key for backwards compatibility
         bearer("api-key") {
             realm = REALM
             authenticate { tokenCredential ->

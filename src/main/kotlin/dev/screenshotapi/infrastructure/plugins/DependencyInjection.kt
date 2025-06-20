@@ -14,6 +14,8 @@ import dev.screenshotapi.core.usecases.auth.*
 import dev.screenshotapi.core.usecases.billing.*
 import dev.screenshotapi.core.usecases.logging.GetUsageLogsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
+import dev.screenshotapi.core.usecases.stats.UpdateDailyStatsUseCase
+import dev.screenshotapi.core.usecases.stats.AggregateStatsUseCase
 import dev.screenshotapi.core.usecases.screenshot.BulkGetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.GetScreenshotStatusUseCase
 import dev.screenshotapi.core.usecases.screenshot.ListScreenshotsUseCase
@@ -89,6 +91,7 @@ fun repositoryModule(config: AppConfig) = module {
     single<SubscriptionRepository> { createSubscriptionRepository(config, getOrNull()) }
     single<UsageRepository> { createUsageRepository(config, getOrNull()) }
     single<UsageLogRepository> { createUsageLogRepository(config, getOrNull()) }
+    single<DailyStatsRepository> { createDailyStatsRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
     single<UrlSecurityPort> { UrlSecurityAdapter() }
@@ -98,6 +101,13 @@ fun repositoryModule(config: AppConfig) = module {
     }
     if (!config.redis.useInMemory) {
         single<StatefulRedisConnection<String, String>> { createRedisConnection(config) }
+    }
+    // Lightweight stats aggregation scheduler (works in all modes)
+    single { 
+        dev.screenshotapi.infrastructure.services.StatsAggregationScheduler(
+            aggregateStatsUseCase = get<AggregateStatsUseCase>(),
+            dailyStatsRepository = get<DailyStatsRepository>()
+        )
     }
 }
 
@@ -127,6 +137,9 @@ private fun createUsageRepository(config: AppConfig, database: Database?): Usage
 
 private fun createUsageLogRepository(config: AppConfig, database: Database?): UsageLogRepository =
     if (config.database.useInMemory) InMemoryUsageLogRepository() else PostgreSQLUsageLogRepository()
+
+private fun createDailyStatsRepository(config: AppConfig, database: Database?): DailyStatsRepository =
+    if (config.database.useInMemory) InMemoryDailyStatsRepository() else PostgreSQLDailyStatsRepository(database!!)
 
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
@@ -174,8 +187,12 @@ fun useCaseModule() = module {
     single { GetUserUsageTimelineUseCase(get<UsageRepository>(), get<UserRepository>()) }
     single { UpdateUserProfileUseCase(get<UserRepository>()) }
 
+    // Stats use cases
+    single { UpdateDailyStatsUseCase(get<DailyStatsRepository>()) }
+    single { AggregateStatsUseCase(get<DailyStatsRepository>()) }
+
     // Logging use cases
-    single { LogUsageUseCase(get<UsageLogRepository>()) }
+    single { LogUsageUseCase(get<UsageLogRepository>(), get<UpdateDailyStatsUseCase>()) }
     single { GetUsageLogsUseCase(get<UsageLogRepository>()) }
 
     // Billing use cases - mixed injection patterns
@@ -259,6 +276,7 @@ fun serviceModule() = module {
             config = get()
         )
     }
+
 }
 
 fun controllerModule() = module {

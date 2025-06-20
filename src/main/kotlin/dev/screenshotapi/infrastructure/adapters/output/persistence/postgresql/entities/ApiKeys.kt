@@ -17,6 +17,7 @@ object ApiKeys : IdTable<String>("api_keys") {
     val rateLimit = integer("rate_limit").default(1000)
     val usageCount = long("usage_count").default(0)
     val isActive = bool("is_active").default(true)
+    val isDefault = bool("is_default").default(false)
     val lastUsed = timestamp("last_used").nullable()
     val expiresAt = timestamp("expires_at").nullable()
     val createdAt = timestamp("created_at")

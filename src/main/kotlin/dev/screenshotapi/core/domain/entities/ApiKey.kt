@@ -13,6 +13,7 @@ data class ApiKey(
     val rateLimit: Int,
     val usageCount: Long = 0,
     val isActive: Boolean,
+    val isDefault: Boolean = false,
     val lastUsed: Instant?,
     val expiresAt: Instant? = null,
     val createdAt: Instant

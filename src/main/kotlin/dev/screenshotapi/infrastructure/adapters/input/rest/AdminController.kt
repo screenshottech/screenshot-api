@@ -11,6 +11,7 @@ import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.usecases.admin.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.*
 import dev.screenshotapi.infrastructure.auth.UserPrincipal
+import dev.screenshotapi.infrastructure.auth.requireUserPrincipal
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -34,7 +35,7 @@ class AdminController : KoinComponent {
     suspend fun listUsers(call: ApplicationCall) {
         try {
             println("[AdminController] Extracting principal from call...")
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             println("[AdminController] Principal extracted successfully")
 
             // Debug logging
@@ -89,7 +90,7 @@ class AdminController : KoinComponent {
 
     suspend fun getUser(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             if (!principal.canManageUsers()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
@@ -127,7 +128,7 @@ class AdminController : KoinComponent {
 
     suspend fun getStats(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             if (!principal.canViewSystemStats()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
@@ -163,7 +164,7 @@ class AdminController : KoinComponent {
 
     suspend fun updateUserStatus(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             if (!principal.canManageUsers()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
@@ -206,7 +207,7 @@ class AdminController : KoinComponent {
 
     suspend fun getUserActivity(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             if (!principal.canManageUsers()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
@@ -244,7 +245,7 @@ class AdminController : KoinComponent {
 
     suspend fun getScreenshotStats(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             if (!principal.canViewSystemStats()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
@@ -471,7 +472,7 @@ class AdminController : KoinComponent {
 
     suspend fun provisionSubscriptionCredits(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             if (!principal.canManageBilling()) {
                 call.respond(
                     HttpStatusCode.Forbidden,
@@ -516,7 +517,7 @@ class AdminController : KoinComponent {
 
     suspend fun synchronizeUserPlan(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             if (!principal.canManageBilling()) {
                 call.respond(
                     HttpStatusCode.Forbidden,

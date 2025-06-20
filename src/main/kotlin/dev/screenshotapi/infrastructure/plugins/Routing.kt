@@ -49,8 +49,8 @@ fun Application.configureRouting() {
                 // Public endpoint - no authentication required
                 get("/plans") { billingController.getPlans(call) }
 
-                // Authenticated endpoints - require API key or JWT
-                authenticate("api-key", "jwt") {
+                // Authenticated endpoints - require JWT for user management
+                authenticate("jwt-auth") {
                     post("/checkout") { billingController.createCheckout(call) }
                     get("/subscription") { billingController.getSubscription(call) }
                     post("/portal") { billingController.createBillingPortal(call) }
@@ -60,38 +60,28 @@ fun Application.configureRouting() {
                 post("/webhook") { billingController.handleWebhook(call) }
             }
 
-            // Screenshot endpoints with multiple authentication support
-            // Supports both: JWT + X-API-Key header, or standalone API key
-            authenticate("api-key", "jwt", optional = true) {
+            // Screenshot operations - Hybrid authentication (JWT OR API Key)
+            authenticate("jwt-auth", "api-key-auth") {
                 // Screenshot creation endpoint with rate limiting
                 rateLimit(RateLimitName("screenshots")) {
                     post("/screenshots") { screenshotController.takeScreenshot(call) }
                 }
                 
+                // Manual retry endpoint for failed/stuck jobs
+                post("/screenshots/{jobId}/retry") { screenshotController.retryScreenshot(call) }
+                
                 // Screenshot status by job ID
                 get("/screenshots/{jobId}") { screenshotController.getScreenshotStatus(call) }
                 
-                // Bulk screenshot status endpoint for efficient polling
-                post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
-                
-                // Screenshot listing (requires authentication)
+                // Screenshot listing (shows screenshots for authenticated user)
                 get("/screenshots") { screenshotController.listScreenshots(call) }
                 
-                // Manual retry endpoint for failed/stuck jobs
-                post("/screenshots/{jobId}/retry") { screenshotController.retryScreenshot(call) }
+                // Bulk screenshot status endpoint for efficient polling
+                post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
+            }
 
-                route("/admin") {
-                    get("/users") { adminController.listUsers(call) }
-                    get("/users/{userId}") { adminController.getUser(call) }
-                    get("/stats") { adminController.getStats(call) }
-                    
-                    // Subscription management
-                    get("/subscriptions") { adminController.listSubscriptions(call) }
-                    get("/subscriptions/{subscriptionId}") { adminController.getSubscriptionDetails(call) }
-                    post("/subscriptions/{subscriptionId}/provision-credits") { adminController.provisionSubscriptionCredits(call) }
-                    post("/users/{userId}/synchronize-plan") { adminController.synchronizeUserPlan(call) }
-                }
-
+            // User management endpoints - JWT authentication only
+            authenticate("jwt-auth") {
                 route("/user") {
                     get("/profile") { authController.getProfile(call) }
                     put("/profile") { authController.updateProfile(call) }
@@ -103,6 +93,21 @@ fun Application.configureRouting() {
 
                     get("/usage") { authController.getUsage(call) }
                     get("/usage/timeline") { authController.getUsageTimeline(call) }
+                }
+            }
+
+            // Admin endpoints - JWT authentication only
+            authenticate("jwt-auth") {
+                route("/admin") {
+                    get("/users") { adminController.listUsers(call) }
+                    get("/users/{userId}") { adminController.getUser(call) }
+                    get("/stats") { adminController.getStats(call) }
+                    
+                    // Subscription management
+                    get("/subscriptions") { adminController.listSubscriptions(call) }
+                    get("/subscriptions/{subscriptionId}") { adminController.getSubscriptionDetails(call) }
+                    post("/subscriptions/{subscriptionId}/provision-credits") { adminController.provisionSubscriptionCredits(call) }
+                    post("/users/{userId}/synchronize-plan") { adminController.synchronizeUserPlan(call) }
                 }
             }
         }

@@ -13,6 +13,8 @@ import dev.screenshotapi.infrastructure.adapters.input.rest.dto.UpdateApiKeyRequ
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.UpdateProfileRequestDto
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.toDto
 import dev.screenshotapi.infrastructure.auth.UserPrincipal
+import dev.screenshotapi.infrastructure.auth.requireUserPrincipal
+import dev.screenshotapi.infrastructure.auth.requireUserId
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.providers.LocalAuthProvider
 import io.ktor.http.*
@@ -115,7 +117,7 @@ class AuthController : KoinComponent {
 
     suspend fun getProfile(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             val response = getUserProfileUseCase(GetUserProfileRequest(principal.userId))
 
             call.respond(
@@ -145,7 +147,7 @@ class AuthController : KoinComponent {
 
     suspend fun updateProfile(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             val dto = call.receive<UpdateProfileRequestDto>()
             val request = UpdateUserProfileRequest(principal.userId, dto.name, dto.email)
             val response = updateUserProfileUseCase(request)
@@ -175,7 +177,7 @@ class AuthController : KoinComponent {
 
     suspend fun listApiKeys(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             val response = listApiKeysUseCase(ListApiKeysRequest(principal.userId))
 
             val apiKeysDto = response.apiKeys.map { apiKey ->
@@ -183,6 +185,7 @@ class AuthController : KoinComponent {
                     id = apiKey.id,
                     name = apiKey.name,
                     isActive = apiKey.isActive,
+                    isDefault = apiKey.isDefault,
                     maskedKey = "sk_****${apiKey.id.takeLast(4)}",
                     usageCount = 0, // TODO: implement usage tracking
                     createdAt = apiKey.createdAt.toString(),
@@ -207,11 +210,12 @@ class AuthController : KoinComponent {
 
     suspend fun createApiKey(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             val dto = call.receive<CreateApiKeyRequestDto>()
             val request = CreateApiKeyRequest(
                 userId = principal.userId,
-                name = dto.name
+                name = dto.name,
+                setAsDefault = dto.setAsDefault
             )
             val response = createApiKeyUseCase(request)
 
@@ -233,14 +237,15 @@ class AuthController : KoinComponent {
 
     suspend fun updateApiKey(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             val keyId = call.parameters["keyId"]!!
             val dto = call.receive<UpdateApiKeyRequestDto>()
             val request = UpdateApiKeyRequest(
                 userId = principal.userId,
                 apiKeyId = keyId,
                 isActive = dto.isActive,
-                name = dto.name
+                name = dto.name,
+                setAsDefault = dto.setAsDefault
             )
             val response = updateApiKeyUseCase(request)
 
@@ -267,7 +272,7 @@ class AuthController : KoinComponent {
 
     suspend fun deleteApiKey(call: ApplicationCall) {
         try {
-            val principal = call.principal<UserPrincipal>()!!
+            val principal = call.requireUserPrincipal()
             val keyId = call.parameters["keyId"]!!
             val request = DeleteApiKeyRequest(principal.userId, keyId)
             deleteApiKeyUseCase(request)
@@ -290,16 +295,7 @@ class AuthController : KoinComponent {
 
     suspend fun getUsage(call: ApplicationCall) {
         try {
-            println("Getting usage - checking principal...")
-            val principal = call.principal<UserPrincipal>()
-            println("Principal: $principal")
-            
-            if (principal == null) {
-                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "No valid principal found"))
-                return
-            }
-            
-            println("User ID from principal: ${principal.userId}")
+            val principal = call.requireUserPrincipal()
             val response = getUserUsageUseCase(GetUserUsageRequest(principal.userId))
 
             call.respond(HttpStatusCode.OK, response.toDto())
@@ -315,15 +311,8 @@ class AuthController : KoinComponent {
 
     suspend fun getUsageTimeline(call: ApplicationCall) {
         try {
-            // Check authentication first
-            val principal = call.principal<UserPrincipal>()
-            if (principal == null) {
-                call.respond(
-                    HttpStatusCode.Unauthorized,
-                    ErrorResponseDto.unauthorized("Authentication required")
-                )
-                return
-            }
+            // Get authenticated user
+            val principal = call.requireUserPrincipal()
             
             // Validate period parameter with proper error handling
             val periodParam = call.parameters["period"]

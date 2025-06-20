@@ -97,6 +97,7 @@ create table public.api_keys
     rate_limit  integer default 1000 not null,
     usage_count bigint  default 0    not null,
     is_active   boolean default true not null,
+    is_default  boolean default false not null,
     last_used   timestamp with time zone,
     expires_at  timestamp with time zone,
     created_at  timestamp            not null
@@ -110,6 +111,11 @@ create unique index "apiKeyHashIndex"
 
 create index idx_api_keys_user_id
     on public.api_keys (user_id);
+
+-- Unique constraint: only one default API key per user
+create unique index idx_api_keys_user_default 
+    on public.api_keys (user_id) 
+    where is_default = true and is_active = true;
 
 create table public.screenshots
 (
@@ -334,4 +340,108 @@ INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_
 INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_free', 'Free Forever', '3x more generous than competitors - perfect for developers', 300, 0, null, 'monthly', 'USD', '["High-quality screenshots", "PNG, JPEG, WEBP, PDF formats", "Full page capture", "Custom dimensions", "10 req/min, 300/hour", "5 concurrent requests", "API access"]', true, null, null, null, null, 1, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
 INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_starter_monthly', 'Starter Monthly', '12% cheaper than competitors + OCR included', 2000, 1499, null, 'monthly', 'USD', '["All Free features", "15 req/min, 400/hour", "8 concurrent requests", "Usage analytics", "Priority support", "OCR text extraction (coming soon)", "Webhooks (coming soon)"]', true, 'prod_starter', 'price_starter_monthly', 'price_starter_annual', null, 2, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
 INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_enterprise_annual', 'Enterprise Annual', '12% cheaper + unlimited + white-label + on-premise + 10% annual savings', 50000, 22900, 247320, 'annual', 'USD', '["All Professional features", "100 req/min, 6000/hour", "Unlimited concurrent requests", "Video capture (coming soon)", "Custom CSS injection (coming soon)", "Scheduled screenshots (coming soon)", "Dedicated support", "10% savings (2 months free)"]', true, 'prod_enterprise', 'price_enterprise_monthly', 'price_enterprise_annual', null, 4, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
+
+-- ============================================================================
+-- STATISTICS TABLES FOR AGGREGATED USER ANALYTICS
+-- ============================================================================
+
+-- Daily User Statistics Table
+create table public.daily_user_stats
+(
+    id                    varchar(255)                        not null
+        primary key,
+    user_id               varchar(255)                        not null
+        references public.users
+            on delete cascade,
+    date                  date                                not null,
+    screenshots_created   integer     default 0               not null,
+    screenshots_completed integer     default 0               not null,
+    screenshots_failed    integer     default 0               not null,
+    screenshots_retried   integer     default 0               not null,
+    credits_used          integer     default 0               not null,
+    api_calls_count       integer     default 0               not null,
+    api_keys_used         integer     default 0               not null,
+    credits_added         integer     default 0               not null,
+    payments_processed    integer     default 0               not null,
+    api_keys_created      integer     default 0               not null,
+    plan_changes          integer     default 0               not null,
+    created_at            timestamp                           not null,
+    updated_at            timestamp                           not null,
+    version               bigint      default 1               not null
+);
+
+alter table public.daily_user_stats
+    owner to screenshotuser;
+
+-- Indexes for Daily User Stats
+create unique index idx_daily_stats_user_date on public.daily_user_stats (user_id, date);
+create index idx_daily_stats_user_date_range on public.daily_user_stats (user_id, date);
+create index idx_daily_stats_date_activity on public.daily_user_stats (date, screenshots_created);
+create index idx_daily_stats_user_month on public.daily_user_stats (user_id, date);
+create index idx_daily_stats_date_retention on public.daily_user_stats (date);
+create index idx_daily_stats_user_id on public.daily_user_stats (user_id);
+
+-- Monthly User Statistics Table
+create table public.monthly_user_stats
+(
+    id                      varchar(255)                        not null
+        primary key,
+    user_id                 varchar(255)                        not null
+        references public.users
+            on delete cascade,
+    month                   varchar(7)                          not null, -- Format: "2025-01"
+    screenshots_created     integer     default 0               not null,
+    screenshots_completed   integer     default 0               not null,
+    screenshots_failed      integer     default 0               not null,
+    screenshots_retried     integer     default 0               not null,
+    credits_used            integer     default 0               not null,
+    api_calls_count         integer     default 0               not null,
+    credits_added           integer     default 0               not null,
+    peak_daily_screenshots  integer     default 0               not null,
+    active_days             integer     default 0               not null,
+    created_at              timestamp                           not null,
+    updated_at              timestamp                           not null,
+    version                 bigint      default 1               not null
+);
+
+alter table public.monthly_user_stats
+    owner to screenshotuser;
+
+-- Indexes for Monthly User Stats
+create unique index idx_monthly_stats_user_month on public.monthly_user_stats (user_id, month);
+create index idx_monthly_stats_month on public.monthly_user_stats (month);
+create index idx_monthly_stats_user_year on public.monthly_user_stats (user_id, month);
+create index idx_monthly_stats_user_id on public.monthly_user_stats (user_id);
+
+-- Yearly User Statistics Table
+create table public.yearly_user_stats
+(
+    id                        varchar(255)                        not null
+        primary key,
+    user_id                   varchar(255)                        not null
+        references public.users
+            on delete cascade,
+    year                      integer                             not null,
+    screenshots_created       integer     default 0               not null,
+    screenshots_completed     integer     default 0               not null,
+    screenshots_failed        integer     default 0               not null,
+    screenshots_retried       integer     default 0               not null,
+    credits_used              integer     default 0               not null,
+    api_calls_count           integer     default 0               not null,
+    credits_added             integer     default 0               not null,
+    peak_monthly_screenshots  integer     default 0               not null,
+    active_months             integer     default 0               not null,
+    created_at                timestamp                           not null,
+    updated_at                timestamp                           not null,
+    version                   bigint      default 1               not null
+);
+
+alter table public.yearly_user_stats
+    owner to screenshotuser;
+
+-- Indexes for Yearly User Stats
+create unique index idx_yearly_stats_user_year on public.yearly_user_stats (user_id, year);
+create index idx_yearly_stats_year on public.yearly_user_stats (year);
+create index idx_yearly_stats_user on public.yearly_user_stats (user_id);
+
 

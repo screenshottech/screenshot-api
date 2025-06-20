@@ -2,8 +2,7 @@ package dev.screenshotapi.infrastructure.adapters.input.rest
 
 import dev.screenshotapi.core.usecases.billing.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.*
-import dev.screenshotapi.infrastructure.auth.ApiKeyPrincipal
-import dev.screenshotapi.infrastructure.auth.UserPrincipal
+import dev.screenshotapi.infrastructure.auth.requireUserId
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -46,18 +45,8 @@ class BillingController : KoinComponent {
     suspend fun createCheckout(call: ApplicationCall) {
         val request = call.receive<CreateCheckoutSessionRequestDto>()
         
-        // Get user ID from authentication principal
-        val userId = when {
-            call.principal<ApiKeyPrincipal>() != null -> {
-                call.principal<ApiKeyPrincipal>()!!.userId
-            }
-            call.principal<UserPrincipal>() != null -> {
-                call.principal<UserPrincipal>()!!.userId
-            }
-            else -> {
-                throw dev.screenshotapi.core.domain.exceptions.AuthenticationException.InvalidCredentials()
-            }
-        }
+        // Get user ID from JWT authentication (billing endpoints use jwt-auth)
+        val userId = call.requireUserId()
         
         // Convert DTO to domain model
         val billingCycle = request.billingCycle.toBillingCycle()
@@ -88,18 +77,8 @@ class BillingController : KoinComponent {
      * Authenticated endpoint to get user's current subscription
      */
     suspend fun getSubscription(call: ApplicationCall) {
-        // Get user ID from authentication principal
-        val userId = when {
-            call.principal<ApiKeyPrincipal>() != null -> {
-                call.principal<ApiKeyPrincipal>()!!.userId
-            }
-            call.principal<UserPrincipal>() != null -> {
-                call.principal<UserPrincipal>()!!.userId
-            }
-            else -> {
-                throw dev.screenshotapi.core.domain.exceptions.AuthenticationException.InvalidCredentials()
-            }
-        }
+        // Get user ID from JWT authentication (billing endpoints use jwt-auth)
+        val userId = call.requireUserId()
         
         // Execute use case
         val request = GetUserSubscriptionRequest(userId)
@@ -124,18 +103,8 @@ class BillingController : KoinComponent {
      * Authenticated endpoint to create Stripe billing portal session
      */
     suspend fun createBillingPortal(call: ApplicationCall) {
-        // Get user ID from authentication principal
-        val userId = when {
-            call.principal<ApiKeyPrincipal>() != null -> {
-                call.principal<ApiKeyPrincipal>()!!.userId
-            }
-            call.principal<UserPrincipal>() != null -> {
-                call.principal<UserPrincipal>()!!.userId
-            }
-            else -> {
-                throw dev.screenshotapi.core.domain.exceptions.AuthenticationException.InvalidCredentials()
-            }
-        }
+        // Get user ID from JWT authentication (billing endpoints use jwt-auth)
+        val userId = call.requireUserId()
         
         logger.info("BILLING_PORTAL_REQUEST: Creating billing portal session [userId=$userId]")
         

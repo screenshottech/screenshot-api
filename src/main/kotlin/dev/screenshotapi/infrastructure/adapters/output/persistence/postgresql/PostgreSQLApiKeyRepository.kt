@@ -42,6 +42,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
                     it[rateLimit] = apiKey.rateLimit
                     it[usageCount] = apiKey.usageCount
                     it[isActive] = apiKey.isActive
+                    it[isDefault] = apiKey.isDefault
                     it[lastUsed] = apiKey.lastUsed
                     it[expiresAt] = apiKey.expiresAt
                     it[createdAt] = apiKey.createdAt
@@ -105,6 +106,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
                     it[rateLimit] = apiKey.rateLimit
                     it[usageCount] = apiKey.usageCount
                     it[isActive] = apiKey.isActive
+                    it[isDefault] = apiKey.isDefault
                     it[lastUsed] = apiKey.lastUsed
                     it[expiresAt] = apiKey.expiresAt
                 }
@@ -130,6 +132,63 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
         } catch (e: Exception) {
             logger.error("Error deleting API key: $id", e)
             throw DatabaseException.OperationFailed("Failed to delete API key", e)
+        }
+    }
+
+    override suspend fun findDefaultByUserId(userId: String): ApiKey? {
+        return try {
+            newSuspendedTransaction(db = database) {
+                ApiKeys.select { 
+                    (ApiKeys.userId eq userId) and 
+                    (ApiKeys.isDefault eq true) and 
+                    (ApiKeys.isActive eq true)
+                }
+                    .singleOrNull()
+                    ?.let { row -> mapRowToApiKey(row) }
+            }
+        } catch (e: Exception) {
+            logger.error("Error finding default API key for user: $userId", e)
+            throw DatabaseException.OperationFailed("Failed to find default API key for user", e)
+        }
+    }
+
+    override suspend fun setAsDefault(userId: String, apiKeyId: String): Boolean {
+        return try {
+            newSuspendedTransaction(db = database) {
+                // First clear any existing default key for this user
+                clearDefaultForUser(userId)
+                
+                // Set the specified key as default
+                val updatedRows = ApiKeys.update({ 
+                    (ApiKeys.id eq apiKeyId) and 
+                    (ApiKeys.userId eq userId) and 
+                    (ApiKeys.isActive eq true)
+                }) {
+                    it[isDefault] = true
+                }
+                
+                updatedRows > 0
+            }
+        } catch (e: Exception) {
+            logger.error("Error setting API key as default: $apiKeyId for user: $userId", e)
+            throw DatabaseException.OperationFailed("Failed to set API key as default", e)
+        }
+    }
+
+    override suspend fun clearDefaultForUser(userId: String): Boolean {
+        return try {
+            newSuspendedTransaction(db = database) {
+                val updatedRows = ApiKeys.update({ 
+                    (ApiKeys.userId eq userId) and (ApiKeys.isDefault eq true) 
+                }) {
+                    it[isDefault] = false
+                }
+                
+                true // Always return true, even if no rows were updated
+            }
+        } catch (e: Exception) {
+            logger.error("Error clearing default API key for user: $userId", e)
+            throw DatabaseException.OperationFailed("Failed to clear default API key for user", e)
         }
     }
 
@@ -161,6 +220,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
             rateLimit = row[ApiKeys.rateLimit],
             usageCount = row[ApiKeys.usageCount],
             isActive = row[ApiKeys.isActive],
+            isDefault = row[ApiKeys.isDefault],
             lastUsed = row[ApiKeys.lastUsed],
             expiresAt = row[ApiKeys.expiresAt],
             createdAt = row[ApiKeys.createdAt]

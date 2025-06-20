@@ -19,10 +19,17 @@ class UpdateApiKeyUseCase(
             throw AuthorizationException.InsufficientPermissions("API_KEY_UPDATE")
         }
 
+        // Handle default key logic before updating
+        if (request.setAsDefault == true) {
+            // Set this key as the default for the user
+            apiKeyRepository.setAsDefault(request.userId, request.apiKeyId)
+        }
+
         // Update only the fields that are provided
         val updatedApiKey = apiKey.copy(
             isActive = request.isActive ?: apiKey.isActive,
-            name = request.name ?: apiKey.name
+            name = request.name ?: apiKey.name,
+            isDefault = if (request.setAsDefault == true) true else apiKey.isDefault
         )
 
         val result = apiKeyRepository.update(updatedApiKey)
@@ -38,12 +45,13 @@ data class UpdateApiKeyRequest(
     val userId: String,
     val apiKeyId: String,
     val isActive: Boolean? = null,
-    val name: String? = null
+    val name: String? = null,
+    val setAsDefault: Boolean? = null
 ) {
     init {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         require(apiKeyId.isNotBlank()) { "API Key ID cannot be blank" }
-        require(isActive != null || name != null) { "At least one field must be provided for update" }
+        require(isActive != null || name != null || setAsDefault != null) { "At least one field must be provided for update" }
     }
 }
 

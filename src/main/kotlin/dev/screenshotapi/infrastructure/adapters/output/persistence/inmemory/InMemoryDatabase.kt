@@ -11,6 +11,11 @@ object InMemoryDatabase {
     private val screenshots = mutableMapOf<String, ScreenshotJob>()
     private val subscriptions = mutableMapOf<String, Subscription>()
     private val queue = mutableListOf<ScreenshotJob>()
+    
+    // Stats collections
+    private val dailyStats = mutableMapOf<Pair<String, kotlinx.datetime.LocalDate>, dev.screenshotapi.core.domain.entities.DailyUserStats>()
+    private val monthlyStats = mutableMapOf<Pair<String, String>, dev.screenshotapi.core.domain.entities.MonthlyUserStats>()
+    private val yearlyStats = mutableMapOf<Pair<String, Int>, dev.screenshotapi.core.domain.entities.YearlyUserStats>()
 
     init {
         // Create initial plans
@@ -236,6 +241,9 @@ object InMemoryDatabase {
         synchronized(screenshots) { screenshots.clear() }
         synchronized(subscriptions) { subscriptions.clear() }
         synchronized(queue) { queue.clear() }
+        synchronized(dailyStats) { dailyStats.clear() }
+        synchronized(monthlyStats) { monthlyStats.clear() }
+        synchronized(yearlyStats) { yearlyStats.clear() }
     }
 
     fun getAllUsers(): List<User> {
@@ -527,6 +535,129 @@ object InMemoryDatabase {
             }
 
             return filtered.count().toLong()
+        }
+    }
+
+    // === STATS METHODS ===
+
+    // Daily Stats
+    fun saveDailyStats(stats: dev.screenshotapi.core.domain.entities.DailyUserStats): dev.screenshotapi.core.domain.entities.DailyUserStats {
+        synchronized(dailyStats) {
+            val key = Pair(stats.userId, stats.date)
+            dailyStats[key] = stats
+            return stats
+        }
+    }
+
+    fun findDailyStats(userId: String, date: kotlinx.datetime.LocalDate): dev.screenshotapi.core.domain.entities.DailyUserStats? {
+        synchronized(dailyStats) {
+            return dailyStats[Pair(userId, date)]
+        }
+    }
+
+    fun findDailyStatsRange(userId: String, startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): List<dev.screenshotapi.core.domain.entities.DailyUserStats> {
+        synchronized(dailyStats) {
+            return dailyStats.values.filter { stats ->
+                stats.userId == userId && 
+                stats.date >= startDate && 
+                stats.date <= endDate
+            }.sortedBy { it.date }
+        }
+    }
+
+    fun findUsersWithDailyActivity(date: kotlinx.datetime.LocalDate): List<String> {
+        synchronized(dailyStats) {
+            return dailyStats.values
+                .filter { it.date == date && it.hasActivity }
+                .map { it.userId }
+                .distinct()
+        }
+    }
+
+    fun deleteDailyStatsOlderThan(date: kotlinx.datetime.LocalDate): Int {
+        synchronized(dailyStats) {
+            val toDelete = dailyStats.filterKeys { it.second < date }
+            toDelete.keys.forEach { dailyStats.remove(it) }
+            return toDelete.size
+        }
+    }
+
+    // Monthly Stats
+    fun saveMonthlyStats(stats: dev.screenshotapi.core.domain.entities.MonthlyUserStats): dev.screenshotapi.core.domain.entities.MonthlyUserStats {
+        synchronized(monthlyStats) {
+            val key = Pair(stats.userId, stats.month)
+            monthlyStats[key] = stats
+            return stats
+        }
+    }
+
+    fun findMonthlyStats(userId: String, month: String): dev.screenshotapi.core.domain.entities.MonthlyUserStats? {
+        synchronized(monthlyStats) {
+            return monthlyStats[Pair(userId, month)]
+        }
+    }
+
+    fun findMonthlyStatsByYear(userId: String, year: Int): List<dev.screenshotapi.core.domain.entities.MonthlyUserStats> {
+        synchronized(monthlyStats) {
+            return monthlyStats.values.filter { stats ->
+                stats.userId == userId && stats.month.startsWith("$year-")
+            }.sortedBy { it.month }
+        }
+    }
+
+    fun deleteMonthlyStatsOlderThan(month: String): Int {
+        synchronized(monthlyStats) {
+            val toDelete = monthlyStats.filterKeys { it.second < month }
+            toDelete.keys.forEach { monthlyStats.remove(it) }
+            return toDelete.size
+        }
+    }
+
+    // Yearly Stats
+    fun saveYearlyStats(stats: dev.screenshotapi.core.domain.entities.YearlyUserStats): dev.screenshotapi.core.domain.entities.YearlyUserStats {
+        synchronized(yearlyStats) {
+            val key = Pair(stats.userId, stats.year)
+            yearlyStats[key] = stats
+            return stats
+        }
+    }
+
+    fun findYearlyStats(userId: String, year: Int): dev.screenshotapi.core.domain.entities.YearlyUserStats? {
+        synchronized(yearlyStats) {
+            return yearlyStats[Pair(userId, year)]
+        }
+    }
+
+    fun findYearlyStatsByUser(userId: String): List<dev.screenshotapi.core.domain.entities.YearlyUserStats> {
+        synchronized(yearlyStats) {
+            return yearlyStats.values
+                .filter { it.userId == userId }
+                .sortedByDescending { it.year }
+        }
+    }
+
+    fun deleteYearlyStatsOlderThan(year: Int): Int {
+        synchronized(yearlyStats) {
+            val toDelete = yearlyStats.filterKeys { it.second < year }
+            toDelete.keys.forEach { yearlyStats.remove(it) }
+            return toDelete.size
+        }
+    }
+
+    fun getStatsTableSizes(): Map<String, Long> {
+        return mapOf(
+            "daily_user_stats" to dailyStats.size.toLong(),
+            "monthly_user_stats" to monthlyStats.size.toLong(),
+            "yearly_user_stats" to yearlyStats.size.toLong()
+        )
+    }
+
+    fun getUsersWithStatsInPeriod(startDate: kotlinx.datetime.LocalDate, endDate: kotlinx.datetime.LocalDate): Set<String> {
+        synchronized(dailyStats) {
+            return dailyStats.values
+                .filter { it.date >= startDate && it.date <= endDate }
+                .map { it.userId }
+                .toSet()
         }
     }
 }

@@ -1,15 +1,16 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest
 
 import dev.screenshotapi.core.usecases.screenshot.*
-import dev.screenshotapi.core.usecases.auth.ValidateApiKeyUseCase
-import dev.screenshotapi.core.usecases.auth.ValidateApiKeyOwnershipUseCase
+import dev.screenshotapi.core.usecases.auth.ListApiKeysUseCase
+import dev.screenshotapi.core.usecases.auth.ListApiKeysRequest
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.core.domain.entities.UsageLogAction
-import dev.screenshotapi.core.domain.exceptions.AuthenticationException
 import dev.screenshotapi.core.domain.exceptions.AuthorizationException
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.*
-import dev.screenshotapi.infrastructure.auth.ApiKeyPrincipal
-import dev.screenshotapi.infrastructure.auth.UserPrincipal
+import dev.screenshotapi.infrastructure.auth.requireApiKeyUserId
+import dev.screenshotapi.infrastructure.auth.requireApiKeyId
+import dev.screenshotapi.infrastructure.auth.requireHybridUserId
+import dev.screenshotapi.infrastructure.auth.getHybridApiKeyId
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -28,20 +29,57 @@ class ScreenshotController : KoinComponent {
     private val bulkGetScreenshotStatusUseCase: BulkGetScreenshotStatusUseCase by inject()
     private val listScreenshotsUseCase: ListScreenshotsUseCase by inject()
     private val manualRetryScreenshotUseCase: ManualRetryScreenshotUseCase by inject()
-    private val validateApiKeyUseCase: ValidateApiKeyUseCase by inject()
-    private val validateApiKeyOwnershipUseCase: ValidateApiKeyOwnershipUseCase by inject()
+    private val listApiKeysUseCase: ListApiKeysUseCase by inject()
     private val logUsageUseCase: LogUsageUseCase by inject()
+
+    /**
+     * Find an active API key for the user (prefers default, falls back to any active)
+     */
+    private suspend fun findActiveApiKeyForUser(userId: String): String? {
+        val response = listApiKeysUseCase(ListApiKeysRequest(userId))
+        val activeApiKeys = response.apiKeys.filter { it.isActive }
+        
+        // First, try to find the default API key
+        val defaultApiKey = activeApiKeys.find { it.isDefault }
+        if (defaultApiKey != null) {
+            return defaultApiKey.id
+        }
+        
+        // If no default, return the first active API key
+        return activeApiKeys.firstOrNull()?.id
+    }
 
     suspend fun takeScreenshot(call: ApplicationCall) {
         val dto = call.receive<TakeScreenshotRequestDto>()
         
-        // Extract authentication info with priority handling - throws exceptions if issues
-        val authResult = extractAuthenticationInfo(call)
+        // Get user ID from hybrid authentication (JWT OR API Key)
+        val userId = call.requireHybridUserId()
+        
+        // Check if API key was provided in request or needs to be auto-selected
+        val providedApiKeyId = call.getHybridApiKeyId()
+        val apiKeyId = providedApiKeyId 
+            ?: findActiveApiKeyForUser(userId)
+            ?: throw AuthorizationException.ApiKeyRequired()
+
+        // If we auto-selected an API key (not provided in request), log the usage
+        // This ensures consistent tracking between pure API key auth and hybrid auth
+        if (providedApiKeyId == null) {
+            // Log API key usage for auto-selected key
+            logUsageUseCase.invoke(LogUsageUseCase.Request(
+                userId = userId,
+                action = UsageLogAction.API_KEY_USED,
+                apiKeyId = apiKeyId,
+                metadata = mapOf(
+                    "mode" to "auto_selected",
+                    "endpoint" to "screenshots"
+                )
+            ))
+        }
 
         // Convert DTO to domain request
         val useCaseRequest = dto.toDomainRequest(
-            userId = authResult.userId,
-            apiKeyId = authResult.apiKeyId
+            userId = userId,
+            apiKeyId = apiKeyId
         )
 
         // Execute use case and convert response back to DTO
@@ -49,120 +87,12 @@ class ScreenshotController : KoinComponent {
         call.respond(HttpStatusCode.Accepted, result.toDto())
     }
 
-    /**
-     * Extracts authentication information with the following priority:
-     * 1. X-API-Key header (with optional JWT validation)
-     * 2. X-API-Key-ID header with JWT (requires JWT authentication)
-     * 3. API Key from Authorization header
-     * 4. JWT only (throws ApiKeyRequired exception)
-     * 5. No authentication (throws InvalidCredentials exception)
-     */
-    private suspend fun extractAuthenticationInfo(call: ApplicationCall): AuthInfo {
-        val apiKeyHeader = call.request.headers["X-API-Key"]
-        val apiKeyIdHeader = call.request.headers["X-API-Key-ID"]
-        val jwtPrincipal = call.principal<UserPrincipal>()
-        val apiKeyPrincipal = call.principal<ApiKeyPrincipal>()
-
-        return when {
-            // Priority 1: X-API-Key header provided
-            apiKeyHeader != null -> {
-                val apiKey = validateApiKeyHeader(apiKeyHeader)
-                    ?: throw AuthenticationException.InvalidCredentials()
-                
-                // If JWT is also present, validate that API key belongs to JWT user
-                if (jwtPrincipal != null && apiKey.userId != jwtPrincipal.userId) {
-                    throw AuthorizationException.ApiKeyNotOwned()
-                }
-                
-                AuthInfo(apiKey.userId, apiKey.keyId)
-            }
-            
-            // Priority 2: X-API-Key-ID header with JWT authentication
-            apiKeyIdHeader != null && jwtPrincipal != null -> {
-                val isValidApiKey = validateApiKeyId(apiKeyIdHeader, jwtPrincipal.userId)
-                if (!isValidApiKey) {
-                    throw AuthorizationException.ApiKeyNotOwned()
-                }
-                
-                AuthInfo(jwtPrincipal.userId, apiKeyIdHeader)
-            }
-            
-            // Priority 3: API Key from Authorization header (standalone)
-            apiKeyPrincipal != null -> {
-                AuthInfo(apiKeyPrincipal.userId, apiKeyPrincipal.keyId)
-            }
-            
-            // Priority 4: JWT only - require API key
-            jwtPrincipal != null -> {
-                throw AuthorizationException.ApiKeyRequired()
-            }
-            
-            // No authentication found
-            else -> throw AuthenticationException.InvalidCredentials()
-        }
-    }
-
-    private suspend fun validateApiKeyHeader(apiKey: String): ApiKeyInfo? {
-        if (!apiKey.startsWith("sk_")) return null
-        
-        try {
-            val result = validateApiKeyUseCase(apiKey)
-            return if (result.isValid && result.userId != null && result.keyId != null) {
-                ApiKeyInfo(result.userId, result.keyId)
-            } else null
-        } catch (e: Exception) {
-            return null
-        }
-    }
-
-    private suspend fun validateApiKeyId(apiKeyId: String, userId: String): Boolean {
-        return try {
-            val request = ValidateApiKeyOwnershipUseCase.Request(
-                apiKeyId = apiKeyId,
-                userId = userId
-            )
-            val result = validateApiKeyOwnershipUseCase(request)
-            
-            if (result.isValid && result.isActive) {
-                // Log API key usage when ownership is validated
-                logUsageUseCase.invoke(LogUsageUseCase.Request(
-                    userId = userId,
-                    action = UsageLogAction.API_KEY_USED,
-                    apiKeyId = apiKeyId,
-                    metadata = mapOf(
-                        "validationType" to "ownership",
-                        "method" to "X-API-Key-ID"
-                    )
-                ))
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    data class AuthInfo(val userId: String, val apiKeyId: String)
-    data class ApiKeyInfo(val userId: String, val keyId: String)
 
     suspend fun getScreenshotStatus(call: ApplicationCall) {
         val jobId = call.parameters["jobId"]!!
         
-        // Support both API Key and JWT authentication
-        val userId = when {
-            call.principal<ApiKeyPrincipal>() != null -> {
-                call.principal<ApiKeyPrincipal>()!!.userId
-            }
-            call.principal<UserPrincipal>() != null -> {
-                call.principal<UserPrincipal>()!!.userId
-            }
-            else -> {
-                call.respond(HttpStatusCode.Unauthorized, 
-                    ErrorResponseDto.unauthorized("Authentication required"))
-                return
-            }
-        }
+        // Get user ID from hybrid authentication (JWT OR API Key)
+        val userId = call.requireHybridUserId()
 
         // Convert to domain request
         val useCaseRequest = GetScreenshotStatusUseCase.Request(
@@ -176,19 +106,8 @@ class ScreenshotController : KoinComponent {
     }
 
     suspend fun listScreenshots(call: ApplicationCall) {
-        // Support both API Key and JWT authentication
-        val userId = when {
-            call.principal<ApiKeyPrincipal>() != null -> {
-                call.principal<ApiKeyPrincipal>()!!.userId
-            }
-            call.principal<UserPrincipal>() != null -> {
-                call.principal<UserPrincipal>()!!.userId
-            }
-            else -> {
-                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required"))
-                return
-            }
-        }
+        // Get user ID from hybrid authentication (JWT OR API Key)
+        val userId = call.requireHybridUserId()
         
         val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
         val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 20
@@ -210,20 +129,8 @@ class ScreenshotController : KoinComponent {
     }
 
     suspend fun getBulkScreenshotStatus(call: ApplicationCall) {
-        // Support both API Key and JWT authentication
-        val userId = when {
-            call.principal<ApiKeyPrincipal>() != null -> {
-                call.principal<ApiKeyPrincipal>()!!.userId
-            }
-            call.principal<UserPrincipal>() != null -> {
-                call.principal<UserPrincipal>()!!.userId
-            }
-            else -> {
-                call.respond(HttpStatusCode.Unauthorized, 
-                    ErrorResponseDto.unauthorized("Authentication required"))
-                return
-            }
-        }
+        // Get user ID from hybrid authentication (JWT OR API Key)
+        val userId = call.requireHybridUserId()
 
         // Parse job IDs from request body
         val requestDto = call.receive<BulkStatusRequestDto>()
@@ -242,23 +149,15 @@ class ScreenshotController : KoinComponent {
     suspend fun retryScreenshot(call: ApplicationCall) {
         val jobId = call.parameters["jobId"]!!
         
-        // Extract authentication info with the same priority handling as takeScreenshot
-        val authResult = extractAuthenticationInfo(call)
-        
-        // Determine the request source for audit logging
-        val requestedBy = when {
-            call.request.headers["X-API-Key"] != null -> authResult.apiKeyId
-            call.request.headers["X-API-Key-ID"] != null -> authResult.apiKeyId
-            call.principal<ApiKeyPrincipal>() != null -> authResult.apiKeyId
-            call.principal<UserPrincipal>() != null -> "web"
-            else -> "unknown"
-        }
+        // Get user ID from hybrid authentication (JWT OR API Key)
+        val userId = call.requireHybridUserId()
+        val apiKeyId = call.getHybridApiKeyId()
 
         // Convert to domain request
         val useCaseRequest = ManualRetryScreenshotUseCase.Request(
             jobId = jobId,
-            userId = authResult.userId,
-            requestedBy = requestedBy
+            userId = userId,
+            requestedBy = apiKeyId ?: "web"
         )
 
         // Execute use case and convert response back to DTO

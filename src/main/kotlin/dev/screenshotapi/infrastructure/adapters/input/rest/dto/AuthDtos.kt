@@ -33,13 +33,15 @@ data class UpdateProfileRequestDto(
 @Serializable
 data class CreateApiKeyRequestDto(
     val name: String,
-    val permissions: List<String>? = null
+    val permissions: List<String>? = null,
+    val setAsDefault: Boolean = false
 )
 
 @Serializable
 data class UpdateApiKeyRequestDto(
     val isActive: Boolean? = null,
-    val name: String? = null
+    val name: String? = null,
+    val setAsDefault: Boolean? = null
 )
 
 // Response DTOs
@@ -80,6 +82,7 @@ data class ApiKeyResponseDto(
     val name: String,
     val keyValue: String,
     val isActive: Boolean,
+    val isDefault: Boolean,
     val createdAt: String
 )
 
@@ -93,10 +96,11 @@ data class ApiKeySummaryResponseDto(
     val id: String,
     val name: String,
     val isActive: Boolean,
+    val isDefault: Boolean,
     val maskedKey: String,
     val usageCount: Long,
     val createdAt: String,
-    val lastUsedAt: String?
+    val lastUsedAt: String?,
 )
 
 @Serializable
@@ -173,6 +177,7 @@ fun CreateApiKeyResponse.toDto(): ApiKeyResponseDto = ApiKeyResponseDto(
     name = name,
     keyValue = keyValue,
     isActive = isActive,
+    isDefault = isDefault,
     createdAt = createdAt
 )
 
@@ -180,6 +185,7 @@ fun UpdateApiKeyResponse.toDto(): ApiKeySummaryResponseDto = ApiKeySummaryRespon
     id = apiKey.id,
     name = apiKey.name,
     isActive = apiKey.isActive,
+    isDefault = apiKey.isDefault,
     maskedKey = "sk_****${apiKey.id.takeLast(4)}",
     usageCount = apiKey.usageCount,
     createdAt = apiKey.createdAt.toString(),
