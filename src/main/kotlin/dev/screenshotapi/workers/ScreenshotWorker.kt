@@ -316,7 +316,7 @@ class ScreenshotWorker(
                 
                 logUsageUseCase.invoke(LogUsageUseCase.Request(
                     userId = job.userId,
-                    action = UsageLogAction.SCREENSHOT_CREATED,
+                    action = UsageLogAction.SCREENSHOT_RETRIED,
                     creditsUsed = 0,
                     apiKeyId = job.apiKeyId,
                     screenshotId = job.id,

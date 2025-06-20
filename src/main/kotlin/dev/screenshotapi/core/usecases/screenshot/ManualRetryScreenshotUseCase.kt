@@ -81,7 +81,7 @@ class ManualRetryScreenshotUseCase(
 
             logUsageUseCase.invoke(LogUsageUseCase.Request(
                 userId = request.userId,
-                action = UsageLogAction.SCREENSHOT_CREATED,
+                action = UsageLogAction.SCREENSHOT_RETRIED,
                 apiKeyId = job.apiKeyId,
                 screenshotId = job.id,
                 metadata = mapOf(

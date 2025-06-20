@@ -106,7 +106,7 @@ class ProcessFailedRetryableJobsUseCase(
                         
                         logUsageUseCase.invoke(LogUsageUseCase.Request(
                             userId = job.userId,
-                            action = UsageLogAction.SCREENSHOT_CREATED,
+                            action = UsageLogAction.SCREENSHOT_RETRIED,
                             apiKeyId = job.apiKeyId,
                             screenshotId = job.id,
                             metadata = mapOf(

@@ -47,6 +47,7 @@ class GetUserActivityUseCase(
             UsageLogAction.SCREENSHOT_CREATED -> UserActivityType.SCREENSHOT_CREATED
             UsageLogAction.SCREENSHOT_COMPLETED -> UserActivityType.SCREENSHOT_COMPLETED
             UsageLogAction.SCREENSHOT_FAILED -> UserActivityType.SCREENSHOT_FAILED
+            UsageLogAction.SCREENSHOT_RETRIED -> UserActivityType.SCREENSHOT_CREATED // Treat retry as creation activity
             UsageLogAction.API_KEY_CREATED -> UserActivityType.API_KEY_CREATED
             UsageLogAction.API_KEY_USED -> UserActivityType.LOGIN // API usage as activity
             UsageLogAction.USER_REGISTERED -> UserActivityType.LOGIN // Registration as first login
@@ -66,6 +67,8 @@ class GetUserActivityUseCase(
                 "Screenshot generation completed successfully"
             UsageLogAction.SCREENSHOT_FAILED -> 
                 "Screenshot generation failed"
+            UsageLogAction.SCREENSHOT_RETRIED -> 
+                "Retried failed screenshot"
             UsageLogAction.CREDITS_DEDUCTED -> 
                 "Used ${log.creditsUsed} credits"
             UsageLogAction.CREDITS_ADDED -> 
