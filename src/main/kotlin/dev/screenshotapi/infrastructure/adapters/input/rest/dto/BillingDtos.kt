@@ -2,6 +2,7 @@ package dev.screenshotapi.infrastructure.adapters.input.rest.dto
 
 import dev.screenshotapi.core.domain.entities.BillingCycle
 import dev.screenshotapi.core.domain.entities.SubscriptionStatus
+import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
 
 // Request DTOs
@@ -58,7 +59,11 @@ data class UserSubscriptionResponseDto(
 data class WebhookResponseDto(
     val received: Boolean,
     val processed: Boolean,
-    val eventType: String?
+    val eventType: String?,
+    val subscriptionId: String? = null,
+    val message: String? = null,
+    val timestamp: String = Clock.System.now().toString(),
+    val processingTimeMs: Long? = null
 )
 
 @Serializable

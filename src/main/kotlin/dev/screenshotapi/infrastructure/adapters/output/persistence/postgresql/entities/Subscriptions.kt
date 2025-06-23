@@ -26,8 +26,11 @@ object Subscriptions : Table("subscriptions") {
     init {
         // Add indexes for common queries
         index(false, userId)
-        index(false, stripeSubscriptionId)
         index(false, stripeCustomerId)
         index(false, status)
+        
+        // Add unique constraint on stripe_subscription_id to prevent duplicate webhooks
+        // This corresponds to the database constraint added in migration 007
+        uniqueIndex(stripeSubscriptionId)
     }
 }

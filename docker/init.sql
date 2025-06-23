@@ -326,6 +326,24 @@ create index "subscriptionsStripeCustomerIdIndex"
 create index "subscriptionsStatusIndex"
     on public.subscriptions (status);
 
+-- Add unique constraint to prevent duplicate Stripe webhook processing
+alter table public.subscriptions
+    add constraint unique_stripe_subscription_id
+        unique (stripe_subscription_id);
+
+-- Add optimized index for webhook lookups (in addition to the basic index)
+-- This partial index is more efficient for queries that filter out NULLs
+create index if not exists idx_subscriptions_stripe_subscription_id_lookup
+    on public.subscriptions (stripe_subscription_id)
+    where stripe_subscription_id is not null;
+
+-- Add documentation comments
+comment on constraint unique_stripe_subscription_id on public.subscriptions
+    is 'Ensures each Stripe subscription ID can only exist once, preventing duplicate webhook processing';
+
+comment on index idx_subscriptions_stripe_subscription_id_lookup
+    is 'Optimizes webhook processing by speeding up Stripe subscription ID lookups';
+
 create trigger update_subscriptions_updated_at
     before update
     on public.subscriptions

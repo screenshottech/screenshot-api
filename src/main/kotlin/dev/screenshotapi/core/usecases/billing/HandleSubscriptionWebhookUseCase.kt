@@ -45,17 +45,18 @@ class HandleSubscriptionWebhookUseCase(
     private val logger = LoggerFactory.getLogger(HandleSubscriptionWebhookUseCase::class.java)
 
     override suspend operator fun invoke(request: HandleSubscriptionWebhookRequest): HandleSubscriptionWebhookResponse {
-        logger.info("WEBHOOK_USECASE_START: Processing webhook event [payloadSize=${request.payload.length}]")
+        val webhookStartTime = System.currentTimeMillis()
+        logger.info("WEBHOOK_USECASE_START: Processing webhook event [payloadSize=${request.payload.length}, timestamp=$webhookStartTime]")
         
         // Parse webhook event via payment gateway (provider normalizes event types)
         val webhookEvent = try {
             paymentGatewayPort.handleWebhookEvent(request.payload, request.signature)
         } catch (e: Exception) {
-            logger.error("WEBHOOK_SIGNATURE_ERROR: Invalid webhook signature or payload [error=${e.message}]", e)
+            logger.error("WEBHOOK_SIGNATURE_ERROR: Invalid webhook signature or payload [error=${e.message}, payloadPreview=${request.payload.take(100)}]", e)
             throw ValidationException("Invalid webhook signature or payload", "webhook")
         }
         
-        logger.info("WEBHOOK_EVENT_PARSED: Event parsed successfully [eventType=${webhookEvent.eventType}, objectId=${webhookEvent.objectId}, objectType=${webhookEvent.objectType}]")
+        logger.info("WEBHOOK_EVENT_PARSED: Event parsed successfully [eventType=${webhookEvent.eventType}, objectId=${webhookEvent.objectId}, objectType=${webhookEvent.objectType}, dataKeys=${webhookEvent.data.keys.joinToString()}]")
         
         // Handle standard event types (normalized by PaymentGatewayPort)
         return try {
@@ -90,7 +91,8 @@ class HandleSubscriptionWebhookUseCase(
                 }
             }
         } catch (e: Exception) {
-            logger.error("WEBHOOK_PROCESSING_ERROR: Failed to process webhook event [eventType=${webhookEvent.eventType}, objectId=${webhookEvent.objectId}, error=${e.javaClass.simpleName}, message=${e.message}]", e)
+            val processingDuration = System.currentTimeMillis() - webhookStartTime
+            logger.error("WEBHOOK_PROCESSING_ERROR: Failed to process webhook event [eventType=${webhookEvent.eventType}, objectId=${webhookEvent.objectId}, error=${e.javaClass.simpleName}, message=${e.message}, processingDuration=${processingDuration}ms]", e)
             throw e
         }
     }
@@ -127,15 +129,36 @@ class HandleSubscriptionWebhookUseCase(
         
         logger.info("SUBSCRIPTION_CREATE_USER_FOUND: User found [userId=$userId, userEmail=${user.email}]")
         
-        // Check if subscription already exists to avoid duplicates
+        // Check if subscription already exists to avoid duplicates (idempotency check)
         val existingSubscription = subscriptionRepository.findByStripeSubscriptionId(actualSubscriptionId)
         if (existingSubscription != null) {
-            logger.warn("SUBSCRIPTION_CREATE_DUPLICATE: Subscription already exists [actualSubscriptionId=$actualSubscriptionId, existingId=${existingSubscription.id}]")
+            logger.info("SUBSCRIPTION_CREATE_IDEMPOTENT: Subscription already exists, returning existing [actualSubscriptionId=$actualSubscriptionId, existingId=${existingSubscription.id}]")
+            
+            // Still try to provision credits in case this was missed previously
+            try {
+                logger.info("SUBSCRIPTION_PROVISION_CREDITS_RETRY: Attempting credit provisioning for existing subscription [subscriptionId=${existingSubscription.id}]")
+                
+                val provisionRequest = ProvisionSubscriptionCreditsRequest(
+                    subscriptionId = existingSubscription.id,
+                    reason = "subscription_created_retry"
+                )
+                
+                val provisionResponse = provisionSubscriptionCreditsUseCase(provisionRequest)
+                
+                if (provisionResponse.processed) {
+                    logger.info("SUBSCRIPTION_PROVISION_CREDITS_RETRY_SUCCESS: Credits provisioned for existing subscription [subscriptionId=${existingSubscription.id}]")
+                } else {
+                    logger.debug("SUBSCRIPTION_PROVISION_CREDITS_RETRY_SKIPPED: Credit provisioning not needed [subscriptionId=${existingSubscription.id}]")
+                }
+            } catch (e: Exception) {
+                logger.warn("SUBSCRIPTION_PROVISION_CREDITS_RETRY_ERROR: Failed to provision credits for existing subscription [subscriptionId=${existingSubscription.id}, error=${e.message}]", e)
+            }
+            
             return HandleSubscriptionWebhookResponse(
                 eventType = event.eventType,
                 processed = true,
                 subscriptionId = existingSubscription.id,
-                message = "Subscription already exists"
+                message = "Subscription processed idempotently (already exists)"
             )
         }
         
