@@ -5,9 +5,9 @@ import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.usecases.billing.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.*
 import dev.screenshotapi.infrastructure.auth.requireUserId
+import dev.screenshotapi.infrastructure.config.AppConfig
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import org.jetbrains.exposed.exceptions.ExposedSQLException
@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory
  */
 class BillingController : KoinComponent {
     private val logger = LoggerFactory.getLogger(BillingController::class.java)
+    private val config: AppConfig by inject()
     private val getAvailablePlansUseCase: GetAvailablePlansUseCase by inject()
     private val createCheckoutSessionUseCase: CreateCheckoutSessionUseCase by inject()
     private val getUserSubscriptionUseCase: GetUserSubscriptionUseCase by inject()
@@ -115,7 +116,7 @@ class BillingController : KoinComponent {
             // Execute use case to create billing portal session
             val request = CreateBillingPortalSessionRequest(
                 userId = userId,
-                returnUrl = "http://localhost:3000/billing" // TODO: Make this configurable
+                returnUrl = config.billing.billingPortalReturnUrl
             )
 
             val response = createBillingPortalSessionUseCase(request)

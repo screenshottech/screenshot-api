@@ -7,12 +7,15 @@ package dev.screenshotapi.infrastructure.config
 data class BillingConfig(
     val stripe: StripeConfig,
     val defaultPaymentProvider: String = "stripe",
-    val enabledPaymentProviders: List<String> = listOf("stripe")
+    val enabledPaymentProviders: List<String> = listOf("stripe"),
+    val billingPortalReturnUrl: String
 ) {
     companion object {
         fun load(): BillingConfig {
             return BillingConfig(
-                stripe = StripeConfig.load()
+                stripe = StripeConfig.load(),
+                billingPortalReturnUrl = System.getenv("BILLING_PORTAL_RETURN_URL") 
+                    ?: "http://localhost:3000/billing"
             )
         }
     }
