@@ -58,7 +58,7 @@ services:
       SCREENSHOT_MAX_HEIGHT: ${SCREENSHOT_MAX_HEIGHT:-1080}
       SCREENSHOT_DEFAULT_TIMEOUT: ${SCREENSHOT_DEFAULT_TIMEOUT:-30000}
       SCREENSHOT_MAX_TIMEOUT: ${SCREENSHOT_MAX_TIMEOUT:-60000}
-      
+
       # Retry scheduler configuration
       # Set to false to disable automatic retry processing (useful for debugging)
       RETRY_SCHEDULER_ENABLED: ${RETRY_SCHEDULER_ENABLED:-true}
@@ -72,12 +72,13 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      BILLING_PORTAL_RETURN_URL: ${BILLING_PORTAL_RETURN_URL:-http://localhost:3000/billing}
 
       # Clerk authentication
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY}
       CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY}
       CLERK_DOMAIN: ${CLERK_DOMAIN}
-      
+
       # Auth provider configuration (CRITICAL for AuthProviderFactory)
       DEFAULT_AUTH_PROVIDER: ${DEFAULT_AUTH_PROVIDER:-local}
       ENABLED_AUTH_PROVIDERS: ${ENABLED_AUTH_PROVIDERS:-local}
