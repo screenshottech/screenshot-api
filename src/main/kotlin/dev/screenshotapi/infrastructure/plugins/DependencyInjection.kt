@@ -183,7 +183,7 @@ fun useCaseModule() = module {
     single { AuthenticateUserUseCase(get<UserRepository>()) }
     single { RegisterUserUseCase(get<UserRepository>(), get<PlanRepository>()) }
     single { GetUserProfileUseCase(get<UserRepository>()) }
-    single { GetUserUsageUseCase(get<UserRepository>(), get<ScreenshotRepository>()) }
+    single { GetUserUsageUseCase(get<UserRepository>(), get<ScreenshotRepository>(), get<PlanRepository>()) }
     single { GetUserUsageTimelineUseCase(get<UsageRepository>(), get<UserRepository>()) }
     single { UpdateUserProfileUseCase(get<UserRepository>()) }
 

@@ -110,6 +110,7 @@ data class UserUsageResponseDto(
     val totalScreenshots: Long,
     val screenshotsLast30Days: Long,
     val planId: String,
+    val planLimit: Int,
     val currentPeriodStart: String,
     val currentPeriodEnd: String
 )
@@ -198,6 +199,7 @@ fun dev.screenshotapi.core.usecases.auth.GetUserUsageResponse.toDto(): UserUsage
     totalScreenshots = totalScreenshots,
     screenshotsLast30Days = screenshotsLast30Days,
     planId = planId,
+    planLimit = planLimit,
     currentPeriodStart = currentPeriodStart.toString(),
     currentPeriodEnd = currentPeriodEnd.toString()
 )

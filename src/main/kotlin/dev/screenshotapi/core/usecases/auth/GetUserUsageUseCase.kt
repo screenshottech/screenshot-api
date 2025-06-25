@@ -1,6 +1,7 @@
 package dev.screenshotapi.core.usecases.auth
 
 import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
+import dev.screenshotapi.core.domain.repositories.PlanRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.usecases.common.UseCase
@@ -10,12 +11,16 @@ import kotlin.time.Duration.Companion.days
 
 class GetUserUsageUseCase(
     private val userRepository: UserRepository,
-    private val screenshotRepository: ScreenshotRepository
+    private val screenshotRepository: ScreenshotRepository,
+    private val planRepository: PlanRepository
 ) : UseCase<GetUserUsageRequest, GetUserUsageResponse> {
 
     override suspend fun invoke(request: GetUserUsageRequest): GetUserUsageResponse {
         val user = userRepository.findById(request.userId)
             ?: throw ResourceNotFoundException("User", request.userId)
+
+        val plan = planRepository.findById(user.planId)
+            ?: throw ResourceNotFoundException("Plan", user.planId)
 
         val now = Clock.System.now()
         val thirtyDaysAgo = now.minus(30.days)
@@ -33,6 +38,7 @@ class GetUserUsageUseCase(
             totalScreenshots = totalScreenshots,
             screenshotsLast30Days = recentScreenshots.toLong(),
             planId = user.planId,
+            planLimit = plan.creditsPerMonth,
             currentPeriodStart = thirtyDaysAgo,
             currentPeriodEnd = now
         )
@@ -53,6 +59,7 @@ data class GetUserUsageResponse(
     val totalScreenshots: Long,
     val screenshotsLast30Days: Long,
     val planId: String,
+    val planLimit: Int,
     val currentPeriodStart: Instant,
     val currentPeriodEnd: Instant
 )
