@@ -8,6 +8,7 @@ import com.microsoft.playwright.options.ScreenshotType
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest
 import dev.screenshotapi.core.domain.entities.ScreenshotResult
+import dev.screenshotapi.core.domain.entities.ScreenshotJob
 import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.StorageOutputPort
@@ -33,7 +34,8 @@ import kotlin.math.min
 class ScreenshotServiceImpl(
     private val storagePort: StorageOutputPort,
     private val config: ScreenshotConfig,
-    private val urlSecurityPort: UrlSecurityPort
+    private val urlSecurityPort: UrlSecurityPort,
+    private val screenshotTokenService: ScreenshotTokenService? = null
 ) : ScreenshotService {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -42,6 +44,24 @@ class ScreenshotServiceImpl(
     private val concurrencySemaphore = Semaphore(min(config.maxConcurrentRequests, 10))
 
     override suspend fun takeScreenshot(request: ScreenshotRequest): ScreenshotResult = withContext(Dispatchers.IO) {
+        takeScreenshotInternal(request, null, null, null)
+    }
+    
+    override suspend fun takeSecureScreenshot(
+        request: ScreenshotRequest,
+        userId: String,
+        jobId: String,
+        createdAtEpochSeconds: Long
+    ): ScreenshotResult = withContext(Dispatchers.IO) {
+        takeScreenshotInternal(request, userId, jobId, createdAtEpochSeconds)
+    }
+    
+    private suspend fun takeScreenshotInternal(
+        request: ScreenshotRequest,
+        userId: String? = null,
+        jobId: String? = null,
+        createdAtEpochSeconds: Long? = null
+    ): ScreenshotResult = withContext(Dispatchers.IO) {
         // Step 1: Validate request format
         validateRequest(request)
         
@@ -56,11 +76,16 @@ class ScreenshotServiceImpl(
 
         // Step 3: Limit concurrency
         concurrencySemaphore.withPermit {
-            executeScreenshotWithIsolatedPlaywright(request)
+            executeScreenshotWithIsolatedPlaywright(request, userId, jobId, createdAtEpochSeconds)
         }
     }
 
-    private suspend fun executeScreenshotWithIsolatedPlaywright(request: ScreenshotRequest): ScreenshotResult {
+    private suspend fun executeScreenshotWithIsolatedPlaywright(
+        request: ScreenshotRequest,
+        userId: String? = null,
+        jobId: String? = null,
+        createdAtEpochSeconds: Long? = null
+    ): ScreenshotResult {
         // Each request gets completely isolated resources
         return withTimeout(config.maxTimeoutDuration.inWholeMilliseconds) {
 
@@ -80,8 +105,8 @@ class ScreenshotServiceImpl(
                     page.use {
                         // Configure and take screenshot
                         when (request.format) {
-                            ScreenshotFormat.PDF -> takePdfScreenshot(page, request)
-                            else -> takeImageScreenshot(page, request)
+                            ScreenshotFormat.PDF -> takePdfScreenshot(page, request, userId, jobId, createdAtEpochSeconds)
+                            else -> takeImageScreenshot(page, request, userId, jobId, createdAtEpochSeconds)
                         }
                     }
                 }
@@ -89,7 +114,13 @@ class ScreenshotServiceImpl(
         }
     }
 
-    private suspend fun takeImageScreenshot(page: Page, request: ScreenshotRequest): ScreenshotResult {
+    private suspend fun takeImageScreenshot(
+        page: Page, 
+        request: ScreenshotRequest,
+        userId: String? = null,
+        jobId: String? = null,
+        createdAtEpochSeconds: Long? = null
+    ): ScreenshotResult {
         // Simple page configuration
         page.setViewportSize(request.width, request.height)
         page.setDefaultTimeout(15000.0)
@@ -137,7 +168,7 @@ class ScreenshotServiceImpl(
         }
 
         // Upload and return
-        val filename = generateFilename(request)
+        val filename = generateFilename(request, userId, jobId, createdAtEpochSeconds, null)
         val contentType = getContentType(request.format)
         val url = storagePort.upload(finalBytes, filename, contentType)
         val fileSizeBytes = finalBytes.size.toLong()
@@ -145,7 +176,13 @@ class ScreenshotServiceImpl(
         return ScreenshotResult(url, fileSizeBytes)
     }
 
-    private suspend fun takePdfScreenshot(page: Page, request: ScreenshotRequest): ScreenshotResult {
+    private suspend fun takePdfScreenshot(
+        page: Page,
+        request: ScreenshotRequest,
+        userId: String? = null,
+        jobId: String? = null,
+        createdAtEpochSeconds: Long? = null
+    ): ScreenshotResult {
         if (!config.enablePdfGeneration) {
             throw ScreenshotException.UnsupportedFormat("PDF generation is disabled")
         }
@@ -182,7 +219,7 @@ class ScreenshotServiceImpl(
         }
 
         // Upload and return
-        val filename = generateFilename(request, "pdf")
+        val filename = generateFilename(request, userId, jobId, createdAtEpochSeconds, "pdf")
         val url = storagePort.upload(pdfBytes, filename, "application/pdf")
         val fileSizeBytes = pdfBytes.size.toLong()
         
@@ -223,7 +260,25 @@ class ScreenshotServiceImpl(
         }
     }
 
-    private fun generateFilename(request: ScreenshotRequest, extension: String? = null): String {
+    private fun generateFilename(
+        request: ScreenshotRequest, 
+        userId: String? = null,
+        jobId: String? = null,
+        createdAtEpochSeconds: Long? = null,
+        extension: String? = null
+    ): String {
+        // Use secure token-based filename if all secure parameters and token service are available
+        if (userId != null && jobId != null && createdAtEpochSeconds != null && screenshotTokenService != null) {
+            return screenshotTokenService.generateSecureFilename(
+                userId = userId,
+                jobId = jobId,
+                createdAtEpochSeconds = createdAtEpochSeconds,
+                request = request,
+                extension = extension
+            )
+        }
+        
+        // Fall back to legacy filename format
         val now = Clock.System.now()
         val instant = now.toLocalDateTime(TimeZone.UTC)
         val year = instant.year
@@ -234,6 +289,7 @@ class ScreenshotServiceImpl(
         val ext = extension ?: request.format.name.lowercase()
         val dimensions = "${request.width}x${request.height}"
         
+        logger.debug("Using legacy filename format for request without secure parameters")
         return "screenshots/$year/$month/${timestamp}_${urlHash}_${dimensions}.$ext"
     }
 

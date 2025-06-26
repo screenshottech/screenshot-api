@@ -21,7 +21,8 @@ data class AuthConfig(
     val sessionTimeoutMinutes: Int,
     val defaultAuthProvider: String,
     val enabledAuthProviders: List<String>,
-    val clerkDomain: String?
+    val clerkDomain: String?,
+    val hmacTokenLength: Int
 ) {
     companion object {
         fun load(): AuthConfig {
@@ -59,7 +60,9 @@ data class AuthConfig(
                 ?: "local",
             enabledAuthProviders = System.getenv("ENABLED_AUTH_PROVIDERS")?.split(",")?.map { it.trim() }
                 ?: listOf("local"),
-            clerkDomain = System.getenv("CLERK_DOMAIN")
+            clerkDomain = System.getenv("CLERK_DOMAIN"),
+            hmacTokenLength = System.getenv("HMAC_TOKEN_LENGTH")?.toInt()
+                ?: 32
             )
         }
         

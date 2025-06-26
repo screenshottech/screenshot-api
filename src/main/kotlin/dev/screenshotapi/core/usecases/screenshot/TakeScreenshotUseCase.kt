@@ -6,6 +6,7 @@ import dev.screenshotapi.core.domain.entities.ScreenshotStatus as DomainStatus
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
+import dev.screenshotapi.core.ports.output.TokenGenerationPort
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -16,7 +17,8 @@ import java.util.*
  */
 class TakeScreenshotUseCase(
     private val screenshotRepository: ScreenshotRepository,
-    private val queueRepository: QueueRepository
+    private val queueRepository: QueueRepository,
+    private val tokenGenerationPort: TokenGenerationPort? = null
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
     suspend operator fun invoke(request: Request): Response {
@@ -49,14 +51,18 @@ class TakeScreenshotUseCase(
         queueRepository.enqueue(job)
         val queueSize = queueRepository.size()
         
-        logger.info("Screenshot job created and enqueued: jobId={}, queuePosition={}, estimatedCompletion=30-60s", 
-            jobId, queueSize)
+        // Generate secure token if token generation port is available
+        val secureToken = tokenGenerationPort?.generateToken(job)
+        
+        logger.info("Screenshot job created and enqueued: jobId={}, queuePosition={}, estimatedCompletion=30-60s, secureToken={}", 
+            jobId, queueSize, secureToken?.take(8)?.plus("...") ?: "none")
 
         return Response(
             jobId = jobId,
             status = DomainStatus.QUEUED,
             estimatedCompletion = "30-60s",
-            queuePosition = queueSize.toInt()
+            queuePosition = queueSize.toInt(),
+            secureToken = secureToken
         )
     }
 
@@ -70,6 +76,7 @@ class TakeScreenshotUseCase(
         val jobId: String,
         val status: DomainStatus,
         val estimatedCompletion: String,
-        val queuePosition: Int
+        val queuePosition: Int,
+        val secureToken: String? = null
     )
 }
