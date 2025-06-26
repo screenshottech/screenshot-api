@@ -41,9 +41,11 @@ import dev.screenshotapi.infrastructure.adapters.output.storage.StorageFactory
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.JwtAuthProvider
 import dev.screenshotapi.infrastructure.config.AppConfig
+import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
 import dev.screenshotapi.infrastructure.services.*
+import dev.screenshotapi.infrastructure.services.ScreenshotTokenService
 import dev.screenshotapi.workers.JobRetryScheduler
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.client.*
@@ -104,7 +106,6 @@ fun repositoryModule(config: AppConfig) = module {
     single<PaymentGatewayPort> { StripePaymentGatewayAdapter(get<StripeConfig>(), get<PlanRepository>()) }
     
     // Token generation services
-    single { ScreenshotTokenService(get<HmacPort>(), get()) }
     single<TokenGenerationPort> { TokenGenerationAdapter(get<ScreenshotTokenService>()) }
     if (!config.database.useInMemory) {
         single<Database> { createDatabase(config) }
@@ -232,7 +233,9 @@ fun useCaseModule() = module {
 }
 
 fun serviceModule() = module {
-    single<ScreenshotService> { ScreenshotServiceImpl(get(), get(), get<UrlSecurityPort>(), get<ScreenshotTokenService>()) }
+    // Screenshot token service - must be before ScreenshotService
+    single { ScreenshotTokenService(get<HmacPort>(), get<AuthConfig>()) }
+    single<ScreenshotService> { ScreenshotServiceImpl(get(), get(), get<UrlSecurityPort>(), getOrNull<ScreenshotTokenService>()) }
     single { BrowserPoolManager(get<ScreenshotConfig>()) }
     single { NotificationService() }
     single { MetricsService() }

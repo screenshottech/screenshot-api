@@ -50,45 +50,35 @@ fun Application.initializeDatabase() {
 
     if (!databaseConfig.useInMemory) {
         try {
+            // Get the existing database instance from Koin instead of creating a new one
+            val database = get<Database>()
 
-            databaseConfig.validate()
-            val hikariConfig = HikariConfig().apply {
-                jdbcUrl = databaseConfig.url
-                username = databaseConfig.username
-                password = databaseConfig.password
-                driverClassName = databaseConfig.driver
-                maximumPoolSize = databaseConfig.maxPoolSize
-                minimumIdle = 5
-                idleTimeout = 300000
-                connectionTimeout = 20000
-                maxLifetime = 1200000
-                addDataSourceProperty("cachePrepStmts", "true")
-                addDataSourceProperty("prepStmtCacheSize", "250")
-                addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
-            }
-
-            val dataSource = HikariDataSource(hikariConfig)
-            Database.connect(dataSource)
-
-            transaction {
+            // Initialize schema with the existing database connection
+            log.info("Checking database schema and creating missing tables/columns...")
+            transaction(database) {
+                // This function is SAFE - it only ADDS missing tables and columns
+                // It does NOT delete or modify existing tables or data
                 SchemaUtils.createMissingTablesAndColumns(
                     Users,
                     ApiKeys,
                     Screenshots,
                     Activities,
                     Plans,
+                    Subscriptions,
                     UsageLogs,
+                    UsageTracking,
+                    DailyUserStatsTable,
                     StripeCustomers
                 )
             }
 
-            log.info("Database initialized successfully")
+            log.info("Database schema initialized successfully")
 
         } catch (e: Exception) {
-            log.error("Failed to initialize database", e)
-            throw ConfigurationException("DATABASE", "Failed to initialize database: ${e.message}", e)
+            log.error("Failed to initialize database schema", e)
+            throw ConfigurationException("DATABASE", "Failed to initialize database schema: ${e.message}", e)
         }
     } else {
-        log.info("Using in-memory database - no initialization required")
+        log.info("Using in-memory database - no schema initialization required")
     }
 }
