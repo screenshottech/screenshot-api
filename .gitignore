@@ -34,3 +34,26 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Node.js ###
+examples/**/node_modules/
+examples/**/.npm
+examples/**/package-lock.json
+examples/**/.node_repl_history
+examples/**/.nyc_output
+examples/**/coverage/
+examples/**/.env
+examples/**/.env.local
+examples/**/.env.development.local
+examples/**/.env.test.local
+examples/**/.env.production.local
+
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Environment Files ###
+.env
+.env.local
+.env.*.local

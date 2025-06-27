@@ -26,6 +26,7 @@ import dev.screenshotapi.core.usecases.screenshot.ProcessFailedRetryableJobsUseC
 import dev.screenshotapi.core.usecases.screenshot.ProcessStuckJobsUseCase
 import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
 import dev.screenshotapi.core.usecases.screenshot.ValidateScreenshotTokenUseCase
+import dev.screenshotapi.core.usecases.webhook.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
 import dev.screenshotapi.infrastructure.adapters.output.payment.StripePaymentGatewayAdapter
@@ -47,6 +48,7 @@ import dev.screenshotapi.infrastructure.config.StripeConfig
 import dev.screenshotapi.infrastructure.services.*
 import dev.screenshotapi.infrastructure.services.ScreenshotTokenService
 import dev.screenshotapi.workers.JobRetryScheduler
+import dev.screenshotapi.workers.WebhookRetryWorker
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -99,6 +101,8 @@ fun repositoryModule(config: AppConfig) = module {
     single<UsageRepository> { createUsageRepository(config, getOrNull()) }
     single<UsageLogRepository> { createUsageLogRepository(config, getOrNull()) }
     single<DailyStatsRepository> { createDailyStatsRepository(config, getOrNull()) }
+    single<WebhookConfigurationRepository> { createWebhookConfigurationRepository(config, getOrNull()) }
+    single<WebhookDeliveryRepository> { createWebhookDeliveryRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
     single<HmacPort> { HmacAdapter(get()) }
@@ -118,6 +122,12 @@ fun repositoryModule(config: AppConfig) = module {
         dev.screenshotapi.infrastructure.services.StatsAggregationScheduler(
             aggregateStatsUseCase = get<AggregateStatsUseCase>(),
             dailyStatsRepository = get<DailyStatsRepository>()
+        )
+    }
+    // Webhook retry worker
+    single { 
+        dev.screenshotapi.workers.WebhookRetryWorker(
+            sendWebhookUseCase = get<SendWebhookUseCase>()
         )
     }
 }
@@ -151,6 +161,12 @@ private fun createUsageLogRepository(config: AppConfig, database: Database?): Us
 
 private fun createDailyStatsRepository(config: AppConfig, database: Database?): DailyStatsRepository =
     if (config.database.useInMemory) InMemoryDailyStatsRepository() else PostgreSQLDailyStatsRepository(database!!)
+
+private fun createWebhookConfigurationRepository(config: AppConfig, database: Database?): WebhookConfigurationRepository =
+    if (config.database.useInMemory) InMemoryWebhookConfigurationRepository() else PostgreSQLWebhookConfigurationRepository(database!!)
+
+private fun createWebhookDeliveryRepository(config: AppConfig, database: Database?): WebhookDeliveryRepository =
+    if (config.database.useInMemory) InMemoryWebhookDeliveryRepository() else PostgreSQLWebhookDeliveryRepository(database!!)
 
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
@@ -216,6 +232,15 @@ fun useCaseModule() = module {
     single { GetUserSubscriptionUseCase(get<UserRepository>(), get<SubscriptionRepository>(), get<PlanRepository>()) }
     single { CreateCheckoutSessionUseCase(get<UserRepository>(), get<PlanRepository>(), get<PaymentGatewayPort>()) }
     single { CreateBillingPortalSessionUseCase(get<UserRepository>(), get<SubscriptionRepository>(), get<PaymentGatewayPort>()) }
+
+    // Webhook use cases
+    single { CreateWebhookUseCase(get<WebhookConfigurationRepository>(), get<UserRepository>()) }
+    single { UpdateWebhookUseCase(get<WebhookConfigurationRepository>()) }
+    single { DeleteWebhookUseCase(get<WebhookConfigurationRepository>()) }
+    single { ListWebhooksUseCase(get<WebhookConfigurationRepository>()) }
+    single { RegenerateWebhookSecretUseCase(get<WebhookConfigurationRepository>()) }
+    single { SendWebhookUseCase(get<WebhookConfigurationRepository>(), get<WebhookDeliveryRepository>(), get<HttpClient>()) }
+    single { GetWebhookDeliveriesUseCase(get<WebhookConfigurationRepository>(), get<WebhookDeliveryRepository>()) }
     single { ProvisionSubscriptionCreditsUseCase(get<SubscriptionRepository>(), get<UserRepository>(), get<PlanRepository>(), get<AddCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { HandleSubscriptionWebhookUseCase(get<PaymentGatewayPort>(), get<SubscriptionRepository>(), get<UserRepository>(), get<ProvisionSubscriptionCreditsUseCase>()) }
 
@@ -237,7 +262,7 @@ fun serviceModule() = module {
     single { ScreenshotTokenService(get<HmacPort>(), get<AuthConfig>()) }
     single<ScreenshotService> { ScreenshotServiceImpl(get(), get(), get<UrlSecurityPort>(), getOrNull<ScreenshotTokenService>()) }
     single { BrowserPoolManager(get<ScreenshotConfig>()) }
-    single { NotificationService() }
+    single { NotificationService(get<SendWebhookUseCase>()) }
     single { MetricsService() }
     single<RetryPolicy> { DefaultRetryPolicyImpl() }
     single { JobRetryScheduler(get(), get(), get()) }
@@ -299,4 +324,5 @@ fun controllerModule() = module {
     single { BillingController() }
     single { AdminController() }
     single { HealthController() }
+    single { WebhookController() }
 }
