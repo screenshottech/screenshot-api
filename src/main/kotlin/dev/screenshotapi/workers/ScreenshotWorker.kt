@@ -257,7 +257,12 @@ class ScreenshotWorker(
             try {
                 logger.info("Screenshot attempt: jobId={}, attempt={}/{}, url={}", 
                     job.id, attempt + 1, config.retryAttempts, job.request.url)
-                return screenshotService.takeScreenshot(job.request)
+                return screenshotService.takeSecureScreenshot(
+                    request = job.request,
+                    userId = job.userId,
+                    jobId = job.id,
+                    createdAtEpochSeconds = job.createdAt.epochSeconds
+                )
 
             } catch (e: Exception) {
                 lastException = e

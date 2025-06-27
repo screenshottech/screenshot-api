@@ -4,3 +4,13 @@ ktor:
       - dev.screenshotapi.infrastructure.ApplicationKt.module
   deployment:
     port: 8080
+
+database:
+  hikari:
+    maximumPoolSize: 20
+    minimumIdle: 5
+    connectionTimeout: 30000
+    idleTimeout: 300000
+    maxLifetime: 1200000
+    keepaliveTime: 60000
+    validationTimeout: 5000

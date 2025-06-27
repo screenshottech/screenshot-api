@@ -5,8 +5,10 @@ import dev.screenshotapi.core.domain.services.RateLimitingService
 import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.HashingPort
+import dev.screenshotapi.core.ports.output.HmacPort
 import dev.screenshotapi.core.ports.output.PaymentGatewayPort
 import dev.screenshotapi.core.ports.output.StorageOutputPort
+import dev.screenshotapi.core.ports.output.TokenGenerationPort
 import dev.screenshotapi.core.ports.output.UrlSecurityPort
 import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.usecases.admin.*
@@ -23,6 +25,7 @@ import dev.screenshotapi.core.usecases.screenshot.ManualRetryScreenshotUseCase
 import dev.screenshotapi.core.usecases.screenshot.ProcessFailedRetryableJobsUseCase
 import dev.screenshotapi.core.usecases.screenshot.ProcessStuckJobsUseCase
 import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
+import dev.screenshotapi.core.usecases.screenshot.ValidateScreenshotTokenUseCase
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
 import dev.screenshotapi.infrastructure.adapters.output.payment.StripePaymentGatewayAdapter
@@ -31,14 +34,18 @@ import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.*
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.BCryptHashingAdapter
+import dev.screenshotapi.infrastructure.adapters.output.security.HmacAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.UrlSecurityAdapter
+import dev.screenshotapi.infrastructure.adapters.output.TokenGenerationAdapter
 import dev.screenshotapi.infrastructure.adapters.output.storage.StorageFactory
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.JwtAuthProvider
 import dev.screenshotapi.infrastructure.config.AppConfig
+import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
 import dev.screenshotapi.infrastructure.services.*
+import dev.screenshotapi.infrastructure.services.ScreenshotTokenService
 import dev.screenshotapi.workers.JobRetryScheduler
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.client.*
@@ -94,8 +101,12 @@ fun repositoryModule(config: AppConfig) = module {
     single<DailyStatsRepository> { createDailyStatsRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
+    single<HmacPort> { HmacAdapter(get()) }
     single<UrlSecurityPort> { UrlSecurityAdapter() }
     single<PaymentGatewayPort> { StripePaymentGatewayAdapter(get<StripeConfig>(), get<PlanRepository>()) }
+    
+    // Token generation services
+    single<TokenGenerationPort> { TokenGenerationAdapter(get<ScreenshotTokenService>()) }
     if (!config.database.useInMemory) {
         single<Database> { createDatabase(config) }
     }
@@ -163,10 +174,11 @@ private fun createRedisConnection(config: AppConfig): StatefulRedisConnection<St
 
 fun useCaseModule() = module {
     // Screenshot use cases - constructor injection
-    single { TakeScreenshotUseCase(get(), get()) }
+    single { TakeScreenshotUseCase(get(), get(), get<TokenGenerationPort>()) }
     single { GetScreenshotStatusUseCase(get()) }
     single { BulkGetScreenshotStatusUseCase(get()) }
     single { ListScreenshotsUseCase(get()) }
+    single { ValidateScreenshotTokenUseCase(get(), get<TokenGenerationPort>()) }
     
     // Retry use cases
     single { ManualRetryScreenshotUseCase(get(), get(), get(), get()) }
@@ -221,7 +233,9 @@ fun useCaseModule() = module {
 }
 
 fun serviceModule() = module {
-    single<ScreenshotService> { ScreenshotServiceImpl(get(), get(), get<UrlSecurityPort>()) }
+    // Screenshot token service - must be before ScreenshotService
+    single { ScreenshotTokenService(get<HmacPort>(), get<AuthConfig>()) }
+    single<ScreenshotService> { ScreenshotServiceImpl(get(), get(), get<UrlSecurityPort>(), getOrNull<ScreenshotTokenService>()) }
     single { BrowserPoolManager(get<ScreenshotConfig>()) }
     single { NotificationService() }
     single { MetricsService() }

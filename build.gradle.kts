@@ -12,11 +12,20 @@ val skiko_version: String by project
 val cohort_ktor_version: String by project
 val ktor_rate_limiting_version: String by project
 val stripe_version: String by project
+val mockk_version: String by project
+val junit_version: String by project
+val bcrypt_version: String by project
 
 plugins {
     kotlin("jvm") version "2.1.10"
-    id("io.ktor.plugin") version "3.1.3"
+    id("io.ktor.plugin") version "3.2.0"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.10"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 group = "dev.screenshotapi"
@@ -38,6 +47,7 @@ dependencies {
     implementation("io.ktor:ktor-server-auth")
     implementation("io.ktor:ktor-server-auth-jwt")
     implementation("io.ktor:ktor-server-content-negotiation")
+    implementation("io.ktor:ktor-serialization-kotlinx-json")
     implementation("io.ktor:ktor-server-cors")
     implementation("io.ktor:ktor-server-default-headers")
     implementation("io.ktor:ktor-serialization-kotlinx-json")
@@ -54,8 +64,11 @@ dependencies {
     implementation("io.github.flaxoos:ktor-server-rate-limiting:$ktor_rate_limiting_version")
     implementation("com.sksamuel.cohort:cohort-ktor:$cohort_ktor_version")
     testImplementation("io.ktor:ktor-server-test-host")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
-
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:$kotlin_version")
+    testImplementation("org.junit.jupiter:junit-jupiter:$junit_version")
+    testImplementation("io.mockk:mockk:${mockk_version}")
+    
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     // Database
     implementation("org.jetbrains.exposed:exposed-core:$jetbrains_exposed_version")
     implementation("org.jetbrains.exposed:exposed-dao:$jetbrains_exposed_version")
@@ -89,7 +102,7 @@ dependencies {
     implementation("io.ktor:ktor-client-serialization")
 
     // Security (BCrypt for hashing)
-    implementation("org.mindrot:jbcrypt:0.4")
+    implementation("org.mindrot:jbcrypt:$bcrypt_version")
 
     // Stripe Payment Gateway
     implementation("com.stripe:stripe-java:$stripe_version")
@@ -98,4 +111,75 @@ dependencies {
     implementation("io.ktor:ktor-server-metrics")
     implementation("io.ktor:ktor-server-metrics-micrometer")
     implementation("io.micrometer:micrometer-registry-prometheus:$prometheus_version")
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+
+    testLogging {
+        events("failed", "skipped")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+        showStandardStreams = false
+    }
+
+    doFirst {
+        println("\n🧪 Running tests...")
+    }
+
+    doLast {
+        println("\n✅ All tests passed successfully!")
+    }
+
+    maxHeapSize = "512m"
+}
+
+tasks.register("installGitHooks") {
+    description = "Install git hooks for pre-commit testing"
+    group = "git hooks"
+
+    doLast {
+        val gitHooksDir = file(".git/hooks")
+        if (!gitHooksDir.exists()) {
+            gitHooksDir.mkdirs()
+        }
+
+        val preCommitHook = file(".git/hooks/pre-commit")
+        preCommitHook.writeText("""
+            #!/bin/sh
+            echo "🧪 Running tests before commit..."
+            ./gradlew test --no-daemon --quiet
+            if [ $? -ne 0 ]; then
+                echo "❌ Tests failed! Commit aborted."
+                echo "💡 Check: ./gradlew test --no-daemon"
+                exit 1
+            fi
+            echo "✅ All tests passed! Proceeding with commit."
+        """.trimIndent())
+        preCommitHook.setExecutable(true)
+
+        val prePushHook = file(".git/hooks/pre-push")
+        prePushHook.writeText("""
+            #!/bin/sh
+            echo "🧪 Running tests before push..."
+            ./gradlew test --no-daemon --quiet
+            if [ $? -ne 0 ]; then
+                echo "❌ Tests failed! Push aborted."
+                echo "💡 Check: ./gradlew test --no-daemon"
+                exit 1
+            fi
+            echo "✅ All tests passed! Proceeding with push."
+        """.trimIndent())
+        prePushHook.setExecutable(true)
+
+        println("✅ Git hooks installed successfully!")
+        println("   - pre-commit: runs tests before every commit")
+        println("   - pre-push: runs tests before every push")
+    }
+}
+
+tasks.named("build") {
+    dependsOn("installGitHooks")
 }
