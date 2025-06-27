@@ -68,7 +68,9 @@ fun Application.initializeDatabase() {
                     UsageLogs,
                     UsageTracking,
                     DailyUserStatsTable,
-                    StripeCustomers
+                    StripeCustomers,
+                    WebhookConfigurations,
+                    WebhookDeliveries
                 )
             }
 

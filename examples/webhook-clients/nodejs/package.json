@@ -1,0 +1,21 @@
+{
+  "name": "webhook-client-example",
+  "version": "1.0.0",
+  "description": "Node.js webhook client example for Screenshot API",
+  "main": "webhook-server.js",
+  "scripts": {
+    "start": "node webhook-server.js",
+    "dev": "nodemon webhook-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["webhook", "example", "screenshot-api", "nodejs"],
+  "author": "Screenshot API Team",
+  "license": "MIT"
+}

@@ -2,6 +2,7 @@ package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.BillingController
+import dev.screenshotapi.infrastructure.adapters.input.rest.webhookRoutes
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.config.AppConfig
 import io.ktor.server.application.*
@@ -94,6 +95,9 @@ fun Application.configureRouting() {
                     get("/usage") { authController.getUsage(call) }
                     get("/usage/timeline") { authController.getUsageTimeline(call) }
                 }
+
+                // Webhook management endpoints - JWT authentication only
+                webhookRoutes()
             }
 
             // Admin endpoints - JWT authentication only

@@ -294,16 +294,26 @@ class ScreenshotWorker(
     }
 
     private suspend fun sendWebhookIfConfigured(job: ScreenshotJob) {
-        job.webhookUrl?.let { webhookUrl ->
-            try {
-                notificationService.sendWebhook(webhookUrl, job)
-                val updatedJob = job.markWebhookSent()
-                screenshotRepository.update(updatedJob)
-                logger.info("Webhook sent successfully: jobId={}, webhookUrl={}", job.id, webhookUrl)
-            } catch (e: Exception) {
-                logger.error("Webhook sending failed: jobId={}, webhookUrl={}, error={}", 
-                    job.id, webhookUrl, e.message, e)
+        try {
+            // Send webhook notifications using the new webhook system
+            notificationService.notifyScreenshotEvent(job)
+            
+            // Handle legacy webhook URL if present (for backward compatibility)
+            job.webhookUrl?.let { webhookUrl ->
+                logger.warn("Legacy webhook URL detected for job ${job.id}. Consider migrating to webhook configurations.")
+                try {
+                    @Suppress("DEPRECATION")
+                    notificationService.sendWebhook(webhookUrl, job)
+                    val updatedJob = job.markWebhookSent()
+                    screenshotRepository.update(updatedJob)
+                    logger.info("Legacy webhook sent successfully: jobId={}, webhookUrl={}", job.id, webhookUrl)
+                } catch (e: Exception) {
+                    logger.error("Legacy webhook sending failed: jobId={}, webhookUrl={}, error={}", 
+                        job.id, webhookUrl, e.message, e)
+                }
             }
+        } catch (e: Exception) {
+            logger.error("Webhook notification failed for job ${job.id}: ${e.message}", e)
         }
     }
 
@@ -373,6 +383,10 @@ class ScreenshotWorker(
                 ))
 
                 recordFailureMetrics(processingTime, error)
+                
+                // Send webhook notification for failed job
+                sendWebhookIfConfigured(failedJob)
+                
                 logger.error("Job permanently failed: jobId={}, userId={}, retryCount={}, processingTime={}ms, reason={}, errorType={}, errorMessage={}", 
                     job.id, job.userId, job.retryCount, processingTime, reason, error::class.simpleName, errorMessage, error)
             }

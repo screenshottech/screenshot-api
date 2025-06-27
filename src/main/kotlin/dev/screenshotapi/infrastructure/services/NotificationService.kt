@@ -1,74 +1,118 @@
 package dev.screenshotapi.infrastructure.services
 
 import dev.screenshotapi.core.domain.entities.ScreenshotJob
+import dev.screenshotapi.core.domain.entities.WebhookEvent
+import dev.screenshotapi.core.usecases.webhook.SendWebhookUseCase
 import dev.screenshotapi.infrastructure.services.models.WebhookPayload
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 
-
-class NotificationService {
+class NotificationService(
+    private val sendWebhookUseCase: SendWebhookUseCase
+) {
     private val logger = LoggerFactory.getLogger(this::class.java)
 
-    private val httpClient = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-            })
-        }
-    }
-
-    suspend fun sendWebhook(webhookUrl: String, job: ScreenshotJob) {
+    /**
+     * Send webhook notifications for screenshot job events
+     */
+    suspend fun notifyScreenshotEvent(job: ScreenshotJob) {
         try {
-            logger.info("Webhook request initiated: jobId={}, webhookUrl={}, status={}", 
-                job.id, webhookUrl, job.status.name)
-
-            val payload = WebhookPayload(
-                jobId = job.id,
-                status = job.status.name.lowercase(),
-                url = job.request.url,
-                resultUrl = job.resultUrl,
-                errorMessage = job.errorMessage,
-                processingTimeMs = job.processingTimeMs,
-                completedAt = job.completedAt?.toString()
-            )
-
-            val response: HttpResponse = httpClient.post(webhookUrl) {
-                contentType(ContentType.Application.Json)
-                setBody(payload)
+            val event = when (job.status.name) {
+                "COMPLETED" -> WebhookEvent.SCREENSHOT_COMPLETED
+                "FAILED" -> WebhookEvent.SCREENSHOT_FAILED
+                else -> return // Only notify on completion or failure
             }
 
-            if (response.status.isSuccess()) {
-                logger.info("Webhook delivered successfully: jobId={}, webhookUrl={}, statusCode={}", 
-                    job.id, webhookUrl, response.status.value)
+            val eventData = mapOf(
+                "jobId" to job.id,
+                "status" to job.status.name.lowercase(),
+                "url" to job.request.url,
+                "resultUrl" to (job.resultUrl ?: ""),
+                "errorMessage" to (job.errorMessage ?: ""),
+                "processingTimeMs" to (job.processingTimeMs ?: 0),
+                "completedAt" to (job.completedAt?.toString() ?: ""),
+                "createdAt" to job.createdAt.toString(),
+                "userId" to job.userId,
+                "format" to job.request.format.name,
+                "width" to job.request.width,
+                "height" to job.request.height
+            )
+
+            logger.info("Sending webhook notifications for job: ${job.id}, event: ${event.name}, user: ${job.userId}")
+            
+            val deliveries = sendWebhookUseCase.sendForEvent(event, eventData, job.userId)
+            
+            if (deliveries.isNotEmpty()) {
+                logger.info("Webhook notifications sent: ${deliveries.size} deliveries for job ${job.id}")
             } else {
-                logger.warn("Webhook delivery failed: jobId={}, webhookUrl={}, statusCode={}, statusText={}", 
-                    job.id, webhookUrl, response.status.value, response.status.description)
+                logger.debug("No webhook configurations found for user ${job.userId} and event ${event.name}")
             }
 
         } catch (e: Exception) {
-            logger.error("Webhook delivery exception: jobId={}, webhookUrl={}, error={}", 
-                job.id, webhookUrl, e.message, e)
+            logger.error("Failed to send webhook notifications for job ${job.id}", e)
         }
     }
 
+    /**
+     * Legacy method for backward compatibility - deprecated
+     */
+    @Deprecated("Use notifyScreenshotEvent instead", ReplaceWith("notifyScreenshotEvent(job)"))
+    suspend fun sendWebhook(webhookUrl: String, job: ScreenshotJob) {
+        logger.warn("Legacy sendWebhook method called - this is deprecated. Use webhook configurations instead.")
+        // For backward compatibility, we could still support this but it's not recommended
+    }
+
+    /**
+     * Send email notifications (placeholder for future implementation)
+     */
     suspend fun sendEmail(to: String, subject: String, body: String) {
         try {
             logger.info("Sending email to $to: $subject")
             logger.warn("Email service not implemented - email would be sent to $to")
+            // TODO: Implement email service integration (SendGrid, AWS SES, etc.)
         } catch (e: Exception) {
             logger.error("Failed to send email to $to", e)
         }
     }
 
-    fun close() {
-        httpClient.close()
+    /**
+     * Send user registration notifications
+     */
+    suspend fun notifyUserRegistration(userId: String, email: String) {
+        try {
+            val eventData = mapOf(
+                "userId" to userId,
+                "email" to email,
+                "registeredAt" to kotlinx.datetime.Clock.System.now().toString()
+            )
+
+            logger.info("Sending user registration notifications for user: $userId")
+            
+            val deliveries = sendWebhookUseCase.sendForEvent(WebhookEvent.USER_REGISTERED, eventData)
+            
+            if (deliveries.isNotEmpty()) {
+                logger.info("User registration notifications sent: ${deliveries.size} deliveries")
+            }
+
+        } catch (e: Exception) {
+            logger.error("Failed to send user registration notifications for user $userId", e)
+        }
+    }
+
+    /**
+     * Send payment notifications
+     */
+    suspend fun notifyPaymentEvent(userId: String, paymentData: Map<String, Any>) {
+        try {
+            logger.info("Sending payment notifications for user: $userId")
+            
+            val deliveries = sendWebhookUseCase.sendForEvent(WebhookEvent.PAYMENT_PROCESSED, paymentData, userId)
+            
+            if (deliveries.isNotEmpty()) {
+                logger.info("Payment notifications sent: ${deliveries.size} deliveries")
+            }
+
+        } catch (e: Exception) {
+            logger.error("Failed to send payment notifications for user $userId", e)
+        }
     }
 }

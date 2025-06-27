@@ -462,4 +462,104 @@ create unique index idx_yearly_stats_user_year on public.yearly_user_stats (user
 create index idx_yearly_stats_year on public.yearly_user_stats (year);
 create index idx_yearly_stats_user on public.yearly_user_stats (user_id);
 
+-- ============================================================================
+-- WEBHOOK SYSTEM TABLES
+-- ============================================================================
+
+-- Webhook Configurations Table
+create table public.webhook_configurations
+(
+    id          varchar(50)                         not null
+        primary key,
+    user_id     varchar(50)                         not null
+        constraint fk_webhook_configurations_user_id__id
+            references public.users
+            on update restrict on delete restrict,
+    url         text                                not null,
+    secret      varchar(255)                        not null,
+    events      text                                not null, -- JSON array of event names
+    is_active   boolean   default true              not null,
+    description text,
+    created_at  timestamp                           not null,
+    updated_at  timestamp                           not null
+);
+
+alter table public.webhook_configurations
+    owner to screenshotuser;
+
+-- Indexes for Webhook Configurations
+create index idx_webhook_configurations_user_id
+    on public.webhook_configurations (user_id);
+create index idx_webhook_configurations_is_active
+    on public.webhook_configurations (is_active);
+create index idx_webhook_configurations_user_active
+    on public.webhook_configurations (user_id, is_active);
+
+create trigger update_webhook_configurations_updated_at
+    before update
+    on public.webhook_configurations
+    for each row
+    execute procedure public.update_updated_at_column();
+
+-- Webhook Deliveries Table
+create table public.webhook_deliveries
+(
+    id                 varchar(50)                         not null
+        primary key,
+    webhook_config_id  varchar(50)                         not null
+        constraint fk_webhook_deliveries_webhook_config_id__id
+            references public.webhook_configurations
+            on update restrict on delete restrict,
+    user_id            varchar(50)                         not null
+        constraint fk_webhook_deliveries_user_id__id
+            references public.users
+            on update restrict on delete restrict,
+    event              varchar(50)                         not null,
+    event_data         text                                not null, -- JSON
+    payload            text                                not null, -- JSON payload sent
+    signature          varchar(255)                        not null,
+    status             varchar(20)                         not null,
+    url                text                                not null,
+    attempts           integer   default 1                 not null,
+    max_attempts       integer   default 5                 not null,
+    last_attempt_at    timestamp                           not null,
+    next_retry_at      timestamp,
+    response_code      integer,
+    response_body      text,
+    response_time_ms   bigint,
+    error              text,
+    created_at         timestamp                           not null
+);
+
+alter table public.webhook_deliveries
+    owner to screenshotuser;
+
+-- Indexes for Webhook Deliveries
+create index idx_webhook_deliveries_webhook_config_id
+    on public.webhook_deliveries (webhook_config_id);
+create index idx_webhook_deliveries_user_id
+    on public.webhook_deliveries (user_id);
+create index idx_webhook_deliveries_status
+    on public.webhook_deliveries (status);
+create index idx_webhook_deliveries_status_retry
+    on public.webhook_deliveries (status, next_retry_at)
+    where status = 'RETRYING';
+create index idx_webhook_deliveries_created_at
+    on public.webhook_deliveries (created_at);
+create index idx_webhook_deliveries_config_created
+    on public.webhook_deliveries (webhook_config_id, created_at);
+
+-- Comments for documentation
+comment on table public.webhook_configurations 
+    is 'Stores user webhook configurations with HMAC secrets for secure payload verification';
+
+comment on table public.webhook_deliveries 
+    is 'Tracks webhook delivery attempts with retry logic and comprehensive status tracking';
+
+comment on column public.webhook_configurations.secret 
+    is 'HMAC secret for webhook payload verification - never exposed after creation';
+
+comment on column public.webhook_deliveries.signature 
+    is 'HMAC-SHA256 signature of the payload for verification';
+
 
