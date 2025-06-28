@@ -10,7 +10,7 @@ import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
+
 import org.slf4j.LoggerFactory
 import java.util.*
 import kotlin.time.Duration.Companion.days
@@ -21,7 +21,7 @@ class PostgreSQLActivityRepository(private val database: Database) : ActivityRep
 
     override suspend fun save(activity: UserActivity): UserActivity {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val userExists = Users.select { Users.id eq activity.userId }.count() > 0
 
                 if (!userExists) {
@@ -53,7 +53,7 @@ class PostgreSQLActivityRepository(private val database: Database) : ActivityRep
 
     override suspend fun findByUserId(userId: String, days: Int, limit: Int): List<UserActivity> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val cutoffDate = Clock.System.now().minus(days.days)
 
                 Activities.select {
@@ -74,7 +74,7 @@ class PostgreSQLActivityRepository(private val database: Database) : ActivityRep
 
     override suspend fun findByType(type: UserActivityType, limit: Int): List<UserActivity> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Activities.select { Activities.type eq type.name }
                     .orderBy(Activities.timestamp, SortOrder.DESC)
                     .limit(limit)
@@ -90,7 +90,7 @@ class PostgreSQLActivityRepository(private val database: Database) : ActivityRep
 
     override suspend fun deleteOlderThan(days: Int): Long {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val cutoffDate = Clock.System.now().minus(days.days)
 
                 Activities.deleteWhere { Activities.timestamp less cutoffDate }.toLong()
