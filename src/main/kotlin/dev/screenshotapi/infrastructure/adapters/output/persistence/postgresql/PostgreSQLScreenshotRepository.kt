@@ -12,7 +12,6 @@ import kotlinx.datetime.*
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.slf4j.LoggerFactory
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
@@ -23,7 +22,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun save(job: ScreenshotJob): ScreenshotJob {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val entityId = try {
                     job.id
                 } catch (e: IllegalArgumentException) {
@@ -69,7 +68,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findById(id: String): ScreenshotJob? {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select { Screenshots.id eq id }
                     .singleOrNull()
                     ?.let { row -> mapRowToScreenshotJob(row) }
@@ -82,7 +81,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findByIdAndUserId(id: String, userId: String): ScreenshotJob? {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select {
                     (Screenshots.id eq id) and
                     (Screenshots.userId eq userId)
@@ -98,7 +97,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findByUserId(userId: String, page: Int, limit: Int): List<ScreenshotJob> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select { Screenshots.userId eq userId }
                     .orderBy(Screenshots.createdAt, SortOrder.DESC)
                     .limit(limit, offset = ((page - 1) * limit).toLong())
@@ -112,7 +111,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findByUserIdAndStatus(userId: String, status: ScreenshotStatus, page: Int, limit: Int): List<ScreenshotJob> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select { 
                     (Screenshots.userId eq userId) and (Screenshots.status eq status.name)
                 }
@@ -128,7 +127,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findByIds(ids: List<String>, userId: String): List<ScreenshotJob> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select {
                     (Screenshots.id inList ids) and (Screenshots.userId eq userId)
                 }
@@ -142,7 +141,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun update(job: ScreenshotJob): ScreenshotJob {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val updatedRows = Screenshots.update({ Screenshots.id eq job.id }) {
                     it[status] = job.status.name
                     it[resultUrl] = job.resultUrl
@@ -177,7 +176,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun countByUserId(userId: String): Long {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select { Screenshots.userId eq userId }.count()
             }
         } catch (e: Exception) {
@@ -188,7 +187,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun countByUserIdAndStatus(userId: String, status: ScreenshotStatus): Long {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select { 
                     (Screenshots.userId eq userId) and (Screenshots.status eq status.name)
                 }.count()
@@ -201,7 +200,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findPendingJobs(): List<ScreenshotJob> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select { Screenshots.status eq ScreenshotStatus.QUEUED.name }
                     .orderBy(Screenshots.createdAt, SortOrder.ASC)
                     .map { row -> mapRowToScreenshotJob(row) }
@@ -218,7 +217,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
         groupBy: StatsGroupBy
     ): List<ScreenshotStatItem> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val dateFormat = when (groupBy) {
                     StatsGroupBy.HOUR -> "YYYY-MM-DD HH24:00:00"
                     StatsGroupBy.DAY -> "YYYY-MM-DD"
@@ -307,7 +306,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun getOverallStats(): ScreenshotOverallStats {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val total = Screenshots.selectAll().count()
                 val completed = Screenshots.select { Screenshots.status eq ScreenshotStatus.COMPLETED.name }.count()
                 val failed = Screenshots.select { Screenshots.status eq ScreenshotStatus.FAILED.name }.count()
@@ -344,7 +343,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun getStatsByFormat(): Map<String, Long> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val results = mutableMapOf<String, Long>()
 
                 Screenshots.selectAll().forEach { row ->
@@ -367,7 +366,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun getStatsByStatus(): Map<String, Long> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.slice(Screenshots.status)
                     .selectAll()
                     .groupBy { it[Screenshots.status] }
@@ -381,7 +380,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun getAverageProcessingTime(): Long {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.slice(Screenshots.processingTimeMs)
                     .select { Screenshots.processingTimeMs.isNotNull() }
                     .map { it[Screenshots.processingTimeMs]!! }
@@ -396,9 +395,9 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun getSuccessRate(): Double {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val total = Screenshots.selectAll().count()
-                if (total == 0L) return@newSuspendedTransaction 0.0
+                if (total == 0L) return@dbQuery 0.0
 
                 val completed = Screenshots.select { Screenshots.status eq ScreenshotStatus.COMPLETED.name }.count()
                 completed.toDouble() / total.toDouble()
@@ -411,7 +410,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun countCreatedToday(): Long {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val today = Clock.System.now()
                 val startOfDay = today.toLocalDateTime(TimeZone.UTC)
                     .date
@@ -428,16 +427,16 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
     // Retry-related methods implementation
     override suspend fun tryLockJob(jobId: String, workerId: String): ScreenshotJob? {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 // First try to find and lock the job atomically
                 val job = Screenshots.select { Screenshots.id eq jobId }
                     .singleOrNull()
                     ?.let { row -> mapRowToScreenshotJob(row) }
-                    ?: return@newSuspendedTransaction null
+                    ?: return@dbQuery null
 
                 // Check if job is already locked or recently locked
                 if (job.isLocked()) {
-                    return@newSuspendedTransaction null
+                    return@dbQuery null
                 }
 
                 // Try to acquire lock
@@ -460,7 +459,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findStuckJobs(stuckAfterMinutes: Int, limit: Int): List<ScreenshotJob> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val stuckThreshold = Clock.System.now().minus(stuckAfterMinutes.minutes)
                 
                 Screenshots.select {
@@ -480,7 +479,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findJobsReadyForRetry(limit: Int): List<ScreenshotJob> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val now = Clock.System.now()
                 
                 Screenshots.select {
@@ -502,7 +501,7 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
 
     override suspend fun findFailedRetryableJobs(limit: Int): List<ScreenshotJob> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 Screenshots.select {
                     (Screenshots.status eq ScreenshotStatus.FAILED.name) and
                     (Screenshots.isRetryable eq true) and

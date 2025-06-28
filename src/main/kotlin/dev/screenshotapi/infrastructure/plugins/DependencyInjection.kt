@@ -4,30 +4,18 @@ import dev.screenshotapi.core.domain.repositories.*
 import dev.screenshotapi.core.domain.services.RateLimitingService
 import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.domain.services.ScreenshotService
-import dev.screenshotapi.core.ports.output.HashingPort
-import dev.screenshotapi.core.ports.output.HmacPort
-import dev.screenshotapi.core.ports.output.PaymentGatewayPort
-import dev.screenshotapi.core.ports.output.StorageOutputPort
-import dev.screenshotapi.core.ports.output.TokenGenerationPort
-import dev.screenshotapi.core.ports.output.UrlSecurityPort
-import dev.screenshotapi.core.ports.output.UsageTrackingPort
+import dev.screenshotapi.core.ports.output.*
 import dev.screenshotapi.core.usecases.admin.*
 import dev.screenshotapi.core.usecases.auth.*
 import dev.screenshotapi.core.usecases.billing.*
 import dev.screenshotapi.core.usecases.logging.GetUsageLogsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
-import dev.screenshotapi.core.usecases.stats.UpdateDailyStatsUseCase
+import dev.screenshotapi.core.usecases.screenshot.*
 import dev.screenshotapi.core.usecases.stats.AggregateStatsUseCase
-import dev.screenshotapi.core.usecases.screenshot.BulkGetScreenshotStatusUseCase
-import dev.screenshotapi.core.usecases.screenshot.GetScreenshotStatusUseCase
-import dev.screenshotapi.core.usecases.screenshot.ListScreenshotsUseCase
-import dev.screenshotapi.core.usecases.screenshot.ManualRetryScreenshotUseCase
-import dev.screenshotapi.core.usecases.screenshot.ProcessFailedRetryableJobsUseCase
-import dev.screenshotapi.core.usecases.screenshot.ProcessStuckJobsUseCase
-import dev.screenshotapi.core.usecases.screenshot.TakeScreenshotUseCase
-import dev.screenshotapi.core.usecases.screenshot.ValidateScreenshotTokenUseCase
+import dev.screenshotapi.core.usecases.stats.UpdateDailyStatsUseCase
 import dev.screenshotapi.core.usecases.webhook.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
+import dev.screenshotapi.infrastructure.adapters.output.TokenGenerationAdapter
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
 import dev.screenshotapi.infrastructure.adapters.output.payment.StripePaymentGatewayAdapter
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.*
@@ -37,7 +25,6 @@ import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAd
 import dev.screenshotapi.infrastructure.adapters.output.security.BCryptHashingAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.HmacAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.UrlSecurityAdapter
-import dev.screenshotapi.infrastructure.adapters.output.TokenGenerationAdapter
 import dev.screenshotapi.infrastructure.adapters.output.storage.StorageFactory
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.JwtAuthProvider
@@ -46,9 +33,7 @@ import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
 import dev.screenshotapi.infrastructure.services.*
-import dev.screenshotapi.infrastructure.services.ScreenshotTokenService
 import dev.screenshotapi.workers.JobRetryScheduler
-import dev.screenshotapi.workers.WebhookRetryWorker
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -108,7 +93,7 @@ fun repositoryModule(config: AppConfig) = module {
     single<HmacPort> { HmacAdapter(get()) }
     single<UrlSecurityPort> { UrlSecurityAdapter() }
     single<PaymentGatewayPort> { StripePaymentGatewayAdapter(get<StripeConfig>(), get<PlanRepository>()) }
-    
+
     // Token generation services
     single<TokenGenerationPort> { TokenGenerationAdapter(get<ScreenshotTokenService>()) }
     if (!config.database.useInMemory) {
@@ -118,14 +103,14 @@ fun repositoryModule(config: AppConfig) = module {
         single<StatefulRedisConnection<String, String>> { createRedisConnection(config) }
     }
     // Lightweight stats aggregation scheduler (works in all modes)
-    single { 
+    single {
         dev.screenshotapi.infrastructure.services.StatsAggregationScheduler(
             aggregateStatsUseCase = get<AggregateStatsUseCase>(),
             dailyStatsRepository = get<DailyStatsRepository>()
         )
     }
     // Webhook retry worker
-    single { 
+    single {
         dev.screenshotapi.workers.WebhookRetryWorker(
             sendWebhookUseCase = get<SendWebhookUseCase>()
         )
@@ -157,7 +142,7 @@ private fun createUsageRepository(config: AppConfig, database: Database?): Usage
     if (config.database.useInMemory) InMemoryUsageRepository() else PostgreSQLUsageRepository(database!!)
 
 private fun createUsageLogRepository(config: AppConfig, database: Database?): UsageLogRepository =
-    if (config.database.useInMemory) InMemoryUsageLogRepository() else PostgreSQLUsageLogRepository()
+    if (config.database.useInMemory) InMemoryUsageLogRepository() else PostgreSQLUsageLogRepository(database!!)
 
 private fun createDailyStatsRepository(config: AppConfig, database: Database?): DailyStatsRepository =
     if (config.database.useInMemory) InMemoryDailyStatsRepository() else PostgreSQLDailyStatsRepository(database!!)
@@ -170,12 +155,20 @@ private fun createWebhookDeliveryRepository(config: AppConfig, database: Databas
 
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
-        Database.connect(
-            url = config.database.url!!,
-            driver = "org.postgresql.Driver",
-            user = config.database.username!!,
+        val hikariConfig = com.zaxxer.hikari.HikariConfig().apply {
+            jdbcUrl = config.database.url!!
+            driverClassName = config.database.driver
+            username = config.database.username!!
             password = config.database.password!!
-        )
+            maximumPoolSize = config.database.maxPoolSize
+            minimumIdle = 5
+            idleTimeout = 600000 // 10 minutes
+            connectionTimeout = 30000 // 30 seconds
+            maxLifetime = 1800000 // 30 minutes
+            isAutoCommit = false
+        }
+        val dataSource = com.zaxxer.hikari.HikariDataSource(hikariConfig)
+        Database.connect(dataSource)
     } else {
         error("Database not needed in in-memory mode")
     }
@@ -195,7 +188,7 @@ fun useCaseModule() = module {
     single { BulkGetScreenshotStatusUseCase(get()) }
     single { ListScreenshotsUseCase(get()) }
     single { ValidateScreenshotTokenUseCase(get(), get<TokenGenerationPort>()) }
-    
+
     // Retry use cases
     single { ManualRetryScreenshotUseCase(get(), get(), get(), get()) }
     single { ProcessStuckJobsUseCase(get(), get(), get(), get()) }

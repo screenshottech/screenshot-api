@@ -9,7 +9,6 @@ import dev.screenshotapi.infrastructure.exceptions.DatabaseException
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.slf4j.LoggerFactory
 import java.util.*
 
@@ -19,7 +18,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun save(apiKey: ApiKey): ApiKey {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val userExists = Users.select { Users.id eq apiKey.userId }.count() > 0
 
                 if (!userExists) {
@@ -58,7 +57,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun findById(id: String): ApiKey? {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 ApiKeys.select { ApiKeys.id eq id }
                     .singleOrNull()
                     ?.let { row -> mapRowToApiKey(row) }
@@ -71,7 +70,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun findByKeyHash(keyHash: String): ApiKey? {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 ApiKeys.select { ApiKeys.keyHash eq keyHash }
                     .singleOrNull()
                     ?.let { row -> mapRowToApiKey(row) }
@@ -84,7 +83,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun findByUserId(userId: String): List<ApiKey> {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 ApiKeys.select { ApiKeys.userId eq userId }
                     .orderBy(ApiKeys.createdAt, SortOrder.DESC)
                     .map { row -> mapRowToApiKey(row) }
@@ -97,7 +96,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun update(apiKey: ApiKey): ApiKey {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val updatedRows = ApiKeys.update({ ApiKeys.id eq apiKey.id }) {
                     it[name] = apiKey.name
                     it[keyHash] = apiKey.keyHash
@@ -125,7 +124,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun delete(id: String): Boolean {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val deletedRows = ApiKeys.deleteWhere { ApiKeys.id eq id }
                 deletedRows > 0
             }
@@ -137,7 +136,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun findDefaultByUserId(userId: String): ApiKey? {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 ApiKeys.select { 
                     (ApiKeys.userId eq userId) and 
                     (ApiKeys.isDefault eq true) and 
@@ -154,7 +153,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun setAsDefault(userId: String, apiKeyId: String): Boolean {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 // First clear any existing default key for this user
                 clearDefaultForUser(userId)
                 
@@ -177,7 +176,7 @@ class PostgreSQLApiKeyRepository(private val database: Database) : ApiKeyReposit
 
     override suspend fun clearDefaultForUser(userId: String): Boolean {
         return try {
-            newSuspendedTransaction(db = database) {
+            dbQuery(database) {
                 val updatedRows = ApiKeys.update({ 
                     (ApiKeys.userId eq userId) and (ApiKeys.isDefault eq true) 
                 }) {

@@ -8,12 +8,12 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
-import org.jetbrains.exposed.sql.transactions.transaction
 
-class PostgreSQLUsageLogRepository : UsageLogRepository {
+class PostgreSQLUsageLogRepository(
+    private val database: Database
+) : UsageLogRepository {
 
-    override suspend fun save(usageLog: UsageLog): UsageLog = transaction {
+    override suspend fun save(usageLog: UsageLog): UsageLog = dbQuery(database) {
         UsageLogs.insert {
             it[id] = usageLog.id
             it[userId] = usageLog.userId
@@ -34,7 +34,7 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
         usageLog
     }
 
-    override suspend fun findById(id: String): UsageLog? = transaction {
+    override suspend fun findById(id: String): UsageLog? = dbQuery(database) {
         UsageLogs.select { UsageLogs.id eq id }
             .singleOrNull()
             ?.toUsageLog()
@@ -44,7 +44,7 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
         userId: String,
         limit: Int,
         offset: Int
-    ): List<UsageLog> = transaction {
+    ): List<UsageLog> = dbQuery(database) {
         UsageLogs.select { UsageLogs.userId eq userId }
             .orderBy(UsageLogs.timestamp, SortOrder.DESC)
             .limit(limit, offset.toLong())
@@ -55,7 +55,7 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
         userId: String,
         action: UsageLogAction,
         limit: Int
-    ): List<UsageLog> = transaction {
+    ): List<UsageLog> = dbQuery(database) {
         UsageLogs.select {
             (UsageLogs.userId eq userId) and (UsageLogs.action eq action.name)
         }
@@ -69,7 +69,7 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
         startTime: Instant,
         endTime: Instant,
         limit: Int
-    ): List<UsageLog> = transaction {
+    ): List<UsageLog> = dbQuery(database) {
         UsageLogs.select {
             (UsageLogs.userId eq userId) and
             (UsageLogs.timestamp greaterEq startTime) and
@@ -80,13 +80,13 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
             .map { it.toUsageLog() }
     }
 
-    override suspend fun findByScreenshotId(screenshotId: String): List<UsageLog> = transaction {
+    override suspend fun findByScreenshotId(screenshotId: String): List<UsageLog> = dbQuery(database) {
         UsageLogs.select { UsageLogs.screenshotId eq screenshotId }
             .orderBy(UsageLogs.timestamp, SortOrder.DESC)
             .map { it.toUsageLog() }
     }
 
-    override suspend fun findByApiKeyId(apiKeyId: String, limit: Int): List<UsageLog> = transaction {
+    override suspend fun findByApiKeyId(apiKeyId: String, limit: Int): List<UsageLog> = dbQuery(database) {
         UsageLogs.select { UsageLogs.apiKeyId eq apiKeyId }
             .orderBy(UsageLogs.timestamp, SortOrder.DESC)
             .limit(limit)
@@ -97,7 +97,7 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
         userId: String,
         startTime: Instant,
         endTime: Instant
-    ): Int = transaction {
+    ): Int = dbQuery(database) {
         UsageLogs.slice(UsageLogs.creditsUsed.sum())
             .select {
                 (UsageLogs.userId eq userId) and
@@ -113,7 +113,7 @@ class PostgreSQLUsageLogRepository : UsageLogRepository {
         action: UsageLogAction,
         startTime: Instant,
         endTime: Instant
-    ): Long = transaction {
+    ): Long = dbQuery(database) {
         UsageLogs.select {
             (UsageLogs.userId eq userId) and
             (UsageLogs.action eq action.name) and

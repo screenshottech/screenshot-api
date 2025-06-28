@@ -8,7 +8,7 @@ import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
  */
 object WebhookConfigurations : Table("webhook_configurations") {
     val id = varchar("id", 50)
-    val userId = varchar("user_id", 50)
+    val userId = varchar("user_id", 50).references(Users.id)
     val url = text("url")
     val secret = varchar("secret", 255)
     val events = text("events") // JSON array of event names
@@ -31,8 +31,8 @@ object WebhookConfigurations : Table("webhook_configurations") {
  */
 object WebhookDeliveries : Table("webhook_deliveries") {
     val id = varchar("id", 50)
-    val webhookConfigId = varchar("webhook_config_id", 50)
-    val userId = varchar("user_id", 50)
+    val webhookConfigId = varchar("webhook_config_id", 50).references(WebhookConfigurations.id)
+    val userId = varchar("user_id", 50).references(Users.id)
     val event = varchar("event", 50)
     val eventData = text("event_data") // JSON
     val payload = text("payload") // JSON payload sent
