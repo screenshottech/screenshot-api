@@ -8,7 +8,8 @@ data class AppConfig(
     val storage: StorageConfig,
     val auth: AuthConfig,
     val screenshot: ScreenshotConfig,
-    val billing: BillingConfig
+    val billing: BillingConfig,
+    val webhook: WebhookConfig
 ) {
     companion object {
         fun load(): AppConfig {
@@ -22,7 +23,8 @@ data class AppConfig(
                 storage = StorageConfig.load(environment),
                 auth = AuthConfig.load(),
                 screenshot = ScreenshotConfig.load(),
-                billing = BillingConfig.load()
+                billing = BillingConfig.load(),
+                webhook = WebhookConfig.load()
             )
         }
     }

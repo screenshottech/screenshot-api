@@ -109,6 +109,14 @@ services:
       RATE_LIMIT_CAPACITY: "100"
       RATE_LIMIT_RATE_SECONDS: "60"
       
+      # Webhook configuration
+      WEBHOOK_MAX_RETRY_ATTEMPTS: "3"
+      WEBHOOK_MAX_TEST_RETRY_ATTEMPTS: "1"
+      WEBHOOK_TEST_RATE_LIMIT_MINUTES: "1"
+      WEBHOOK_RETRY_DELAY_MINUTES: "1,5,15,30,60"
+      WEBHOOK_TEST_RETRY_DELAY_SECONDS: "30"
+      WEBHOOK_TIMEOUT_SECONDS: "30"
+      
       # Logging
       LOG_LEVEL: "INFO"
       

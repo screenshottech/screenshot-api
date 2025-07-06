@@ -222,6 +222,21 @@ class PostgreSQLWebhookDeliveryRepository(
         WebhookDeliveries.deleteWhere { WebhookDeliveries.createdAt lessEq before }
     }
 
+    override suspend fun deleteOldDeliveries(before: Instant, status: WebhookDeliveryStatus?, limit: Int): Int = dbQuery(database) {
+        // Simple approach: delete directly with limit using a subquery-like approach
+        val baseCondition = WebhookDeliveries.createdAt lessEq before
+        val condition = if (status != null) {
+            baseCondition and (WebhookDeliveries.status eq status.name)
+        } else {
+            baseCondition
+        }
+        
+        // For PostgreSQL, we'll do a direct delete with limit
+        // Note: This may delete more than the limit if there are many matching records
+        // but it's simpler and safer than complex subqueries
+        WebhookDeliveries.deleteWhere(limit) { condition }
+    }
+
     override suspend fun update(delivery: WebhookDelivery): WebhookDelivery = dbQuery(database) {
         WebhookDeliveries.update({ WebhookDeliveries.id eq delivery.id }) {
             it[status] = delivery.status.name

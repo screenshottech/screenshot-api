@@ -31,6 +31,7 @@ interface WebhookDeliveryRepository {
     suspend fun countByStatus(status: WebhookDeliveryStatus): Long
     suspend fun countByWebhookConfigId(webhookConfigId: String): Long
     suspend fun deleteOlderThan(before: Instant): Int
+    suspend fun deleteOldDeliveries(before: Instant, status: WebhookDeliveryStatus? = null, limit: Int = 1000): Int
     
     // Analytics queries
     suspend fun getDeliveryStats(webhookConfigId: String, since: Instant): WebhookDeliveryStats

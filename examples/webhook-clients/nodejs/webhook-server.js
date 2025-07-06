@@ -26,9 +26,9 @@ function verifySignature(payload, signature, secret) {
       .createHmac('sha256', secret)
       .update(payload, 'utf8')
       .digest('hex');
-    
+
     const receivedSignature = signature.replace('sha256=', '');
-    
+
     return crypto.timingSafeEqual(
       Buffer.from(expectedSignature, 'hex'),
       Buffer.from(receivedSignature, 'hex')
@@ -43,16 +43,16 @@ function verifySignature(payload, signature, secret) {
 app.post('/webhook', (req, res) => {
   const startTime = Date.now();
   webhookCount++;
-  
+
   const headers = {
     signature: req.headers['x-webhook-signature-256'],
     event: req.headers['x-webhook-event'],
     deliveryId: req.headers['x-webhook-delivery'],
     userAgent: req.headers['user-agent']
   };
-  
+
   const payload = req.body;
-  
+
   console.log('\n' + '='.repeat(60));
   console.log(`🔔 Webhook #${webhookCount} Received at ${new Date().toISOString()}`);
   console.log('='.repeat(60));
@@ -61,21 +61,21 @@ app.post('/webhook', (req, res) => {
   console.log('🤖 User Agent:', headers.userAgent || 'NONE');
   console.log('🔐 Signature:', headers.signature || 'NONE');
   console.log('📏 Payload Size:', payload.length, 'bytes');
-  
+
   // Get secret from environment or use default for testing
-  const secret = process.env.WEBHOOK_SECRET || 'default-test-secret';
-  
+  const secret = process.env.WEBHOOK_SECRET || 'onNWKeSp6kbx90dtwdsNngNu9PJBHsmo0PsOgpZNjeY';
+
   // Verify signature
   const isValidSignature = verifySignature(payload, headers.signature, secret);
-  
+
   if (isValidSignature) {
     console.log('✅ Signature verification: PASSED');
-    
+
     try {
       const parsedPayload = JSON.parse(payload);
       console.log('📦 Parsed Payload:');
       console.log(JSON.stringify(parsedPayload, null, 2));
-      
+
       // Store webhook for analysis
       const webhookRecord = {
         id: webhookCount,
@@ -85,28 +85,34 @@ app.post('/webhook', (req, res) => {
         processingTime: Date.now() - startTime,
         valid: true
       };
-      
+
       receivedWebhooks.unshift(webhookRecord); // Add to beginning
-      
+
       // Keep only last 100 webhooks
       if (receivedWebhooks.length > 100) {
         receivedWebhooks.splice(100);
       }
-      
+
       console.log('✅ Webhook processed successfully');
       res.status(200).send('OK');
-      
+
     } catch (parseError) {
       console.log('❌ JSON parsing failed:', parseError.message);
       console.log('📄 Raw payload:', payload.toString());
       res.status(400).send('Invalid JSON payload');
     }
-    
+
   } else {
     console.log('❌ Signature verification: FAILED');
     console.log('🔑 Expected secret length:', secret.length);
-    console.log('📝 Raw payload for debugging:', payload.toString().substring(0, 200) + '...');
-    
+    console.log('📝 Raw payload for debugging (COMPLETE):', payload.toString());
+    // Debug HMAC with both secrets
+    const testSig1 = crypto.createHmac('sha256', secret).update(payload, 'utf8').digest('hex');
+    const testSig2 = crypto.createHmac('sha256', Buffer.from(secret, 'base64')).update(payload, 'utf8').digest('hex');
+    console.log('🧪 Test sig (raw secret):', testSig1);
+    console.log('🧪 Test sig (base64 secret):', testSig2);
+    console.log('🎯 Received signature:', (headers.signature || '').replace('sha256=', ''));
+
     // Store invalid webhook for debugging
     const webhookRecord = {
       id: webhookCount,
@@ -117,12 +123,12 @@ app.post('/webhook', (req, res) => {
       valid: false,
       error: 'Invalid signature'
     };
-    
+
     receivedWebhooks.unshift(webhookRecord);
-    
+
     res.status(401).send('Invalid signature');
   }
-  
+
   console.log('⏱️  Processing time:', Date.now() - startTime, 'ms');
   console.log('='.repeat(60));
 });
@@ -141,7 +147,7 @@ app.get('/health', (req, res) => {
 app.get('/stats', (req, res) => {
   const validWebhooks = receivedWebhooks.filter(w => w.valid).length;
   const invalidWebhooks = receivedWebhooks.filter(w => !w.valid).length;
-  
+
   res.json({
     total: webhookCount,
     stored: receivedWebhooks.length,
@@ -156,7 +162,7 @@ app.get('/stats', (req, res) => {
 app.get('/webhooks', (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const recent = receivedWebhooks.slice(0, limit);
-  
+
   res.json({
     count: recent.length,
     total: webhookCount,
@@ -169,7 +175,7 @@ app.delete('/webhooks', (req, res) => {
   const cleared = receivedWebhooks.length;
   receivedWebhooks.splice(0);
   webhookCount = 0;
-  
+
   res.json({
     message: 'Webhook history cleared',
     cleared: cleared
@@ -192,7 +198,7 @@ app.post('/webhook/test-error', (req, res) => {
 app.post('/webhook/test-random', (req, res) => {
   const success = Math.random() > 0.5;
   console.log(`🧪 Test endpoint hit - returning ${success ? 'success' : 'error'}`);
-  
+
   if (success) {
     res.status(200).send('Random Success');
   } else {
@@ -353,7 +359,7 @@ app.get('/', (req, res) => {
     </script>
 </body>
 </html>`;
-  
+
   res.send(html);
 });
 

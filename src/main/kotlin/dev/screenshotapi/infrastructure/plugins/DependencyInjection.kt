@@ -32,6 +32,7 @@ import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
+import dev.screenshotapi.infrastructure.config.WebhookConfig
 import dev.screenshotapi.infrastructure.services.*
 import dev.screenshotapi.workers.JobRetryScheduler
 import dev.screenshotapi.workers.WorkerManager
@@ -73,6 +74,7 @@ fun configModule(config: AppConfig) = module {
     single { config.screenshot }
     single { config.billing }
     single { config.billing.stripe }
+    single { config.webhook }
 }
 
 fun repositoryModule(config: AppConfig) = module {
@@ -232,8 +234,9 @@ fun useCaseModule() = module {
     single { DeleteWebhookUseCase(get<WebhookConfigurationRepository>()) }
     single { ListWebhooksUseCase(get<WebhookConfigurationRepository>()) }
     single { RegenerateWebhookSecretUseCase(get<WebhookConfigurationRepository>()) }
-    single { SendWebhookUseCase(get<WebhookConfigurationRepository>(), get<WebhookDeliveryRepository>(), get<HttpClient>()) }
+    single { SendWebhookUseCase(get<WebhookConfigurationRepository>(), get<WebhookDeliveryRepository>(), get<HttpClient>(), get<AppConfig>().webhook) }
     single { GetWebhookDeliveriesUseCase(get<WebhookConfigurationRepository>(), get<WebhookDeliveryRepository>()) }
+    single { CleanupWebhookDeliveriesUseCase(get<WebhookDeliveryRepository>()) }
     single { ProvisionSubscriptionCreditsUseCase(get<SubscriptionRepository>(), get<UserRepository>(), get<PlanRepository>(), get<AddCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { HandleSubscriptionWebhookUseCase(get<PaymentGatewayPort>(), get<SubscriptionRepository>(), get<UserRepository>(), get<ProvisionSubscriptionCreditsUseCase>()) }
 

@@ -1,11 +1,13 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest
 
 import dev.screenshotapi.core.domain.entities.WebhookEvent
+import dev.screenshotapi.core.domain.exceptions.AuthorizationException
 import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
 import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.usecases.webhook.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.webhook.*
 import dev.screenshotapi.infrastructure.auth.requireUserId
+import dev.screenshotapi.infrastructure.config.WebhookConfig
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -16,6 +18,9 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.slf4j.LoggerFactory
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 class WebhookController : KoinComponent {
     private val logger = LoggerFactory.getLogger(WebhookController::class.java)
@@ -26,6 +31,12 @@ class WebhookController : KoinComponent {
     private val getWebhookDeliveriesUseCase: GetWebhookDeliveriesUseCase by inject()
     private val regenerateWebhookSecretUseCase: RegenerateWebhookSecretUseCase by inject()
     private val sendWebhookUseCase: SendWebhookUseCase by inject()
+    private val webhookConfig: WebhookConfig by inject()
+    
+    // Simple rate limiting for webhook tests: configurable per user
+    private val webhookTestRateLimit = ConcurrentHashMap<String, kotlinx.datetime.Instant>()
+    private val cleanupCounter = AtomicInteger(0)
+    private val CLEANUP_THRESHOLD = 100
 
     suspend fun createWebhook(call: ApplicationCall) {
         try {
@@ -282,13 +293,35 @@ class WebhookController : KoinComponent {
         val webhookId = call.parameters["webhookId"]
             ?: throw ValidationException("webhookId is required")
 
+        // Periodic cleanup of expired entries
+        if (cleanupCounter.incrementAndGet() % CLEANUP_THRESHOLD == 0) {
+            val cutoff = Clock.System.now().minus(webhookConfig.getTestRateLimit())
+            webhookTestRateLimit.entries.removeIf { it.value < cutoff }
+            logger.debug("Cleaned up expired webhook rate limit entries")
+        }
+
+        // Check rate limit for webhook tests
+        val now = Clock.System.now()
+        val lastTest = webhookTestRateLimit[userId]
+        val testRateLimit = webhookConfig.getTestRateLimit()
+        
+        if (lastTest != null && now < lastTest.plus(testRateLimit)) {
+            logger.warn("Webhook test rate limit exceeded for user $userId")
+            throw AuthorizationException.RateLimitExceeded(
+                resetTime = lastTest.plus(testRateLimit)
+            )
+        }
+
         val webhooks = listWebhooksUseCase.invoke(userId)
         val webhook = webhooks.find { it.id == webhookId }
             ?: throw ResourceNotFoundException("Webhook", webhookId)
 
+        // Update rate limit tracker
+        webhookTestRateLimit[userId] = now
+
         val testEventData = mapOf(
             "test" to "true",
-            "timestamp" to Clock.System.now().toString(),
+            "timestamp" to now.toString(),
             "webhookId" to webhookId,
             "userId" to userId
         )
@@ -299,6 +332,7 @@ class WebhookController : KoinComponent {
             eventData = testEventData
         )
 
+        logger.info("Webhook test triggered for user $userId, webhook $webhookId")
         call.respond(HttpStatusCode.OK, delivery.toDto())
     }
 
