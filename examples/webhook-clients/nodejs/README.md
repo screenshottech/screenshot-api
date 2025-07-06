@@ -14,28 +14,60 @@ A complete Node.js webhook server for testing webhook deliveries from the Screen
 
 ## Quick Start
 
-### 1. Install Dependencies
+### Option 1: Using the helper script (Recommended)
+
+1. Get your webhook secret from the Screenshot API
+2. Run the setup script:
+
+```bash
+./start-webhook-server.sh "lleeG6fXfLmdgtvSTF_esaD75XUXsJSpmNUbHxP73mU"
+```
+
+### Option 2: Manual Setup
+
+#### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Start Server
+#### 2. Start Server with Secret
 ```bash
-# Default mode
-npm start
+# With your webhook secret from the API
+WEBHOOK_SECRET="lleeG6fXfLmdgtvSTF_esaD75XUXsJSpmNUbHxP73mU" node webhook-server.js
 
-# Development mode with auto-reload  
-npm run dev
-
-# With custom secret
-WEBHOOK_SECRET=your-webhook-secret npm start
-
-# Custom port
-PORT=3002 npm start
+# Or set environment variable
+export WEBHOOK_SECRET="lleeG6fXfLmdgtvSTF_esaD75XUXsJSpmNUbHxP73mU"
+node webhook-server.js
 ```
 
-### 3. Open Web Interface
+#### 3. Open Web Interface
 Visit http://localhost:3001 to see the real-time dashboard
+
+## How to Get Your Webhook Secret
+
+1. Create a webhook using the Screenshot API:
+```bash
+curl -X POST http://localhost:8080/api/v1/webhooks \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "http://localhost:3001/webhook",
+    "events": ["WEBHOOK_TEST", "SCREENSHOT_COMPLETED"],
+    "description": "Test webhook"
+  }'
+```
+
+2. Copy the `secret` field from the response:
+```json
+{
+  "id": "webhook-id",
+  "secret": "lleeG6fXfLmdgtvSTF_esaD75XUXsJSpmNUbHxP73mU",
+  "url": "http://localhost:3001/webhook",
+  ...
+}
+```
+
+3. Use that secret to start the webhook server
 
 ## API Endpoints
 
@@ -64,17 +96,7 @@ Visit http://localhost:3001 to see the real-time dashboard
 ### 1. Basic Webhook Integration
 ```bash
 # Start the webhook server
-npm start
-
-# In another terminal, create webhook in Screenshot API
-curl -X POST http://localhost:8080/api/v1/webhooks \
-  -H "Authorization: Bearer YOUR_JWT" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "http://localhost:3001/webhook",
-    "events": ["SCREENSHOT_COMPLETED"],
-    "description": "Test webhook integration"
-  }'
+./start-webhook-server.sh "YOUR_SECRET_HERE"
 
 # Test the webhook
 curl -X POST http://localhost:8080/api/v1/webhooks/WEBHOOK_ID/test \
@@ -83,28 +105,14 @@ curl -X POST http://localhost:8080/api/v1/webhooks/WEBHOOK_ID/test \
 
 ### 2. Retry Logic Testing
 ```bash
-# Use error endpoint to force retries
-curl -X POST http://localhost:8080/api/v1/webhooks \
-  -H "Authorization: Bearer YOUR_JWT" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "http://localhost:3001/webhook/test-error",
-    "events": ["SCREENSHOT_COMPLETED"],
-    "description": "Test retry logic"
-  }'
+# Use error endpoint to force retries - configure webhook with:
+"url": "http://localhost:3001/webhook/test-error"
 ```
 
 ### 3. Intermittent Failure Testing
 ```bash
-# Use random endpoint for realistic failure scenarios
-curl -X POST http://localhost:8080/api/v1/webhooks \
-  -H "Authorization: Bearer YOUR_JWT" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "http://localhost:3001/webhook/test-random",
-    "events": ["SCREENSHOT_COMPLETED"],
-    "description": "Test random failures"
-  }'
+# Use random endpoint for realistic failure scenarios - configure webhook with:
+"url": "http://localhost:3001/webhook/test-random"
 ```
 
 ## Security Implementation
@@ -145,70 +153,14 @@ The web interface displays:
 - **Response Times**: Performance metrics
 - **Error Analysis**: Failed delivery details
 
-## Monitoring Integration
-
-### JSON Stats Endpoint
-`GET /stats` returns monitoring-friendly JSON:
-```json
-{
-  "total_webhooks": 42,
-  "valid_signatures": 40,
-  "invalid_signatures": 2,
-  "success_rate": 0.95,
-  "uptime_seconds": 3600,
-  "last_webhook": "2023-12-01T10:30:00Z"
-}
-```
-
-### Health Check
-`GET /health` returns simple status for load balancers:
-```json
-{
-  "status": "healthy",
-  "uptime": 3600,
-  "port": 3001
-}
-```
-
-## Development Tips
-
-### Debug Mode
-Enable verbose logging:
-```bash
-DEBUG=* npm start
-```
-
-### Custom Secret Management
-For testing with different secrets:
-```bash
-# Create webhook with custom secret in Screenshot API
-WEBHOOK_SECRET=your-custom-secret npm start
-```
-
-### Testing with ngrok
-For external webhook testing:
-```bash
-# Install ngrok
-npm install -g ngrok
-
-# Start webhook server
-npm start
-
-# In another terminal, expose to internet
-ngrok http 3001
-
-# Use ngrok URL in webhook configuration
-# https://abc123.ngrok.io/webhook
-```
-
 ## Troubleshooting
 
 ### Common Issues
 
 **Invalid Signatures**
-- Verify WEBHOOK_SECRET matches the one from webhook creation
+- Verify WEBHOOK_SECRET matches the one from webhook creation response
+- The secret should be used as-is (URL-safe Base64 string)
 - Ensure request body is raw bytes, not parsed JSON
-- Check that no middleware is modifying the request
 
 **Connection Refused**
 - Verify server is running: `curl http://localhost:3001/health`
@@ -250,5 +202,6 @@ curl -X DELETE http://localhost:3001/webhooks
 ## Files
 
 - `package.json` - Node.js dependencies and scripts
-- `webhook-server.js` - Main webhook server implementation
-- `test-webhook-flow.sh` - Automated testing script
+- `webhook-server.js` - Main webhook server implementation  
+- `start-webhook-server.sh` - Helper script to start server with secret
+- `README.md` - This documentation

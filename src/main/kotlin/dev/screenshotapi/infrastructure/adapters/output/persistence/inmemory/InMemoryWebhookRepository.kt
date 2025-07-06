@@ -117,6 +117,17 @@ class InMemoryWebhookDeliveryRepository : WebhookDeliveryRepository {
         return toDelete.size
     }
 
+    override suspend fun deleteOldDeliveries(before: Instant, status: WebhookDeliveryStatus?, limit: Int): Int {
+        val toDelete = deliveries.values
+            .filter { delivery ->
+                delivery.createdAt < before && (status == null || delivery.status == status)
+            }
+            .take(limit)
+            
+        toDelete.forEach { deliveries.remove(it.id) }
+        return toDelete.size
+    }
+
     override suspend fun getDeliveryStats(webhookConfigId: String, since: Instant): WebhookDeliveryStats {
         val deliveriesForConfig = deliveries.values
             .filter { it.webhookConfigId == webhookConfigId && it.createdAt >= since }

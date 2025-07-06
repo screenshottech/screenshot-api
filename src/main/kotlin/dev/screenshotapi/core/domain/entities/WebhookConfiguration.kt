@@ -20,8 +20,8 @@ data class WebhookConfiguration(
     init {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         require(url.isNotBlank()) { "Webhook URL cannot be blank" }
-        require(url.startsWith("https://") || url.startsWith("http://")) { 
-            "Webhook URL must start with http:// or https://" 
+        require(url.startsWith("https://") || url.startsWith("http://")) {
+            "Webhook URL must start with http:// or https://"
         }
         require(secret.length >= 32) { "Webhook secret must be at least 32 characters" }
         require(events.isNotEmpty()) { "At least one event must be subscribed" }
@@ -35,23 +35,23 @@ enum class WebhookEvent {
     // Screenshot events
     SCREENSHOT_COMPLETED,
     SCREENSHOT_FAILED,
-    
+
     // Credit events
     CREDITS_LOW,         // When credits drop below 20%
     CREDITS_EXHAUSTED,   // When credits reach 0
-    
+
     // Subscription events
     SUBSCRIPTION_RENEWED,
     SUBSCRIPTION_CANCELLED,
-    
+
     // Payment events
     PAYMENT_SUCCESSFUL,
     PAYMENT_FAILED,
     PAYMENT_PROCESSED,   // Alias for PAYMENT_SUCCESSFUL for backward compatibility
-    
+
     // User events
     USER_REGISTERED,     // When a new user registers
-    
+
     // Testing events
     WEBHOOK_TEST         // For testing webhook configurations
 }
@@ -85,13 +85,13 @@ data class WebhookDelivery(
         require(attempts >= 0) { "Attempts must be non-negative" }
         require(attempts <= maxAttempts) { "Attempts cannot exceed max attempts" }
     }
-    
+
     fun shouldRetry(): Boolean {
-        return status == WebhookDeliveryStatus.FAILED && 
+        return status == WebhookDeliveryStatus.FAILED &&
                attempts < maxAttempts &&
                responseCode?.let { it >= 500 || it == 429 } ?: true
     }
-    
+
     fun isSuccessful(): Boolean {
         return status == WebhookDeliveryStatus.DELIVERED
     }
@@ -107,15 +107,3 @@ enum class WebhookDeliveryStatus {
     FAILED,     // Failed after all retries
     RETRYING    // Failed but will be retried
 }
-
-/**
- * Webhook test payload for testing webhook configuration
- */
-data class WebhookTestPayload(
-    val event: String = "test",
-    val timestamp: String,
-    val data: Map<String, Any> = mapOf(
-        "message" to "This is a test webhook from Screenshot API",
-        "test" to true
-    )
-)

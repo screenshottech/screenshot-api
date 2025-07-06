@@ -43,5 +43,10 @@ data class ErrorResponseDto(
             code = "INTERNAL_SERVER_ERROR",
             message = message
         )
+        
+        fun rateLimitExceeded(message: String = "Rate limit exceeded") = ErrorResponseDto(
+            code = "RATE_LIMIT_EXCEEDED",
+            message = message
+        )
     }
 }
