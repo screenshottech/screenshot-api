@@ -6,20 +6,12 @@ import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
 import dev.screenshotapi.core.domain.exceptions.UserAlreadyExistsException
 import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.usecases.auth.*
-import dev.screenshotapi.infrastructure.adapters.input.rest.dto.CreateApiKeyRequestDto
-import dev.screenshotapi.infrastructure.adapters.input.rest.dto.LoginRequestDto
-import dev.screenshotapi.infrastructure.adapters.input.rest.dto.RegisterRequestDto
-import dev.screenshotapi.infrastructure.adapters.input.rest.dto.UpdateApiKeyRequestDto
-import dev.screenshotapi.infrastructure.adapters.input.rest.dto.UpdateProfileRequestDto
-import dev.screenshotapi.infrastructure.adapters.input.rest.dto.toDto
-import dev.screenshotapi.infrastructure.auth.UserPrincipal
-import dev.screenshotapi.infrastructure.auth.requireUserPrincipal
-import dev.screenshotapi.infrastructure.auth.requireUserId
+import dev.screenshotapi.infrastructure.adapters.input.rest.dto.*
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.providers.LocalAuthProvider
+import dev.screenshotapi.infrastructure.auth.requireUserPrincipal
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import org.koin.core.component.KoinComponent
@@ -47,7 +39,7 @@ class AuthController : KoinComponent {
             // Generate JWT token for the authenticated user
             val localAuthProvider = authProviderFactory.getProvider("local") as? LocalAuthProvider
             val jwt = localAuthProvider?.createToken(response.userId ?: "unknown") ?: "jwt_generation_failed"
-            
+
             call.respond(
                 HttpStatusCode.OK, mapOf(
                     "token" to jwt,
@@ -192,7 +184,7 @@ class AuthController : KoinComponent {
                     lastUsedAt = null // TODO: implement last used tracking
                 )
             }
-            
+
             val responseDto = dev.screenshotapi.infrastructure.adapters.input.rest.dto.ApiKeysListResponseDto(
                 apiKeys = apiKeysDto
             )
@@ -313,7 +305,7 @@ class AuthController : KoinComponent {
         try {
             // Get authenticated user
             val principal = call.requireUserPrincipal()
-            
+
             // Validate period parameter with proper error handling
             val periodParam = call.parameters["period"]
             val period = try {
@@ -328,12 +320,12 @@ class AuthController : KoinComponent {
                 )
                 return
             }
-            
-            val granularity = call.parameters["granularity"]?.let { 
-                try { 
-                    dev.screenshotapi.core.domain.entities.TimeGranularity.valueOf(it.uppercase()) 
-                } catch (e: IllegalArgumentException) { 
-                    dev.screenshotapi.core.domain.entities.TimeGranularity.DAILY 
+
+            val granularity = call.parameters["granularity"]?.let {
+                try {
+                    dev.screenshotapi.core.domain.entities.TimeGranularity.valueOf(it.uppercase())
+                } catch (e: IllegalArgumentException) {
+                    dev.screenshotapi.core.domain.entities.TimeGranularity.DAILY
                 }
             } ?: dev.screenshotapi.core.domain.entities.TimeGranularity.DAILY
 
@@ -342,7 +334,7 @@ class AuthController : KoinComponent {
                 period = period,
                 granularity = granularity
             )
-            
+
             val response = getUserUsageTimelineUseCase(request)
 
             call.respond(HttpStatusCode.OK, response.toDto())

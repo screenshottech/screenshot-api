@@ -32,7 +32,6 @@ import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
-import dev.screenshotapi.infrastructure.config.WebhookConfig
 import dev.screenshotapi.infrastructure.services.*
 import dev.screenshotapi.workers.JobRetryScheduler
 import dev.screenshotapi.workers.WorkerManager
@@ -291,9 +290,10 @@ fun serviceModule() = module {
     single {
         JwtAuthProvider(
             userRepository = get(),
-            jwtSecret = get<dev.screenshotapi.infrastructure.config.AuthConfig>().jwtSecret,
-            jwtIssuer = get<dev.screenshotapi.infrastructure.config.AuthConfig>().jwtIssuer,
-            jwtAudience = get<dev.screenshotapi.infrastructure.config.AuthConfig>().jwtAudience
+            jwtSecret = get<AuthConfig>().jwtSecret,
+            jwtIssuer = get<AuthConfig>().jwtIssuer,
+            jwtAudience = get<AuthConfig>().jwtAudience,
+            jwtExpirationHours = get<AuthConfig>().jwtExpirationHours
         )
     }
     single {

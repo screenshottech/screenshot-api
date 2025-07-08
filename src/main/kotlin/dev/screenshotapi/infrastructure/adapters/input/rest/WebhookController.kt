@@ -6,7 +6,7 @@ import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
 import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.usecases.webhook.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.webhook.*
-import dev.screenshotapi.infrastructure.auth.requireUserId
+import dev.screenshotapi.infrastructure.auth.requireHybridUserId
 import dev.screenshotapi.infrastructure.config.WebhookConfig
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -40,7 +40,7 @@ class WebhookController : KoinComponent {
 
     suspend fun createWebhook(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val request = call.receive<CreateWebhookRequestDto>()
 
             val webhook = createWebhookUseCase.invoke(
@@ -61,7 +61,7 @@ class WebhookController : KoinComponent {
 
     suspend fun listWebhooks(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val webhooks = listWebhooksUseCase.invoke(userId)
             val response = WebhookListResponseDto(
                 webhooks = webhooks.map { it.toDtoSafe() },
@@ -76,7 +76,7 @@ class WebhookController : KoinComponent {
 
     suspend fun getWebhook(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val webhookId = call.parameters["webhookId"]
                 ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponseDto.validation("webhookId is required"))
 
@@ -93,7 +93,7 @@ class WebhookController : KoinComponent {
 
     suspend fun updateWebhook(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val webhookId = call.parameters["webhookId"]
                 ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponseDto.validation("webhookId is required"))
 
@@ -121,7 +121,7 @@ class WebhookController : KoinComponent {
 
     suspend fun regenerateWebhookSecret(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val webhookId = call.parameters["webhookId"]
                 ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponseDto.validation("webhookId is required"))
 
@@ -140,7 +140,7 @@ class WebhookController : KoinComponent {
 
     suspend fun deleteWebhook(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val webhookId = call.parameters["webhookId"]
                 ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponseDto.validation("webhookId is required"))
 
@@ -163,7 +163,7 @@ class WebhookController : KoinComponent {
 
     suspend fun getWebhookDeliveries(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val webhookId = call.parameters["webhookId"]
                 ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponseDto.validation("webhookId is required"))
 
@@ -187,7 +187,7 @@ class WebhookController : KoinComponent {
 
     suspend fun getWebhookStats(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val webhookId = call.parameters["webhookId"]
                 ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponseDto.validation("webhookId is required"))
 
@@ -209,7 +209,7 @@ class WebhookController : KoinComponent {
 
     suspend fun getAllWebhookDeliveries(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
             val deliveries = getWebhookDeliveriesUseCase.getUserDeliveries(userId, limit)
 
@@ -226,7 +226,7 @@ class WebhookController : KoinComponent {
 
     suspend fun getWebhookDelivery(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val deliveryId = call.parameters["deliveryId"]
                 ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponseDto.validation("deliveryId is required"))
 
@@ -244,7 +244,7 @@ class WebhookController : KoinComponent {
 
     suspend fun getWebhookEvents(call: ApplicationCall) {
         try {
-            val userId = call.requireUserId()
+            val userId = call.requireHybridUserId()
             val events = WebhookEvent.values().map { event ->
                 mapOf(
                     "name" to event.name,
@@ -259,7 +259,7 @@ class WebhookController : KoinComponent {
     }
 
     suspend fun getDebugStats(call: ApplicationCall) {
-        val userId = call.requireUserId()
+        val userId = call.requireHybridUserId()
         val webhooks = listWebhooksUseCase.invoke(userId)
         val totalDeliveries = getWebhookDeliveriesUseCase.getUserDeliveries(userId, 1000)
 
@@ -289,7 +289,7 @@ class WebhookController : KoinComponent {
     }
 
     suspend fun testWebhook(call: ApplicationCall) {
-        val userId = call.requireUserId()
+        val userId = call.requireHybridUserId()
         val webhookId = call.parameters["webhookId"]
             ?: throw ValidationException("webhookId is required")
 

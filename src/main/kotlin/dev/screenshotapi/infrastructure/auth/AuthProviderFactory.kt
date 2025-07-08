@@ -51,15 +51,14 @@ class AuthProviderFactory(
     }
     
     private fun initializeProviders() {
-        // Always initialize local provider
         providers["local"] = LocalAuthProvider(
             userRepository = userRepository,
             jwtSecret = authConfig.jwtSecret,
             jwtIssuer = authConfig.jwtIssuer,
-            jwtAudience = authConfig.jwtAudience
+            jwtAudience = authConfig.jwtAudience,
+            jwtExpirationHours = authConfig.jwtExpirationHours
         )
         
-        // Initialize Clerk provider if configured
         if (authConfig.enabledAuthProviders.contains("clerk")) {
             providers["clerk"] = ClerkAuthProvider(
                 userRepository = userRepository,

@@ -12,7 +12,8 @@ class LocalAuthProvider(
     private val userRepository: UserRepository,
     private val jwtSecret: String,
     private val jwtIssuer: String,
-    private val jwtAudience: String
+    private val jwtAudience: String,
+    private val jwtExpirationHours: Int
 ) : AuthProvider {
     
     private val logger = LoggerFactory.getLogger(LocalAuthProvider::class.java)
@@ -74,19 +75,18 @@ class LocalAuthProvider(
     }
     
     suspend fun createToken(userId: String): String {
-        // Get user data to include roles in JWT
         val user = userRepository.findById(userId)
         val userRoles = user?.roles?.map { it.name } ?: listOf("USER")
         
         return JWT.create()
             .withAudience(jwtAudience)
             .withIssuer(jwtIssuer)
-            .withSubject(userId) // Use standard JWT subject claim
-            .withClaim("userId", userId) // Keep for backward compatibility
-            .withClaim("roles", userRoles) // Add roles to JWT
-            .withClaim("email", user?.email) // Add email for convenience
-            .withIssuedAt(java.util.Date()) // Add issued at time
-            .withExpiresAt(java.util.Date(System.currentTimeMillis() + 24 * 60 * 60 * 1000)) // 24 hours
+            .withSubject(userId)
+            .withClaim("userId", userId)
+            .withClaim("roles", userRoles)
+            .withClaim("email", user?.email)
+            .withIssuedAt(java.util.Date())
+            .withExpiresAt(java.util.Date(System.currentTimeMillis() + jwtExpirationHours * 60 * 60 * 1000))
             .sign(algorithm)
     }
 }
