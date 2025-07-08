@@ -22,7 +22,8 @@ data class AuthConfig(
     val defaultAuthProvider: String,
     val enabledAuthProviders: List<String>,
     val clerkDomain: String?,
-    val hmacTokenLength: Int
+    val hmacTokenLength: Int,
+    val realm: String
 ) {
     companion object {
         fun load(): AuthConfig {
@@ -62,7 +63,9 @@ data class AuthConfig(
                 ?: listOf("local"),
             clerkDomain = System.getenv("CLERK_DOMAIN"),
             hmacTokenLength = System.getenv("HMAC_TOKEN_LENGTH")?.toInt()
-                ?: 32
+                ?: 32,
+            realm = System.getenv("AUTH_REALM")
+                ?: "screenshotapi-api"
             )
         }
         

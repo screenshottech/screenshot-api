@@ -1,15 +1,13 @@
 package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
-import dev.screenshotapi.infrastructure.adapters.input.rest.BillingController
-import dev.screenshotapi.infrastructure.adapters.input.rest.webhookRoutes
+import dev.screenshotapi.infrastructure.auth.AuthCombinations
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.config.AppConfig
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.http.content.*
-import io.ktor.server.plugins.ratelimit.RateLimitName
-import io.ktor.server.plugins.ratelimit.rateLimit
+import io.ktor.server.plugins.ratelimit.*
 import io.ktor.server.routing.*
 import org.koin.ktor.ext.inject
 import java.io.File
@@ -41,7 +39,7 @@ fun Application.configureRouting() {
             // Public routes
             post("/auth/login") { authController.login(call) }
             post("/auth/register") { authController.register(call) }
-            
+
             // Multi-provider auth routes
             multiProviderAuthRoutes(authProviderFactory)
 
@@ -51,7 +49,7 @@ fun Application.configureRouting() {
                 get("/plans") { billingController.getPlans(call) }
 
                 // Authenticated endpoints - require JWT for user management
-                authenticate("jwt-auth") {
+                authenticate(*AuthCombinations.USER_MANAGEMENT) {
                     post("/checkout") { billingController.createCheckout(call) }
                     get("/subscription") { billingController.getSubscription(call) }
                     post("/portal") { billingController.createBillingPortal(call) }
@@ -61,28 +59,28 @@ fun Application.configureRouting() {
                 post("/webhook") { billingController.handleWebhook(call) }
             }
 
-            // Screenshot operations - Hybrid authentication (JWT OR API Key)
-            authenticate("jwt-auth", "api-key-auth") {
+            // Screenshot operations - Hybrid authentication (JWT OR API Key OR X-API-Key)
+            authenticate(*AuthCombinations.OPERATIONS) {
                 // Screenshot creation endpoint with rate limiting
                 rateLimit(RateLimitName("screenshots")) {
                     post("/screenshots") { screenshotController.takeScreenshot(call) }
                 }
-                
+
                 // Manual retry endpoint for failed/stuck jobs
                 post("/screenshots/{jobId}/retry") { screenshotController.retryScreenshot(call) }
-                
+
                 // Screenshot status by job ID
                 get("/screenshots/{jobId}") { screenshotController.getScreenshotStatus(call) }
-                
+
                 // Screenshot listing (shows screenshots for authenticated user)
                 get("/screenshots") { screenshotController.listScreenshots(call) }
-                
+
                 // Bulk screenshot status endpoint for efficient polling
                 post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
             }
 
             // User management endpoints - JWT authentication only
-            authenticate("jwt-auth") {
+            authenticate(*AuthCombinations.USER_MANAGEMENT) {
                 route("/user") {
                     get("/profile") { authController.getProfile(call) }
                     put("/profile") { authController.updateProfile(call) }
@@ -95,18 +93,20 @@ fun Application.configureRouting() {
                     get("/usage") { authController.getUsage(call) }
                     get("/usage/timeline") { authController.getUsageTimeline(call) }
                 }
+            }
 
-                // Webhook management endpoints - JWT authentication only
+            // Webhook management - Hybrid authentication (JWT OR API Key OR X-API-Key)
+            authenticate(*AuthCombinations.OPERATIONS) {
                 webhookRoutes()
             }
 
             // Admin endpoints - JWT authentication only
-            authenticate("jwt-auth") {
+            authenticate(*AuthCombinations.USER_MANAGEMENT) {
                 route("/admin") {
                     get("/users") { adminController.listUsers(call) }
                     get("/users/{userId}") { adminController.getUser(call) }
                     get("/stats") { adminController.getStats(call) }
-                    
+
                     // Subscription management
                     get("/subscriptions") { adminController.listSubscriptions(call) }
                     get("/subscriptions/{subscriptionId}") { adminController.getSubscriptionDetails(call) }

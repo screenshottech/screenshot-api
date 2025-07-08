@@ -33,11 +33,12 @@ services:
       REDIS_URL: ${REDIS_URL}
       REDIS_MAX_CONNECTIONS: ${REDIS_MAX_CONNECTIONS:-30}
 
-      # JWT configuration
+      # JWT and Authentication configuration
       JWT_SECRET: ${JWT_SECRET}
       JWT_ISSUER: ${JWT_ISSUER:-screenshotapi-production}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-screenshotapi-production-users}
       JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      AUTH_REALM: ${AUTH_REALM:-screenshotapi-production}
 
       # Storage configuration
       STORAGE_USE_LOCAL: ${STORAGE_USE_LOCAL:-false}
