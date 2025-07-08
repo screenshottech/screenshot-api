@@ -15,14 +15,14 @@ class GetUserActivityUseCase(
         // Verify user exists
         val user = userRepository.findById(request.userId)
             ?: throw ResourceNotFoundException("User", request.userId)
-        
+
         // Get recent usage logs for the user
         val recentLogs = usageLogRepository.findByUserId(
             userId = request.userId,
             limit = request.limit,
             offset = 0
         )
-        
+
         // Convert usage logs to user activities
         val activities = recentLogs.map { log ->
             UserActivity(
@@ -34,14 +34,14 @@ class GetUserActivityUseCase(
                 timestamp = log.timestamp
             )
         }
-        
+
         return GetUserActivityResponse(
             userId = request.userId,
             days = request.days,
             activities = activities
         )
     }
-    
+
     private fun convertUsageLogActionToUserActivityType(action: UsageLogAction): UserActivityType {
         return when (action) {
             UsageLogAction.SCREENSHOT_CREATED -> UserActivityType.SCREENSHOT_CREATED
@@ -57,37 +57,51 @@ class GetUserActivityUseCase(
             UsageLogAction.CREDITS_DEDUCTED -> UserActivityType.SCREENSHOT_CREATED // Credit usage implies screenshot
             UsageLogAction.CREDITS_ADDED -> UserActivityType.CREDITS_PROVISIONED_ADMIN
             UsageLogAction.EMAIL_SENT -> UserActivityType.LOGIN // Email activity as engagement
+            // OCR Actions
+            UsageLogAction.OCR_CREATED -> UserActivityType.SCREENSHOT_CREATED // Treat OCR as similar to screenshot
+            UsageLogAction.OCR_COMPLETED -> UserActivityType.SCREENSHOT_COMPLETED
+            UsageLogAction.OCR_FAILED -> UserActivityType.SCREENSHOT_FAILED
+            UsageLogAction.OCR_PRICE_EXTRACTION -> UserActivityType.SCREENSHOT_COMPLETED // Specialized OCR operation
         }
     }
-    
+
     private fun generateActivityDescription(log: UsageLog): String {
         return when (log.action) {
-            UsageLogAction.SCREENSHOT_CREATED -> 
+            UsageLogAction.SCREENSHOT_CREATED ->
                 "Created screenshot request"
-            UsageLogAction.SCREENSHOT_COMPLETED -> 
+            UsageLogAction.SCREENSHOT_COMPLETED ->
                 "Screenshot generation completed successfully"
-            UsageLogAction.SCREENSHOT_FAILED -> 
+            UsageLogAction.SCREENSHOT_FAILED ->
                 "Screenshot generation failed"
-            UsageLogAction.SCREENSHOT_RETRIED -> 
+            UsageLogAction.SCREENSHOT_RETRIED ->
                 "Retried failed screenshot"
-            UsageLogAction.CREDITS_DEDUCTED -> 
+            UsageLogAction.CREDITS_DEDUCTED ->
                 "Used ${log.creditsUsed} credits"
-            UsageLogAction.CREDITS_ADDED -> 
+            UsageLogAction.CREDITS_ADDED ->
                 "Added ${log.creditsUsed} credits"
-            UsageLogAction.API_KEY_CREATED -> 
+            UsageLogAction.API_KEY_CREATED ->
                 "Created new API key"
-            UsageLogAction.API_KEY_USED -> 
+            UsageLogAction.API_KEY_USED ->
                 "Used API key for request"
-            UsageLogAction.USER_REGISTERED -> 
+            UsageLogAction.USER_REGISTERED ->
                 "User account registered"
-            UsageLogAction.PLAN_UPGRADED -> 
+            UsageLogAction.PLAN_UPGRADED ->
                 "Plan upgraded"
-            UsageLogAction.PLAN_CHANGED -> 
+            UsageLogAction.PLAN_CHANGED ->
                 "Plan changed"
-            UsageLogAction.PAYMENT_PROCESSED -> 
+            UsageLogAction.PAYMENT_PROCESSED ->
                 "Payment processed successfully"
-            UsageLogAction.EMAIL_SENT -> 
+            UsageLogAction.EMAIL_SENT ->
                 "Email notification sent"
+            // OCR Actions
+            UsageLogAction.OCR_CREATED ->
+                "Created OCR extraction request"
+            UsageLogAction.OCR_COMPLETED ->
+                "OCR extraction completed successfully"
+            UsageLogAction.OCR_FAILED ->
+                "OCR extraction failed"
+            UsageLogAction.OCR_PRICE_EXTRACTION ->
+                "Performed price extraction analysis"
         }
     }
 }

@@ -2,6 +2,9 @@ package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.auth.AuthCombinations
+import dev.screenshotapi.infrastructure.adapters.input.rest.BillingController
+import dev.screenshotapi.infrastructure.adapters.input.rest.webhookRoutes
+import dev.screenshotapi.infrastructure.adapters.input.rest.configureOcrRoutes
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.config.AppConfig
 import io.ktor.server.application.*
@@ -78,6 +81,9 @@ fun Application.configureRouting() {
                 // Bulk screenshot status endpoint for efficient polling
                 post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
             }
+
+            // OCR operations - API Key authentication
+            configureOcrRoutes()
 
             // User management endpoints - JWT authentication only
             authenticate(*AuthCombinations.USER_MANAGEMENT) {

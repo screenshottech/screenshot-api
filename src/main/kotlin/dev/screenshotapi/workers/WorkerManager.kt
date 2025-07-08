@@ -11,6 +11,7 @@ import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
 import dev.screenshotapi.infrastructure.services.EmailService
+import dev.screenshotapi.infrastructure.services.ScreenshotOcrWorkflowService
 import kotlinx.coroutines.*
 import kotlinx.datetime.Instant
 import org.slf4j.LoggerFactory
@@ -31,7 +32,8 @@ class WorkerManager(
     private val retryPolicy: RetryPolicy,
     private val jobRetryScheduler: JobRetryScheduler,
     private val config: AppConfig,
-    private val emailService: EmailService? = null
+    private val emailService: EmailService? = null,
+    private val ocrWorkflowService: ScreenshotOcrWorkflowService?
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
     private val workers = ConcurrentHashMap<String, ScreenshotWorker>()
@@ -147,7 +149,8 @@ class WorkerManager(
             metricsService = metricsService,
             retryPolicy = retryPolicy,
             config = config.screenshot,
-            emailService = emailService
+            emailService = emailService,
+            ocrWorkflowService = ocrWorkflowService,
         )
 
         workers[workerId] = worker
@@ -166,7 +169,7 @@ class WorkerManager(
 
                 // If we're below the minimum and the manager is still running, start a new worker
                 if (isRunning.get() && workers.size < minWorkers) {
-                    logger.info("Worker count below minimum: current={}, min={}, starting replacement", 
+                    logger.info("Worker count below minimum: current={}, min={}, starting replacement",
                         workers.size, minWorkers)
                     delay(5000)
                     if (isRunning.get()) {

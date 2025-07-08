@@ -134,6 +134,24 @@ class UpdateDailyStatsUseCase(
                     // These actions don't affect daily stats, return current state
                     dailyStatsRepository.findByUserAndDate(request.userId, request.date)
                 }
+                
+                // OCR Actions - treat as similar to screenshots for stats
+                UsageLogAction.OCR_CREATED -> {
+                    currentStats.incrementScreenshotsCreated()
+                }
+                
+                UsageLogAction.OCR_COMPLETED -> {
+                    currentStats.incrementScreenshotsCompleted()
+                }
+                
+                UsageLogAction.OCR_FAILED -> {
+                    currentStats.incrementScreenshotsFailed()
+                }
+                
+                UsageLogAction.OCR_PRICE_EXTRACTION -> {
+                    // Price extraction is a specialized operation, count as completed
+                    currentStats.incrementScreenshotsCompleted()
+                }
             }
 
             // atomicIncrement already handles the database operations

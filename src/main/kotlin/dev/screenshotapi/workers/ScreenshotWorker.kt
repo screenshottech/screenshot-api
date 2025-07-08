@@ -18,6 +18,7 @@ import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
 import dev.screenshotapi.infrastructure.services.EmailService
+import dev.screenshotapi.infrastructure.services.ScreenshotOcrWorkflowService
 import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -40,6 +41,8 @@ class ScreenshotWorker(
     private val retryPolicy: RetryPolicy,
     private val config: ScreenshotConfig,
     private val emailService: EmailService? = null
+    private val ocrWorkflowService: ScreenshotOcrWorkflowService?,
+    private val config: ScreenshotConfig
 ) {
     private val logger = LoggerFactory.getLogger("${this::class.simpleName}-$id")
 
@@ -161,7 +164,7 @@ class ScreenshotWorker(
             // 1. Update status to "processing"
             val processingJob = job.markAsProcessing()
             screenshotRepository.update(processingJob)
-            logger.info("Job state transition: jobId={}, from=QUEUED, to=PROCESSING, userId={}", 
+            logger.info("Job state transition: jobId={}, from=QUEUED, to=PROCESSING, userId={}",
                 job.id, job.userId)
 
             // 2. Log screenshot creation in usage logs
@@ -187,7 +190,7 @@ class ScreenshotWorker(
             // 4. Update status to "completed"
             val completedJob = job.markAsCompleted(screenshotResult.url, processingTime, screenshotResult.fileSizeBytes)
             screenshotRepository.update(completedJob)
-            logger.info("Job state transition: jobId={}, from=PROCESSING, to=COMPLETED, userId={}, processingTime={}ms", 
+            logger.info("Job state transition: jobId={}, from=PROCESSING, to=COMPLETED, userId={}, processingTime={}ms",
                 job.id, job.userId, processingTime)
 
             // 5. Log screenshot completion in usage logs (no credits here, just event logging)
@@ -209,25 +212,43 @@ class ScreenshotWorker(
             // 6. Deduct credits (this also tracks usage in monthly tracking)
             val creditsToDeduct = job.jobType.defaultCredits
             deductCreditsUseCase(DeductCreditsRequest(
-                userId = job.userId, 
+                userId = job.userId,
                 amount = creditsToDeduct,
                 jobId = job.id,
                 reason = JobType.getDeductionReason(job.jobType)
             ))
-            logger.info("Credits deducted: jobId={}, userId={}, jobType={}, amount={}", 
+            logger.info("Credits deducted: jobId={}, userId={}, jobType={}, amount={}",
                 job.id, job.userId, job.jobType.name, creditsToDeduct)
 
             // Note: Removed usageTrackingService.trackUsage() to prevent double credit deduction
 
+            // 6.5. Process OCR if requested
+            var finalCompletedJob = completedJob
+            if (completedJob.ocrRequested && ocrWorkflowService != null) {
+                try {
+                    logger.info("Starting OCR processing for job ${completedJob.id}")
+                    val ocrResult = ocrWorkflowService.processOcrForScreenshot(completedJob)
+
+                    if (ocrResult != null) {
+                        // Reload job to get OCR result ID
+                        finalCompletedJob = screenshotRepository.findById(completedJob.id) ?: completedJob
+                        logger.info("OCR processing completed for job ${completedJob.id}, OCR result ID: ${ocrResult.id}")
+                    }
+                } catch (e: Exception) {
+                    logger.error("OCR processing failed for job ${completedJob.id}, continuing with screenshot result", e)
+                    // OCR failure should not fail the screenshot job
+                }
+            }
+
             // 7. Send webhook if configured
-            sendWebhookIfConfigured(completedJob)
+            sendWebhookIfConfigured(finalCompletedJob)
 
             // 8. Update metrics
             recordSuccessMetrics(processingTime)
 
-            logger.info("Job completed successfully: jobId={}, userId={}, processingTime={}ms, resultUrl={}", 
+            logger.info("Job completed successfully: jobId={}, userId={}, processingTime={}ms, resultUrl={}",
                 job.id, job.userId, processingTime, screenshotResult.url)
-            
+
             // 9. Send first screenshot email if this is user's first completed screenshot
             val user = userRepository.findById(job.userId)
             if (user != null) {
@@ -258,7 +279,7 @@ class ScreenshotWorker(
 
         repeat(config.retryAttempts) { attempt ->
             try {
-                logger.info("Screenshot attempt: jobId={}, attempt={}/{}, url={}", 
+                logger.info("Screenshot attempt: jobId={}, attempt={}/{}, url={}",
                     job.id, attempt + 1, config.retryAttempts, job.request.url)
                 return screenshotService.takeSecureScreenshot(
                     request = job.request,
@@ -271,11 +292,11 @@ class ScreenshotWorker(
                 lastException = e
 
                 if (attempt < config.retryAttempts - 1) {
-                    logger.warn("Screenshot attempt failed: jobId={}, attempt={}/{}, retryIn={}, error={}", 
+                    logger.warn("Screenshot attempt failed: jobId={}, attempt={}/{}, retryIn={}, error={}",
                         job.id, attempt + 1, config.retryAttempts, config.retryDelay, e.message)
                     delay(config.retryDelay.inWholeMilliseconds)
                 } else {
-                    logger.error("All screenshot attempts exhausted: jobId={}, attempts={}, finalError={}", 
+                    logger.error("All screenshot attempts exhausted: jobId={}, attempts={}, finalError={}",
                         job.id, config.retryAttempts, e.message, e)
                 }
             }
@@ -300,7 +321,7 @@ class ScreenshotWorker(
         try {
             // Send webhook notifications using the new webhook system
             notificationService.notifyScreenshotEvent(job)
-            
+
             // Handle legacy webhook URL if present (for backward compatibility)
             job.webhookUrl?.let { webhookUrl ->
                 logger.warn("Legacy webhook URL detected for job ${job.id}. Consider migrating to webhook configurations.")
@@ -311,7 +332,7 @@ class ScreenshotWorker(
                     screenshotRepository.update(updatedJob)
                     logger.info("Legacy webhook sent successfully: jobId={}, webhookUrl={}", job.id, webhookUrl)
                 } catch (e: Exception) {
-                    logger.error("Legacy webhook sending failed: jobId={}, webhookUrl={}, error={}", 
+                    logger.error("Legacy webhook sending failed: jobId={}, webhookUrl={}, error={}",
                         job.id, webhookUrl, e.message, e)
                 }
             }
@@ -324,14 +345,14 @@ class ScreenshotWorker(
         try {
             val errorMessage = error.message ?: "Unknown error"
             val shouldRetry = job.canRetry() && retryPolicy.shouldRetry(error)
-            
+
             if (shouldRetry) {
                 val delay = retryPolicy.calculateDelay(job.retryCount)
                 val retryJob = job.scheduleRetry(errorMessage, delay)
-                
+
                 screenshotRepository.update(retryJob)
                 queueRepository.enqueueDelayed(retryJob, delay)
-                
+
                 logUsageUseCase.invoke(LogUsageUseCase.Request(
                     userId = job.userId,
                     action = UsageLogAction.SCREENSHOT_RETRIED,
@@ -346,10 +367,10 @@ class ScreenshotWorker(
                         "errorType" to (error::class.simpleName ?: "Exception")
                     )
                 ))
-                
-                logger.warn("Job failed but scheduled for retry: jobId={}, retryCount={}, delay={}s, error={}", 
+
+                logger.warn("Job failed but scheduled for retry: jobId={}, retryCount={}, delay={}s, error={}",
                     job.id, job.retryCount, delay.inWholeSeconds, errorMessage)
-                
+
             } else {
                 val failedJob = if (!job.canRetry()) {
                     job.markAsFailed(errorMessage, processingTime)
@@ -360,11 +381,11 @@ class ScreenshotWorker(
                         completedAt = Clock.System.now()
                     )
                 }
-                
+
                 screenshotRepository.update(failedJob)
-                
+
                 val reason = if (!job.canRetry()) "Max retries exceeded" else "Non-retryable error"
-                logger.info("Job state transition: jobId={}, from=PROCESSING, to=FAILED, userId={}, reason={}, processingTime={}ms", 
+                logger.info("Job state transition: jobId={}, from=PROCESSING, to=FAILED, userId={}, reason={}, processingTime={}ms",
                     job.id, job.userId, reason, processingTime)
 
                 logUsageUseCase.invoke(LogUsageUseCase.Request(
@@ -386,14 +407,14 @@ class ScreenshotWorker(
                 ))
 
                 recordFailureMetrics(processingTime, error)
-                
+
                 // Send webhook notification for failed job
                 sendWebhookIfConfigured(failedJob)
-                
-                logger.error("Job permanently failed: jobId={}, userId={}, retryCount={}, processingTime={}ms, reason={}, errorType={}, errorMessage={}", 
+
+                logger.error("Job permanently failed: jobId={}, userId={}, retryCount={}, processingTime={}ms, reason={}, errorType={}, errorMessage={}",
                     job.id, job.userId, job.retryCount, processingTime, reason, error::class.simpleName, errorMessage, error)
             }
-            
+
         } catch (e: Exception) {
             logger.error("Failed to handle job failure for ${job.id}", e)
         }
@@ -474,7 +495,7 @@ class ScreenshotWorker(
             isRunning = isRunning.get()
         )
     )
-    
+
     /**
      * Sends first screenshot email if this is the user's first successfully completed screenshot.
      * Uses O(1) User entity flag instead of expensive COUNT(*) database query.
@@ -489,24 +510,24 @@ class ScreenshotWorker(
             logger.debug("FIRST_SCREENSHOT_EMAIL_DISABLED: Email service not available [userId=${user.id}]")
             return
         }
-        
+
         try {
             // O(1) check using User entity flag instead of COUNT(*) query
             if (!user.hasCompletedFirstScreenshot()) {
                 logger.info("FIRST_SCREENSHOT_EMAIL_TRIGGER: Sending first screenshot email [userId=${user.id}, jobId=${job.id}]")
-                
+
                 // Mark user as having completed first screenshot to prevent duplicates
                 val updatedUser = user.markFirstScreenshotCompleted()
                 userRepository.save(updatedUser)
                 logger.debug("FIRST_SCREENSHOT_FLAG_UPDATED: User marked as having completed first screenshot [userId=${user.id}]")
-                
+
                 // Send celebration email
                 emailService.sendFirstScreenshotEmail(
                     user = user,
                     screenshotUrl = result.url,
                     processingTimeMs = processingTimeMs
                 )
-                
+
                 logger.info("FIRST_SCREENSHOT_EMAIL_SUCCESS: First screenshot email sent successfully [userId=${user.id}, jobId=${job.id}]")
             } else {
                 logger.debug("FIRST_SCREENSHOT_EMAIL_SKIPPED: User already completed first screenshot [userId=${user.id}, jobId=${job.id}, completedAt=${user.firstScreenshotCompletedAt}]")

@@ -31,7 +31,10 @@ data class ScreenshotJob(
     val isRetryable: Boolean = true,
     val retryType: RetryType = RetryType.AUTOMATIC,
     val lockedBy: String? = null,
-    val lockedAt: Instant? = null
+    val lockedAt: Instant? = null,
+    // OCR Integration - GitHub Issue #4
+    val ocrResultId: String? = null,
+    val ocrRequested: Boolean = false
 ) {
     fun markAsProcessing(): ScreenshotJob = copy(
         status = ScreenshotStatus.PROCESSING,

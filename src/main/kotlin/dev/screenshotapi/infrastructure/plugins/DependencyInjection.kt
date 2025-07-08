@@ -5,6 +5,7 @@ import dev.screenshotapi.core.domain.services.EmailProvider
 import dev.screenshotapi.core.domain.services.RateLimitingService
 import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.domain.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.OcrService
 import dev.screenshotapi.core.ports.output.*
 import dev.screenshotapi.core.usecases.admin.*
 import dev.screenshotapi.core.usecases.auth.*
@@ -16,6 +17,7 @@ import dev.screenshotapi.core.usecases.stats.AggregateStatsUseCase
 import dev.screenshotapi.core.usecases.stats.UpdateDailyStatsUseCase
 import dev.screenshotapi.core.usecases.webhook.*
 import dev.screenshotapi.core.usecases.email.*
+import dev.screenshotapi.core.usecases.ocr.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.output.TokenGenerationAdapter
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
@@ -25,6 +27,7 @@ import dev.screenshotapi.infrastructure.adapters.output.email.MockEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.email.AwsSesEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.email.GmailEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.*
+import dev.screenshotapi.infrastructure.adapters.output.ocr.PaddleOcrService
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.BCryptHashingAdapter
@@ -37,6 +40,8 @@ import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
+import dev.screenshotapi.infrastructure.config.WebhookConfig
+import dev.screenshotapi.infrastructure.config.OcrConfig
 import dev.screenshotapi.infrastructure.services.*
 import dev.screenshotapi.infrastructure.config.EmailConfig
 import dev.screenshotapi.workers.JobRetryScheduler
@@ -81,6 +86,7 @@ fun configModule(config: AppConfig) = module {
     single { config.billing }
     single { config.billing.stripe }
     single { config.webhook }
+    single { config.ocr }
     single { config.email }
 }
 
@@ -98,6 +104,7 @@ fun repositoryModule(config: AppConfig) = module {
     single<WebhookConfigurationRepository> { createWebhookConfigurationRepository(config, getOrNull()) }
     single<WebhookDeliveryRepository> { createWebhookDeliveryRepository(config, getOrNull()) }
     single<EmailLogRepository> { createEmailLogRepository(config, getOrNull()) }
+    single<OcrResultRepository> { createOcrResultRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
     single<HmacPort> { HmacAdapter(get()) }
@@ -172,6 +179,9 @@ private fun createEmailProvider(config: EmailConfig): EmailProvider {
         else -> MockEmailProvider()
     }
 }
+
+private fun createOcrResultRepository(config: AppConfig, database: Database?): OcrResultRepository =
+    if (config.database.useInMemory) InMemoryOcrResultRepository() else PostgreSQLOcrResultRepository(database!!)
 
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
@@ -260,6 +270,10 @@ fun useCaseModule() = module {
     single { SendWelcomeEmailUseCase(get<UserRepository>(), get<EmailLogRepository>(), get<EmailService>(), get<LogUsageUseCase>()) }
     single { SendCreditAlertUseCase(get<UserRepository>(), get<EmailLogRepository>(), get<EmailService>(), get<LogUsageUseCase>()) }
     single { GetEmailLogsByUserUseCase(get<EmailLogRepository>(), get<UserRepository>()) }
+
+    // OCR use cases
+    single { ExtractTextUseCase(get<OcrService>(), get<UserRepository>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
+    single { ExtractPriceDataUseCase(get<ExtractTextUseCase>(), get<LogUsageUseCase>()) }
     single { ProvisionSubscriptionCreditsUseCase(get<SubscriptionRepository>(), get<UserRepository>(), get<PlanRepository>(), get<AddCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { HandleSubscriptionWebhookUseCase(get<PaymentGatewayPort>(), get<SubscriptionRepository>(), get<UserRepository>(), get<ProvisionSubscriptionCreditsUseCase>()) }
 
@@ -296,6 +310,20 @@ fun serviceModule() = module {
         )
     }
     single<RateLimitingService> { RateLimitingServiceImpl(get(), get(), get()) }
+    single<OcrService> { PaddleOcrService(
+        pythonPath = get<OcrConfig>().paddleOcr.pythonPath,
+        paddleOcrPath = get<OcrConfig>().paddleOcr.paddleOcrPath,
+        workingDirectory = get<OcrConfig>().paddleOcr.workingDirectory,
+        timeoutSeconds = get<OcrConfig>().paddleOcr.timeoutSeconds
+    ) }
+    single { ScreenshotOcrWorkflowService(
+        screenshotRepository = get(),
+        ocrResultRepository = get(),
+        extractTextUseCase = get(),
+        extractPriceDataUseCase = get(),
+        storagePort = get(),
+        httpClient = get()
+    ) }
     single<HttpClient> {
         HttpClient(CIO) {
             install(ContentNegotiation) {
@@ -336,7 +364,9 @@ fun serviceModule() = module {
             retryPolicy = get(),
             jobRetryScheduler = get(),
             config = get(),
-            emailService = getOrNull<EmailService>()
+            emailService = getOrNull<EmailService>(),
+            ocrWorkflowService = getOrNull(),
+            config = get()
         )
     }
 
