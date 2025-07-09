@@ -1014,7 +1014,494 @@ paths:
                 message: "Job is currently being processed by another worker"
                 status: 409
 
-  # Health check endpoint
+  /api/v1/screenshots/status/bulk:
+    post:
+      tags: [Screenshots]
+      summary: Bulk screenshot status check
+      description: |
+        Check the status of multiple screenshot jobs in a single request.
+        This endpoint is optimized for efficient polling of multiple jobs,
+        reducing the number of API calls needed for status monitoring.
+      security:
+        - apiKey: []
+        - apiKeyId: []
+          bearerAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - jobIds
+              properties:
+                jobIds:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 50
+                  description: List of job IDs to check (max 50)
+                  example: ["job_1749294000_abc12345", "job_1749294001_def67890"]
+      responses:
+        '200':
+          description: Bulk status response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScreenshotStatusResponse'
+                  summary:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 2
+                      completed:
+                        type: integer
+                        example: 1
+                      failed:
+                        type: integer
+                        example: 0
+                      processing:
+                        type: integer
+                        example: 1
+                      queued:
+                        type: integer
+                        example: 0
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Billing endpoints
+  /api/v1/billing/plans:
+    get:
+      tags: [Billing]
+      summary: Get available subscription plans
+      description: Retrieve all available subscription plans with pricing and features
+      responses:
+        '200':
+          description: List of available plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plans:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "plan_starter"
+                        name:
+                          type: string
+                          example: "Starter Plan"
+                        price:
+                          type: number
+                          example: 9.99
+                        currency:
+                          type: string
+                          example: "USD"
+                        credits:
+                          type: integer
+                          example: 1000
+                        features:
+                          type: array
+                          items:
+                            type: string
+                          example: ["1000 screenshots/month", "API access", "Email support"]
+
+  /api/v1/billing/checkout:
+    post:
+      tags: [Billing]
+      summary: Create Stripe checkout session
+      description: Create a Stripe checkout session for plan subscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - planId
+              properties:
+                planId:
+                  type: string
+                  example: "plan_starter"
+                successUrl:
+                  type: string
+                  format: uri
+                  example: "https://yourapp.com/success"
+                cancelUrl:
+                  type: string
+                  format: uri
+                  example: "https://yourapp.com/cancel"
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                    example: "cs_test_123"
+                  url:
+                    type: string
+                    format: uri
+                    example: "https://checkout.stripe.com/pay/cs_test_123"
+
+  /api/v1/billing/subscription:
+    get:
+      tags: [Billing]
+      summary: Get user subscription
+      description: Get the current user's subscription details
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User subscription details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptionId:
+                    type: string
+                    example: "sub_123"
+                  planId:
+                    type: string
+                    example: "plan_starter"
+                  status:
+                    type: string
+                    example: "active"
+                  currentPeriodEnd:
+                    type: string
+                    format: date-time
+                    example: "2025-02-01T00:00:00Z"
+
+  /api/v1/billing/portal:
+    post:
+      tags: [Billing]
+      summary: Create billing portal session
+      description: Create a Stripe billing portal session for subscription management
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - returnUrl
+              properties:
+                returnUrl:
+                  type: string
+                  format: uri
+                  example: "https://yourapp.com/billing"
+      responses:
+        '200':
+          description: Billing portal session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    example: "https://billing.stripe.com/session/12345"
+
+  /api/v1/billing/webhook:
+    post:
+      tags: [Billing]
+      summary: Stripe webhook handler
+      description: Handle Stripe webhook events for subscription updates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Stripe webhook event payload
+      responses:
+        '200':
+          description: Webhook processed successfully
+        '400':
+          description: Invalid webhook payload
+
+  # Webhook endpoints
+  /api/v1/webhooks:
+    post:
+      tags: [Webhooks]
+      summary: Create webhook configuration
+      description: Create a new webhook configuration for event notifications
+      security:
+        - apiKey: []
+        - apiKeyId: []
+          bearerAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+                - events
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://yourapp.com/webhooks"
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [SCREENSHOT_COMPLETED, SCREENSHOT_FAILED, CREDITS_LOW, CREDITS_EXHAUSTED]
+                  example: ["SCREENSHOT_COMPLETED", "SCREENSHOT_FAILED"]
+                isActive:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Webhook created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "webhook_123"
+                  url:
+                    type: string
+                    format: uri
+                    example: "https://yourapp.com/webhooks"
+                  events:
+                    type: array
+                    items:
+                      type: string
+                    example: ["SCREENSHOT_COMPLETED", "SCREENSHOT_FAILED"]
+                  secret:
+                    type: string
+                    example: "whsec_abc123"
+                  isActive:
+                    type: boolean
+                    example: true
+    get:
+      tags: [Webhooks]
+      summary: List user webhooks
+      description: Get all webhook configurations for the authenticated user
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "webhook_123"
+                        url:
+                          type: string
+                          format: uri
+                          example: "https://yourapp.com/webhooks"
+                        events:
+                          type: array
+                          items:
+                            type: string
+                          example: ["SCREENSHOT_COMPLETED"]
+                        isActive:
+                          type: boolean
+                          example: true
+                        createdAt:
+                          type: string
+                          format: date-time
+
+  /api/v1/webhooks/{webhookId}:
+    get:
+      tags: [Webhooks]
+      summary: Get webhook details
+      description: Get details of a specific webhook configuration
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "webhook_123"
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "webhook_123"
+                  url:
+                    type: string
+                    format: uri
+                    example: "https://yourapp.com/webhooks"
+                  events:
+                    type: array
+                    items:
+                      type: string
+                    example: ["SCREENSHOT_COMPLETED"]
+                  isActive:
+                    type: boolean
+                    example: true
+                  createdAt:
+                    type: string
+                    format: date-time
+                  lastDelivery:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+    put:
+      tags: [Webhooks]
+      summary: Update webhook
+      description: Update an existing webhook configuration
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "webhook_123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://yourapp.com/webhooks"
+                events:
+                  type: array
+                  items:
+                    type: string
+                  example: ["SCREENSHOT_COMPLETED", "SCREENSHOT_FAILED"]
+                isActive:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Webhook updated successfully
+
+    delete:
+      tags: [Webhooks]
+      summary: Delete webhook
+      description: Delete a webhook configuration
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "webhook_123"
+      responses:
+        '200':
+          description: Webhook deleted successfully
+        '404':
+          description: Webhook not found
+
+  /api/v1/webhooks/{webhookId}/test:
+    post:
+      tags: [Webhooks]
+      summary: Test webhook
+      description: Send a test webhook event (rate limited to 1 per minute per user)
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "webhook_123"
+      responses:
+        '200':
+          description: Test webhook sent successfully
+        '429':
+          description: Rate limit exceeded (1 test per minute per user)
+
+  /api/v1/webhooks/events:
+    get:
+      tags: [Webhooks]
+      summary: List available webhook events
+      description: Get all available webhook events that can be subscribed to
+      security:
+        - apiKey: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of available events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          example: "SCREENSHOT_COMPLETED"
+                        description:
+                          type: string
+                          example: "Triggered when a screenshot is successfully completed"
+
+  # System health and status endpoints
   /health:
     get:
       tags: [System]
@@ -1038,6 +1525,497 @@ paths:
                     type: string
                     example: "1.0.0"
 
+  /status:
+    get:
+      tags: [System]
+      summary: Service status check
+      description: Check service status with version information
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: string
+                    example: "2h 35m 14s"
+
+  /ready:
+    get:
+      tags: [System]
+      summary: Readiness check
+      description: Check readiness status for database, Redis, and workers
+      responses:
+        '200':
+          description: Service ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ready"
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        example: "healthy"
+                      redis:
+                        type: string
+                        example: "healthy"
+                      workers:
+                        type: string
+                        example: "healthy"
+        '503':
+          description: Service not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "not_ready"
+                  checks:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        example: "failed"
+                      redis:
+                        type: string
+                        example: "healthy"
+                      workers:
+                        type: string
+                        example: "degraded"
+
+  /metrics:
+    get:
+      tags: [System]
+      summary: System metrics
+      description: Get system metrics including workers, memory, and uptime
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workers:
+                    type: object
+                    properties:
+                      active:
+                        type: integer
+                        example: 3
+                      idle:
+                        type: integer
+                        example: 2
+                      total:
+                        type: integer
+                        example: 5
+                  memory:
+                    type: object
+                    properties:
+                      used:
+                        type: string
+                        example: "512MB"
+                      available:
+                        type: string
+                        example: "1GB"
+                      percentage:
+                        type: number
+                        example: 51.2
+                  uptime:
+                    type: string
+                    example: "2h 35m 14s"
+                  requests:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 1247
+                      success:
+                        type: integer
+                        example: 1198
+                      error:
+                        type: integer
+                        example: 49
+
+  /test-screenshot:
+    get:
+      tags: [System]
+      summary: Test screenshot generation
+      description: Test endpoint for screenshot generation without authentication
+      responses:
+        '200':
+          description: Test screenshot initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Test screenshot initiated"
+                  jobId:
+                    type: string
+                    example: "test_job_123"
+
+  # Admin endpoints
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      summary: List users
+      description: Get paginated list of users (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+          example: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+          example: "john@example.com"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, suspended]
+          example: "active"
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserProfile'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 156
+                      totalPages:
+                        type: integer
+                        example: 8
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin access required
+
+  /api/v1/admin/users/{userId}:
+    get:
+      tags: [Admin]
+      summary: Get user details
+      description: Get detailed information about a specific user (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "user_123"
+        - name: includeActivity
+          in: query
+          schema:
+            type: boolean
+            default: false
+          example: true
+        - name: includeApiKeys
+          in: query
+          schema:
+            type: boolean
+            default: false
+          example: true
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/UserProfile'
+                  - type: object
+                    properties:
+                      activity:
+                        type: object
+                        properties:
+                          lastLogin:
+                            type: string
+                            format: date-time
+                          screenshotCount:
+                            type: integer
+                            example: 45
+                          creditsUsed:
+                            type: integer
+                            example: 90
+                      apiKeys:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: "key_123"
+                            name:
+                              type: string
+                              example: "Production Key"
+                            maskedKey:
+                              type: string
+                              example: "sk_live_***...abc"
+                            isActive:
+                              type: boolean
+                              example: true
+                            lastUsed:
+                              type: string
+                              format: date-time
+                              nullable: true
+        '404':
+          description: User not found
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin access required
+
+  /api/v1/admin/stats:
+    get:
+      tags: [Admin]
+      summary: Get system statistics
+      description: Get comprehensive system statistics (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1d, 7d, 30d, 90d, 365d]
+            default: 30d
+          example: "30d"
+        - name: breakdown
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: daily
+          example: "daily"
+      responses:
+        '200':
+          description: System statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 156
+                      active:
+                        type: integer
+                        example: 89
+                      new:
+                        type: integer
+                        example: 12
+                  screenshots:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 4567
+                      successful:
+                        type: integer
+                        example: 4321
+                      failed:
+                        type: integer
+                        example: 246
+                      successRate:
+                        type: number
+                        example: 94.6
+                  revenue:
+                    type: object
+                    properties:
+                      total:
+                        type: number
+                        example: 1234.56
+                      currency:
+                        type: string
+                        example: "USD"
+                      subscriptions:
+                        type: integer
+                        example: 23
+                  performance:
+                    type: object
+                    properties:
+                      avgProcessingTime:
+                        type: number
+                        example: 2.3
+                      peakConcurrency:
+                        type: integer
+                        example: 15
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin access required
+
+  /api/v1/admin/subscriptions:
+    get:
+      tags: [Admin]
+      summary: List all subscriptions
+      description: Get paginated list of all subscriptions (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+          example: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, canceled, past_due]
+          example: "active"
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "sub_123"
+                        userId:
+                          type: string
+                          example: "user_456"
+                        planId:
+                          type: string
+                          example: "plan_starter"
+                        status:
+                          type: string
+                          example: "active"
+                        currentPeriodStart:
+                          type: string
+                          format: date-time
+                        currentPeriodEnd:
+                          type: string
+                          format: date-time
+                        createdAt:
+                          type: string
+                          format: date-time
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 45
+                      totalPages:
+                        type: integer
+                        example: 3
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin access required
+
+  /api/v1/admin/users/{userId}/synchronize-plan:
+    post:
+      tags: [Admin]
+      summary: Synchronize user plan
+      description: Synchronize user plan with Stripe subscription (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "user_123"
+      responses:
+        '200':
+          description: Plan synchronized successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "User plan synchronized successfully"
+                  planId:
+                    type: string
+                    example: "plan_starter"
+                  creditsRemaining:
+                    type: integer
+                    example: 750
+        '404':
+          description: User not found
+        '401':
+          description: Authentication required
+        '403':
+          description: Admin access required
+
 tags:
   - name: Authentication
     description: User authentication and session management
@@ -1049,5 +2027,11 @@ tags:
     description: Screenshot generation and management
   - name: Usage & Analytics
     description: Usage statistics and analytics
+  - name: Billing
+    description: Subscription plans and billing management
+  - name: Webhooks
+    description: Webhook configuration and event notifications
+  - name: Admin
+    description: Administrative operations and system management
   - name: System
     description: System health and status endpoints
