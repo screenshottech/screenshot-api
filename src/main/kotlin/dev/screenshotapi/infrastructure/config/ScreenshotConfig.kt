@@ -78,7 +78,7 @@ data class ScreenshotConfig(
             pageLoadTimeout = System.getenv("PAGE_LOAD_TIMEOUT")?.toLong()
                 ?: 30_000L,
             networkIdleTimeout = System.getenv("NETWORK_IDLE_TIMEOUT")?.toLong()
-                ?: 5_000L,
+                ?: 30_000L,
             allowedDomains = System.getenv("ALLOWED_DOMAINS")?.split(",")?.map { it.trim() },
             blockedDomains = System.getenv("BLOCKED_DOMAINS")?.split(",")?.map { it.trim() }
                 ?: listOf("localhost", "127.0.0.1", "0.0.0.0", "internal", "private"),

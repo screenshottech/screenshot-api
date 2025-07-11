@@ -123,7 +123,7 @@ class ScreenshotServiceImpl(
     ): ScreenshotResult {
         // Simple page configuration
         page.setViewportSize(request.width, request.height)
-        page.setDefaultTimeout(15000.0)
+        page.setDefaultTimeout(config.pageLoadTimeout.toDouble())
 
         // Navigate to URL
         val response = page.navigate(request.url)
@@ -133,7 +133,7 @@ class ScreenshotServiceImpl(
 
         // Wait for page to load
         page.waitForLoadState(LoadState.NETWORKIDLE,
-            Page.WaitForLoadStateOptions().setTimeout(10000.0))
+            Page.WaitForLoadStateOptions().setTimeout(config.networkIdleTimeout.toDouble()))
 
         // Optional wait time
         request.waitTime?.let { delay(minOf(it, 5000)) }
@@ -199,7 +199,7 @@ class ScreenshotServiceImpl(
 
         // Wait for page load
         page.waitForLoadState(LoadState.NETWORKIDLE,
-            Page.WaitForLoadStateOptions().setTimeout(10000.0))
+            Page.WaitForLoadStateOptions().setTimeout(config.networkIdleTimeout.toDouble()))
 
         // Optional wait time
         request.waitTime?.let { delay(minOf(it.toLong(), 5000)) }
