@@ -62,13 +62,78 @@ class NotificationService(
     }
 
     /**
-     * Send email notifications (placeholder for future implementation)
+     * Send welcome email to new user
+     */
+    suspend fun sendWelcomeEmail(user: dev.screenshotapi.core.domain.entities.User, apiKey: String) {
+        try {
+            logger.info("Sending welcome email to ${user.email} for user ${user.id}")
+            // TODO: Integrate with SendWelcomeEmailUseCase when DI is updated
+            logger.warn("Welcome email service not fully integrated - would send welcome email to ${user.email}")
+        } catch (e: Exception) {
+            logger.error("Failed to send welcome email to ${user.email}", e)
+        }
+    }
+
+    /**
+     * Send first screenshot success email
+     */
+    suspend fun sendFirstScreenshotEmail(user: dev.screenshotapi.core.domain.entities.User, screenshotJob: dev.screenshotapi.core.domain.entities.ScreenshotJob) {
+        try {
+            logger.info("Sending first screenshot email to ${user.email} for job ${screenshotJob.id}")
+            // TODO: Integrate with email service when DI is updated
+            logger.warn("First screenshot email service not fully integrated - would send to ${user.email}")
+        } catch (e: Exception) {
+            logger.error("Failed to send first screenshot email to ${user.email}", e)
+        }
+    }
+
+    /**
+     * Send credit alert email
+     */
+    suspend fun sendCreditAlertEmail(user: dev.screenshotapi.core.domain.entities.User, usagePercent: Int, creditsUsed: Int, creditsTotal: Int) {
+        try {
+            logger.info("Sending credit alert email to ${user.email} for user ${user.id} (${usagePercent}% used)")
+            // TODO: Integrate with SendCreditAlertUseCase when DI is updated
+            logger.warn("Credit alert email service not fully integrated - would send ${usagePercent}% alert to ${user.email}")
+        } catch (e: Exception) {
+            logger.error("Failed to send credit alert email to ${user.email}", e)
+        }
+    }
+
+    /**
+     * Send upgrade campaign email
+     */
+    suspend fun sendUpgradeEmail(user: dev.screenshotapi.core.domain.entities.User, recommendedPlan: dev.screenshotapi.core.domain.entities.Plan) {
+        try {
+            logger.info("Sending upgrade email to ${user.email} for plan ${recommendedPlan.name}")
+            // TODO: Integrate with upgrade email use case when DI is updated
+            logger.warn("Upgrade email service not fully integrated - would send upgrade suggestion to ${user.email}")
+        } catch (e: Exception) {
+            logger.error("Failed to send upgrade email to ${user.email}", e)
+        }
+    }
+
+    /**
+     * Send first month transition email
+     */
+    suspend fun sendFirstMonthTransitionEmail(user: dev.screenshotapi.core.domain.entities.User, totalCreditsUsed: Int) {
+        try {
+            logger.info("Sending first month transition email to ${user.email} for user ${user.id}")
+            // TODO: Integrate with first month transition email use case when DI is updated
+            logger.warn("First month transition email service not fully integrated - would send to ${user.email}")
+        } catch (e: Exception) {
+            logger.error("Failed to send first month transition email to ${user.email}", e)
+        }
+    }
+
+    /**
+     * Legacy email method (placeholder for future implementation)
      */
     suspend fun sendEmail(to: String, subject: String, body: String) {
         try {
             logger.info("Sending email to $to: $subject")
             logger.warn("Email service not implemented - email would be sent to $to")
-            // TODO: Implement email service integration (SendGrid, AWS SES, etc.)
+            // TODO: Implement email service integration (AWS SES, Gmail, etc.)
         } catch (e: Exception) {
             logger.error("Failed to send email to $to", e)
         }

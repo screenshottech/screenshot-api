@@ -38,84 +38,114 @@ class UpdateDailyStatsUseCase(
         return try {
             logger.debug("Updating daily stats for user ${request.userId}, action ${request.action}, date ${request.date}")
 
-            // Get or create daily stats for the user and date
-            val currentStats = dailyStatsRepository.findByUserAndDate(request.userId, request.date)
-                ?: DailyUserStats.createEmpty(request.userId, request.date)
-
-            // Update stats based on the action
+            // Use atomic increment operations to avoid optimistic locking conflicts
             val updatedStats = when (request.action) {
                 UsageLogAction.SCREENSHOT_CREATED -> {
-                    currentStats.incrementScreenshotsCreated()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.SCREENSHOTS_CREATED, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.SCREENSHOT_COMPLETED -> {
-                    currentStats.incrementScreenshotsCompleted()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.SCREENSHOTS_COMPLETED, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.SCREENSHOT_FAILED -> {
-                    currentStats.incrementScreenshotsFailed()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.SCREENSHOTS_FAILED, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.SCREENSHOT_RETRIED -> {
-                    currentStats.incrementScreenshotsRetried()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.SCREENSHOTS_RETRIED, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.CREDITS_DEDUCTED -> {
-                    currentStats.incrementCreditsUsed(request.creditsUsed)
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.CREDITS_USED, 
+                        request.creditsUsed
+                    )
                 }
                 
                 UsageLogAction.CREDITS_ADDED -> {
-                    currentStats.incrementCreditsAdded(request.creditsUsed)
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.CREDITS_ADDED, 
+                        request.creditsUsed
+                    )
                 }
                 
                 UsageLogAction.API_KEY_USED -> {
-                    currentStats.incrementApiCalls()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.API_CALLS_COUNT, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.API_KEY_CREATED -> {
-                    currentStats.copy(
-                        apiKeysCreated = currentStats.apiKeysCreated + 1,
-                        updatedAt = Clock.System.now(),
-                        version = currentStats.version + 1
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.API_KEYS_CREATED, 
+                        1
                     )
                 }
                 
                 UsageLogAction.PLAN_UPGRADED, UsageLogAction.PLAN_CHANGED -> {
-                    currentStats.copy(
-                        planChanges = currentStats.planChanges + 1,
-                        updatedAt = Clock.System.now(),
-                        version = currentStats.version + 1
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.PLAN_CHANGES, 
+                        1
                     )
                 }
                 
                 UsageLogAction.PAYMENT_PROCESSED -> {
-                    currentStats.copy(
-                        paymentsProcessed = currentStats.paymentsProcessed + 1,
-                        updatedAt = Clock.System.now(),
-                        version = currentStats.version + 1
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        dev.screenshotapi.core.domain.repositories.StatsField.PAYMENTS_PROCESSED, 
+                        1
                     )
                 }
                 
-                UsageLogAction.USER_REGISTERED -> {
-                    // User registration doesn't affect daily stats for screenshots/credits
-                    currentStats
+                UsageLogAction.USER_REGISTERED, UsageLogAction.EMAIL_SENT -> {
+                    // These actions don't affect daily stats, return current state
+                    dailyStatsRepository.findByUserAndDate(request.userId, request.date)
                 }
             }
 
-            // Save the updated stats using atomic operations
-            val savedStats = if (currentStats.createdAt == currentStats.updatedAt) {
-                // This is a new record, create it
-                dailyStatsRepository.create(updatedStats)
+            // atomicIncrement already handles the database operations
+            if (updatedStats != null) {
+                logger.info("Successfully updated daily stats for user ${request.userId}: ${request.action}")
             } else {
-                // This is an update, use atomic increment
-                dailyStatsRepository.atomicUpdate(updatedStats)
+                logger.debug("No daily stats update needed for user ${request.userId}: ${request.action}")
             }
-
-            logger.info("Successfully updated daily stats for user ${request.userId}: ${request.action}")
             
             Response(
                 success = true,
-                updatedStats = savedStats
+                updatedStats = updatedStats
             )
             
         } catch (e: Exception) {

@@ -20,6 +20,7 @@ fun Application.configureRouting() {
     val healthController by inject<HealthController>()
     val authProviderFactory by inject<AuthProviderFactory>()
     val appConfig by inject<AppConfig>()
+    val testEmailController by inject<TestEmailController>()
 
     routing {
         // Health checks (using Cohort at /health)
@@ -42,6 +43,9 @@ fun Application.configureRouting() {
 
             // Multi-provider auth routes
             multiProviderAuthRoutes(authProviderFactory)
+
+            // TEST ENDPOINT - TEMPORAL PARA PROBAR EMAILS
+            post("/test-email") { testEmailController.sendTestEmail(call) }
 
             // Billing and subscription routes
             route("/billing") {
@@ -92,6 +96,7 @@ fun Application.configureRouting() {
 
                     get("/usage") { authController.getUsage(call) }
                     get("/usage/timeline") { authController.getUsageTimeline(call) }
+                    get("/email-logs") { authController.getEmailLogs(call) }
                 }
             }
 

@@ -562,4 +562,66 @@ comment on column public.webhook_configurations.secret
 comment on column public.webhook_deliveries.signature 
     is 'HMAC-SHA256 signature of the payload for verification';
 
+-- ==========================================
+-- EMAIL LOGS TABLE
+-- ==========================================
+
+-- Table for tracking email delivery and engagement
+create table public.email_logs (
+    id                varchar(36)                                  not null
+        primary key,
+    user_id           varchar(36)                                  not null,
+    email_type        varchar(50)                                  not null,
+    subject           varchar(200)                                 not null,
+    recipient_email   varchar(255)                                 not null,
+    sent_at           timestamp                                    not null,
+    opened            boolean     default false                    not null,
+    clicked           boolean     default false                    not null,
+    opened_at         timestamp,
+    clicked_at        timestamp,
+    bounced           boolean     default false                    not null,
+    bounced_at        timestamp,
+    unsubscribed      boolean     default false                    not null,
+    unsubscribed_at   timestamp,
+    metadata          text        default '{}'::text               not null,
+    created_at        timestamp   default now()                    not null,
+    updated_at        timestamp   default now()                    not null
+);
+
+alter table public.email_logs
+    owner to screenshotapi_user;
+
+-- Create indexes for performance
+create index idx_email_logs_user_id on public.email_logs (user_id);
+create index idx_email_logs_email_type on public.email_logs (email_type);
+create index idx_email_logs_sent_at on public.email_logs (sent_at);
+create index idx_email_logs_user_type on public.email_logs (user_id, email_type);
+create index idx_email_logs_opened on public.email_logs (opened);
+create index idx_email_logs_clicked on public.email_logs (clicked);
+create index idx_email_logs_bounced on public.email_logs (bounced);
+create index idx_email_logs_unsubscribed on public.email_logs (unsubscribed);
+
+-- Create trigger for updated_at
+create trigger update_email_logs_updated_at
+    before update
+    on public.email_logs
+    for each row
+    execute procedure public.update_updated_at_column();
+
+-- Comments for documentation
+comment on table public.email_logs 
+    is 'Tracks email delivery and engagement metrics for the email growth system';
+
+comment on column public.email_logs.email_type 
+    is 'Type of email: WELCOME, CREDIT_ALERT_50, CREDIT_ALERT_80, CREDIT_ALERT_90, UPGRADE_CAMPAIGN, etc.';
+
+comment on column public.email_logs.metadata 
+    is 'JSON metadata with email-specific data like template variables, provider info, etc.';
+
+comment on column public.email_logs.opened 
+    is 'Whether the email was opened (tracked via pixel or other means)';
+
+comment on column public.email_logs.clicked 
+    is 'Whether any link in the email was clicked';
+
 

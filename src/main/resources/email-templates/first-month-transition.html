@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your plan has been updated</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; line-height: 1.5; color: #111827; margin: 0; padding: 0; background-color: #f9fafb; }
+        .email-wrapper { width: 100%; max-width: 560px; margin: 0 auto; padding: 20px; }
+        .container { background-color: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); overflow: hidden; }
+        .header { text-align: center; padding: 40px 32px; border-bottom: 1px solid #f3f4f6; }
+        .logo { font-size: 18px; font-weight: 600; color: #111827; margin: 0; }
+        .content { padding: 40px 32px; }
+        .hero { text-align: center; margin-bottom: 40px; }
+        .hero h1 { color: #111827; font-size: 24px; font-weight: 700; margin: 0 0 8px 0; line-height: 1.3; }
+        .hero p { color: #6b7280; font-size: 16px; margin: 0; }
+        .info-card { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 12px; padding: 32px; margin: 32px 0; text-align: center; }
+        .info-icon { font-size: 48px; margin: 0 0 16px 0; }
+        .info-title { font-size: 18px; font-weight: 600; color: #ffffff; margin: 0 0 8px 0; }
+        .info-subtitle { color: #dbeafe; font-size: 14px; margin: 0; }
+        .changes { margin: 32px 0; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; }
+        .change { padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
+        .change:last-child { border-bottom: none; }
+        .change-label { font-size: 14px; color: #374151; font-weight: 500; margin-bottom: 4px; }
+        .change-value { font-size: 14px; color: #111827; font-weight: 600; }
+        .explanation { margin: 32px 0; padding: 20px; background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; }
+        .explanation h3 { color: #1e40af; font-size: 16px; font-weight: 600; margin: 0 0 12px 0; }
+        .explanation p { color: #1e40af; font-size: 14px; margin: 0; }
+        .cta-buttons { text-align: center; margin: 40px 0 32px 0; }
+        .cta-button { display: inline-block; background-color: #6366f1; color: #ffffff !important; padding: 10px 20px; text-decoration: none; border-radius: 8px; font-weight: 500; font-size: 14px; margin: 0 4px; }
+        .cta-button.secondary { background-color: #ffffff; color: #6366f1 !important; border: 1px solid #e5e7eb; }
+        .footer { text-align: center; padding: 32px; background-color: #f9fafb; }
+        .footer p { color: #6b7280; font-size: 13px; margin: 0 0 8px 0; }
+        .footer a { color: #6366f1; text-decoration: none; font-weight: 500; }
+        .footer-links { margin-top: 12px; }
+        .footer-links a { margin: 0 12px; color: #6b7280; }
+        .divider { height: 1px; background-color: #e5e7eb; margin: 16px 0; }
+        @media screen and (max-width: 600px) {
+            .email-wrapper { padding: 12px; }
+            .content { padding: 32px 24px; }
+            .header { padding: 32px 24px; }
+            .cta-button { display: block; margin: 8px 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-wrapper">
+        <div class="container">
+            <div class="header">
+                <div class="logo">{{appLogo}} {{appName}}</div>
+            </div>
+            <div class="content">
+                <div class="hero">
+                    <h1>Your plan has been updated</h1>
+                    <p>{{userName}}, your free plan limits have changed starting {{resetDate}}.</p>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">📊</div>
+                    <div class="info-title">Plan Updated</div>
+                    <p class="info-subtitle">{{newCreditLimit}} credits per month</p>
+                </div>
+                <div class="changes">
+                    <div class="change">
+                        <div class="change-label">Credits used last month</div>
+                        <div class="change-value">{{totalCreditsUsed}}</div>
+                    </div>
+                    <div class="change">
+                        <div class="change-label">New monthly limit</div>
+                        <div class="change-value">{{newCreditLimit}} credits</div>
+                    </div>
+                    <div class="change">
+                        <div class="change-label">Reset date</div>
+                        <div class="change-value">{{resetDate}}</div>
+                    </div>
+                    <div class="change">
+                        <div class="change-label">Current plan</div>
+                        <div class="change-value">{{planName}}</div>
+                    </div>
+                </div>
+                <div class="explanation">
+                    <h3>Why did this change?</h3>
+                    <p>After your first month, our free plan provides {{newCreditLimit}} credits per month. This ensures fair usage for all users while you evaluate our service.</p>
+                </div>
+                <div class="cta-buttons">
+                    <a href="{{upgradeUrl}}" class="cta-button">Upgrade Plan</a>
+                    <a href="{{dashboardUrl}}" class="cta-button secondary">View Dashboard</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p><strong>Questions about your plan?</strong> Just reply to this email.</p>
+                <div class="divider"></div>
+                <div class="footer-links">
+                    <a href="{{dashboardUrl}}">Dashboard</a>
+                    <a href="{{upgradeUrl}}">Upgrade</a>
+                    <a href="mailto:{{supportEmail}}">Support</a>
+                </div>
+                <p style="margin-top: 16px; font-size: 12px; color: #9ca3af;">{{teamName}}</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,6 +1,7 @@
 package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.core.domain.repositories.*
+import dev.screenshotapi.core.domain.services.EmailProvider
 import dev.screenshotapi.core.domain.services.RateLimitingService
 import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.domain.services.ScreenshotService
@@ -14,11 +15,15 @@ import dev.screenshotapi.core.usecases.screenshot.*
 import dev.screenshotapi.core.usecases.stats.AggregateStatsUseCase
 import dev.screenshotapi.core.usecases.stats.UpdateDailyStatsUseCase
 import dev.screenshotapi.core.usecases.webhook.*
+import dev.screenshotapi.core.usecases.email.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.output.TokenGenerationAdapter
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
 import dev.screenshotapi.infrastructure.adapters.output.payment.StripePaymentGatewayAdapter
 import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.*
+import dev.screenshotapi.infrastructure.adapters.output.email.MockEmailProvider
+import dev.screenshotapi.infrastructure.adapters.output.email.AwsSesEmailProvider
+import dev.screenshotapi.infrastructure.adapters.output.email.GmailEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.*
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
@@ -33,7 +38,9 @@ import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
 import dev.screenshotapi.infrastructure.services.*
+import dev.screenshotapi.infrastructure.config.EmailConfig
 import dev.screenshotapi.workers.JobRetryScheduler
+import dev.screenshotapi.workers.WebhookRetryWorker
 import dev.screenshotapi.workers.WorkerManager
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
@@ -74,6 +81,7 @@ fun configModule(config: AppConfig) = module {
     single { config.billing }
     single { config.billing.stripe }
     single { config.webhook }
+    single { config.email }
 }
 
 fun repositoryModule(config: AppConfig) = module {
@@ -89,13 +97,13 @@ fun repositoryModule(config: AppConfig) = module {
     single<DailyStatsRepository> { createDailyStatsRepository(config, getOrNull()) }
     single<WebhookConfigurationRepository> { createWebhookConfigurationRepository(config, getOrNull()) }
     single<WebhookDeliveryRepository> { createWebhookDeliveryRepository(config, getOrNull()) }
+    single<EmailLogRepository> { createEmailLogRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
     single<HmacPort> { HmacAdapter(get()) }
     single<UrlSecurityPort> { UrlSecurityAdapter() }
     single<PaymentGatewayPort> { StripePaymentGatewayAdapter(get<StripeConfig>(), get<PlanRepository>()) }
 
-    // Token generation services
     single<TokenGenerationPort> { TokenGenerationAdapter(get<ScreenshotTokenService>()) }
     if (!config.database.useInMemory) {
         single<Database> { createDatabase(config) }
@@ -103,16 +111,15 @@ fun repositoryModule(config: AppConfig) = module {
     if (!config.redis.useInMemory) {
         single<StatefulRedisConnection<String, String>> { createRedisConnection(config) }
     }
-    // Lightweight stats aggregation scheduler (works in all modes)
     single {
-        dev.screenshotapi.infrastructure.services.StatsAggregationScheduler(
+        StatsAggregationScheduler(
             aggregateStatsUseCase = get<AggregateStatsUseCase>(),
             dailyStatsRepository = get<DailyStatsRepository>()
         )
     }
-    // Webhook retry worker
+
     single {
-        dev.screenshotapi.workers.WebhookRetryWorker(
+        WebhookRetryWorker(
             sendWebhookUseCase = get<SendWebhookUseCase>()
         )
     }
@@ -153,6 +160,18 @@ private fun createWebhookConfigurationRepository(config: AppConfig, database: Da
 
 private fun createWebhookDeliveryRepository(config: AppConfig, database: Database?): WebhookDeliveryRepository =
     if (config.database.useInMemory) InMemoryWebhookDeliveryRepository() else PostgreSQLWebhookDeliveryRepository(database!!)
+
+private fun createEmailLogRepository(config: AppConfig, database: Database?): EmailLogRepository =
+    if (config.database.useInMemory) InMemoryEmailLogRepository() else PostgreSQLEmailLogRepository(database!!)
+
+private fun createEmailProvider(config: EmailConfig): EmailProvider {
+    return when (config.provider.lowercase()) {
+        "aws_ses" -> AwsSesEmailProvider(config)
+        "gmail" -> GmailEmailProvider(config)
+        "mock" -> MockEmailProvider()
+        else -> MockEmailProvider()
+    }
+}
 
 private fun createDatabase(config: AppConfig): Database =
     if (!config.database.useInMemory) {
@@ -203,7 +222,7 @@ fun useCaseModule() = module {
     single { DeleteApiKeyUseCase(get<ApiKeyRepository>()) }
     single { ListApiKeysUseCase(get<ApiKeyRepository>(), get<UserRepository>()) }
     single { AuthenticateUserUseCase(get<UserRepository>()) }
-    single { RegisterUserUseCase(get<UserRepository>(), get<PlanRepository>()) }
+    single { RegisterUserUseCase(get<UserRepository>(), get<PlanRepository>(), getOrNull<SendWelcomeEmailUseCase>()) }
     single { GetUserProfileUseCase(get<UserRepository>()) }
     single { GetUserUsageUseCase(get<UserRepository>(), get<ScreenshotRepository>(), get<PlanRepository>()) }
     single { GetUserUsageTimelineUseCase(get<UsageRepository>(), get<UserRepository>()) }
@@ -219,7 +238,7 @@ fun useCaseModule() = module {
 
     // Billing use cases - mixed injection patterns
     single { CheckCreditsUseCase(get()) }
-    single { DeductCreditsUseCase(get<UserRepository>(), get<LogUsageUseCase>()) }
+    single { DeductCreditsUseCase(get<UserRepository>(), get<LogUsageUseCase>(), getOrNull<SendCreditAlertUseCase>()) }
     single { AddCreditsUseCase(get<UserRepository>()) }
     single { HandlePaymentUseCase(get<UserRepository>(), get<AddCreditsUseCase>()) }
     single { GetAvailablePlansUseCase(get<PlanRepository>()) }
@@ -236,6 +255,11 @@ fun useCaseModule() = module {
     single { SendWebhookUseCase(get<WebhookConfigurationRepository>(), get<WebhookDeliveryRepository>(), get<HttpClient>(), get<AppConfig>().webhook) }
     single { GetWebhookDeliveriesUseCase(get<WebhookConfigurationRepository>(), get<WebhookDeliveryRepository>()) }
     single { CleanupWebhookDeliveriesUseCase(get<WebhookDeliveryRepository>()) }
+
+    // Email use cases
+    single { SendWelcomeEmailUseCase(get<UserRepository>(), get<EmailLogRepository>(), get<EmailService>(), get<LogUsageUseCase>()) }
+    single { SendCreditAlertUseCase(get<UserRepository>(), get<EmailLogRepository>(), get<EmailService>(), get<LogUsageUseCase>()) }
+    single { GetEmailLogsByUserUseCase(get<EmailLogRepository>(), get<UserRepository>()) }
     single { ProvisionSubscriptionCreditsUseCase(get<SubscriptionRepository>(), get<UserRepository>(), get<PlanRepository>(), get<AddCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { HandleSubscriptionWebhookUseCase(get<PaymentGatewayPort>(), get<SubscriptionRepository>(), get<UserRepository>(), get<ProvisionSubscriptionCreditsUseCase>()) }
 
@@ -257,6 +281,8 @@ fun serviceModule() = module {
     single { ScreenshotTokenService(get<HmacPort>(), get<AuthConfig>()) }
     single<ScreenshotService> { ScreenshotServiceImpl(get(), get(), get<UrlSecurityPort>(), getOrNull<ScreenshotTokenService>()) }
     single { BrowserPoolManager(get<ScreenshotConfig>()) }
+    single<EmailProvider> { createEmailProvider(get<EmailConfig>()) }
+    single { EmailService(get<EmailProvider>(), get<EmailConfig>()) }
     single { NotificationService(get<SendWebhookUseCase>()) }
     single { MetricsService() }
     single<RetryPolicy> { DefaultRetryPolicyImpl() }

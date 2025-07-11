@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Welcome to {{appName}}</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        /* Reset styles for email clients */
+        body, table, td, a { 
+            -webkit-text-size-adjust: 100%; 
+            -ms-text-size-adjust: 100%; 
+        }
+        table, td { 
+            mso-table-lspace: 0pt; 
+            mso-table-rspace: 0pt; 
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+        
+        /* Main styles - Modern minimal design */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, system-ui, sans-serif;
+            line-height: 1.5;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+            background-color: #f9fafb;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .email-wrapper {
+            width: 100%;
+            max-width: 560px;
+            margin: 0 auto;
+            background-color: #f9fafb;
+            padding: 20px;
+        }
+        
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 40px 32px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .logo {
+            font-size: 18px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .content {
+            padding: 40px 32px;
+        }
+        
+        .hero {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .hero h1 {
+            color: #111827;
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.025em;
+            line-height: 1.3;
+        }
+        
+        .hero p {
+            color: #6b7280;
+            font-size: 16px;
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        .credits-card {
+            background-color: #6366f1;
+            border-radius: 12px;
+            padding: 32px;
+            margin: 32px 0;
+            text-align: center;
+        }
+        
+        .credits-number {
+            font-size: 48px;
+            font-weight: 700;
+            color: #ffffff;
+            margin: 0 0 4px 0;
+            letter-spacing: -0.05em;
+            line-height: 1;
+        }
+        
+        .credits-text {
+            color: #e0e7ff;
+            font-size: 14px;
+            margin: 0;
+            font-weight: 500;
+        }
+        
+        .features {
+            margin: 40px 0;
+        }
+        
+        .features h3 {
+            color: #111827;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 20px 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .feature {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding: 0;
+        }
+        
+        .feature-icon {
+            width: 20px;
+            height: 20px;
+            background-color: #10b981;
+            border-radius: 50%;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 12px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        
+        .feature-text {
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        
+        .quick-start {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .quick-start h3 {
+            color: #111827;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .code-block {
+            background-color: #1f2937;
+            color: #e5e7eb;
+            padding: 16px;
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        
+        .cta-buttons {
+            text-align: center;
+            margin: 40px 0 32px 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background-color: #6366f1;
+            color: #ffffff !important;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            margin: 0 4px;
+            transition: all 0.15s ease;
+        }
+        
+        .cta-button:hover {
+            background-color: #4f46e5;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .cta-button.secondary {
+            background-color: #ffffff;
+            color: #6366f1 !important;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .cta-button.secondary:hover {
+            background-color: #f9fafb;
+            border-color: #d1d5db;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 32px;
+            background-color: #f9fafb;
+        }
+        
+        .footer p {
+            color: #6b7280;
+            font-size: 13px;
+            margin: 0 0 8px 0;
+            line-height: 1.5;
+        }
+        
+        .footer p strong {
+            color: #374151;
+            font-weight: 600;
+        }
+        
+        .footer a {
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 13px;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .footer-links {
+            margin-top: 12px;
+        }
+        
+        .footer-links a {
+            margin: 0 12px;
+            color: #6b7280;
+        }
+        
+        .footer-links a:hover {
+            color: #6366f1;
+        }
+        
+        .divider {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 16px 0;
+        }
+        
+        /* Mobile responsive */
+        @media screen and (max-width: 600px) {
+            .email-wrapper {
+                padding: 12px;
+            }
+            
+            .content {
+                padding: 32px 24px;
+            }
+            
+            .header {
+                padding: 32px 24px;
+            }
+            
+            .hero h1 {
+                font-size: 22px;
+            }
+            
+            .credits-number {
+                font-size: 40px;
+            }
+            
+            .cta-button {
+                display: block;
+                margin: 8px 0;
+            }
+            
+            .code-block {
+                font-size: 11px;
+                padding: 12px;
+            }
+            
+            .footer-links a {
+                display: block;
+                margin: 8px 0;
+            }
+        }
+        
+        /* Dark mode support for supported clients */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #111827 !important;
+                color: #e5e7eb !important;
+            }
+            
+            .email-wrapper {
+                background-color: #111827 !important;
+            }
+            
+            .container {
+                background-color: #1f2937 !important;
+                box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+            }
+            
+            .header {
+                background-color: #1f2937 !important;
+                border-bottom-color: #374151 !important;
+            }
+            
+            .logo {
+                color: #f3f4f6 !important;
+            }
+            
+            .hero h1 {
+                color: #f3f4f6 !important;
+            }
+            
+            .hero p {
+                color: #9ca3af !important;
+            }
+            
+            .features h3 {
+                color: #f3f4f6 !important;
+            }
+            
+            .feature-text {
+                color: #d1d5db !important;
+            }
+            
+            .quick-start {
+                background-color: #111827 !important;
+                border-color: #374151 !important;
+            }
+            
+            .quick-start h3 {
+                color: #f3f4f6 !important;
+            }
+            
+            .code-block {
+                background-color: #000000 !important;
+                border: 1px solid #374151 !important;
+            }
+            
+            .footer {
+                background-color: #111827 !important;
+            }
+            
+            .footer p {
+                color: #9ca3af !important;
+            }
+            
+            .footer p strong {
+                color: #e5e7eb !important;
+            }
+            
+            .cta-button.secondary {
+                background-color: #374151 !important;
+                color: #f3f4f6 !important;
+                border-color: #4b5563 !important;
+            }
+            
+            .cta-button.secondary:hover {
+                background-color: #4b5563 !important;
+                border-color: #6b7280 !important;
+            }
+            
+            .divider {
+                background-color: #374151 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-wrapper">
+        <div class="container">
+            <div class="header">
+                <div class="logo">{{appLogo}} {{appName}}</div>
+            </div>
+            
+            <div class="content">
+                <div class="hero">
+                    <h1>Welcome to {{appName}}, {{userName}}!</h1>
+                    <p>Your account is ready. Start capturing screenshots with our powerful API.</p>
+                </div>
+                
+                <div class="credits-card">
+                    <div class="credits-number">{{creditsRemaining}}</div>
+                    <p class="credits-text">Free credits this month</p>
+                </div>
+                
+                <div class="features">
+                    <h3>What's included</h3>
+                    <div class="feature">
+                        <div class="feature-icon">✓</div>
+                        <div class="feature-text"><strong>{{creditsRemaining}} free credits</strong> to get started</div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">✓</div>
+                        <div class="feature-text"><strong>Multiple formats</strong> - PNG, JPEG, WEBP, PDF</div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">✓</div>
+                        <div class="feature-text"><strong>Instant notifications</strong> via webhooks</div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">✓</div>
+                        <div class="feature-text"><strong>Full documentation</strong> with code examples</div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">✓</div>
+                        <div class="feature-text"><strong>Usage analytics</strong> to track your API calls</div>
+                    </div>
+                </div>
+                
+                <div class="quick-start">
+                    <h3>Quick start</h3>
+                    <div class="code-block">curl -X POST "{{apiBaseUrl}}/api/v1/screenshots" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com"}'</div>
+                </div>
+                
+                <div class="cta-buttons">
+                    <a href="{{dashboardUrl}}" class="cta-button">Open Dashboard</a>
+                    <a href="{{docsUrl}}" class="cta-button secondary">View Docs</a>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p><strong>Need help?</strong> Just reply to this email.</p>
+                <div class="divider"></div>
+                <div class="footer-links">
+                    <a href="{{dashboardUrl}}">Dashboard</a>
+                    <a href="{{docsUrl}}">Documentation</a>
+                    <a href="mailto:{{supportEmail}}">Support</a>
+                </div>
+                <p style="margin-top: 16px; font-size: 12px; color: #9ca3af;">{{teamName}}</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

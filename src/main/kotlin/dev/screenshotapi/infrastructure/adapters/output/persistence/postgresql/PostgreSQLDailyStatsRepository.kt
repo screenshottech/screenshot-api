@@ -68,7 +68,9 @@ class PostgreSQLDailyStatsRepository(private val database: Database) : DailyStat
         return try {
             dbQuery(database) {
                 val id = UUID.randomUUID().toString()
-                DailyUserStatsTable.insert {
+                DailyUserStatsTable.upsert(
+                    keys = arrayOf(DailyUserStatsTable.userId, DailyUserStatsTable.date)
+                ) {
                     it[DailyUserStatsTable.id] = id
                     it[userId] = stats.userId
                     it[date] = stats.date

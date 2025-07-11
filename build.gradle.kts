@@ -15,6 +15,8 @@ val stripe_version: String by project
 val mockk_version: String by project
 val junit_version: String by project
 val bcrypt_version: String by project
+val jakarta_mail_version: String by project
+val jakarta_mail_api_version: String by project
 
 plugins {
     kotlin("jvm") version "2.1.10"
@@ -67,7 +69,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:$kotlin_version")
     testImplementation("org.junit.jupiter:junit-jupiter:$junit_version")
     testImplementation("io.mockk:mockk:${mockk_version}")
-    
+
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     // Database
     implementation("org.jetbrains.exposed:exposed-core:$jetbrains_exposed_version")
@@ -111,6 +113,11 @@ dependencies {
     implementation("io.ktor:ktor-server-metrics")
     implementation("io.ktor:ktor-server-metrics-micrometer")
     implementation("io.micrometer:micrometer-registry-prometheus:$prometheus_version")
+
+
+    // Email - Jakarta Mail for Gmail SMTP support
+    implementation("com.sun.mail:jakarta.mail:$jakarta_mail_version")
+    implementation("jakarta.mail:jakarta.mail-api:$jakarta_mail_api_version")
 }
 
 tasks.withType<Test> {

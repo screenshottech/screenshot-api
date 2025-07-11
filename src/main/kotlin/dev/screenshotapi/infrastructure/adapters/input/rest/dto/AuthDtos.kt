@@ -6,8 +6,11 @@ import dev.screenshotapi.core.usecases.auth.GetUserProfileResponse
 import dev.screenshotapi.core.usecases.auth.GetUserUsageTimelineResponse
 import dev.screenshotapi.core.usecases.auth.RegisterUserResponse
 import dev.screenshotapi.core.usecases.auth.UpdateApiKeyResponse
+import dev.screenshotapi.core.usecases.auth.UpdateUserProfileResponse
+import dev.screenshotapi.core.usecases.email.GetEmailLogsByUserResponse
 import dev.screenshotapi.core.domain.entities.UsageTimelineEntry
 import dev.screenshotapi.core.domain.entities.UsageTimelineSummary
+import dev.screenshotapi.core.domain.entities.EmailLog
 import kotlinx.serialization.Serializable
 
 // Request DTOs
@@ -70,8 +73,9 @@ data class UserProfileResponseDto(
     val email: String,
     val name: String?,
     val status: String,
-    val planId: String,
+    val roles: List<String>,
     val creditsRemaining: Int,
+    val planId: String,
     val createdAt: String,
     val lastActivity: String?
 )
@@ -144,6 +148,26 @@ data class UsageTimelineResponseDto(
     val granularity: String
 )
 
+@Serializable
+data class EmailLogDto(
+    val id: String,
+    val emailType: String,
+    val subject: String,
+    val recipientEmail: String,
+    val sentAt: String,
+    val opened: Boolean,
+    val clicked: Boolean,
+    val bounced: Boolean,
+    val unsubscribed: Boolean
+)
+
+@Serializable
+data class EmailLogsResponseDto(
+    val userId: String,
+    val emailLogs: List<EmailLogDto>,
+    val totalEmails: Int
+)
+
 // Extension functions for conversion
 fun AuthenticateUserResponse.toDto(): LoginResponseDto = LoginResponseDto(
     token = token ?: "jwt_token_placeholder",
@@ -167,8 +191,21 @@ fun GetUserProfileResponse.toDto(): UserProfileResponseDto = UserProfileResponse
     email = email,
     name = name,
     status = status.name.lowercase(),
-    planId = "basic_plan",
+    roles = roles.map { it.name.lowercase() },
     creditsRemaining = creditsRemaining,
+    planId = "basic_plan",
+    createdAt = "2023-01-01T00:00:00Z",
+    lastActivity = null
+)
+
+fun UpdateUserProfileResponse.toDto(): UserProfileResponseDto = UserProfileResponseDto(
+    userId = userId,
+    email = email,
+    name = name,
+    status = status.name.lowercase(),
+    roles = emptyList(), // UpdateUserProfileResponse doesn't have roles
+    creditsRemaining = creditsRemaining,
+    planId = planId,
     createdAt = "2023-01-01T00:00:00Z",
     lastActivity = null
 )
@@ -234,4 +271,22 @@ fun GetUserUsageTimelineResponse.toDto(): UsageTimelineResponseDto = UsageTimeli
         dev.screenshotapi.core.domain.entities.TimePeriod.ONE_YEAR -> "1y"
     },
     granularity = granularity.name
+)
+
+fun EmailLog.toDto(): EmailLogDto = EmailLogDto(
+    id = id,
+    emailType = emailType.name,
+    subject = subject,
+    recipientEmail = recipientEmail,
+    sentAt = sentAt.toString(),
+    opened = opened,
+    clicked = clicked,
+    bounced = bounced,
+    unsubscribed = unsubscribed
+)
+
+fun GetEmailLogsByUserResponse.toDto(): EmailLogsResponseDto = EmailLogsResponseDto(
+    userId = userId,
+    emailLogs = emailLogs.map { it.toDto() },
+    totalEmails = totalEmails
 )
