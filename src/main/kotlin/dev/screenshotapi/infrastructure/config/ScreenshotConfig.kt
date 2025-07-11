@@ -45,7 +45,8 @@ data class ScreenshotConfig(
     val screenshotRetentionDays: Int,
     val selectorTimeoutDuration: Duration = 10.seconds,
     val maxConcurrentRequests: Int,
-    val retrySchedulerEnabled: Boolean
+    val retrySchedulerEnabled: Boolean,
+    val enableGracefulTimeoutFallback: Boolean
 ) {
     companion object {
         fun load(): ScreenshotConfig = ScreenshotConfig(
@@ -74,11 +75,11 @@ data class ScreenshotConfig(
             maxBrowserInstances = System.getenv("MAX_BROWSER_INSTANCES")?.toInt()
                 ?: 10,
             browserLaunchTimeout = System.getenv("BROWSER_LAUNCH_TIMEOUT")?.toLong()
-                ?: 30_000L,
+                ?: 60_000L,
             pageLoadTimeout = System.getenv("PAGE_LOAD_TIMEOUT")?.toLong()
-                ?: 30_000L,
+                ?: 45_000L,
             networkIdleTimeout = System.getenv("NETWORK_IDLE_TIMEOUT")?.toLong()
-                ?: 30_000L,
+                ?: 45_000L,
             allowedDomains = System.getenv("ALLOWED_DOMAINS")?.split(",")?.map { it.trim() },
             blockedDomains = System.getenv("BLOCKED_DOMAINS")?.split(",")?.map { it.trim() }
                 ?: listOf("localhost", "127.0.0.1", "0.0.0.0", "internal", "private"),
@@ -123,6 +124,8 @@ data class ScreenshotConfig(
             maxConcurrentRequests = System.getenv("MAX_CONCURRENT_REQUESTS")?.toInt()
                 ?: 10,
             retrySchedulerEnabled = System.getenv("RETRY_SCHEDULER_ENABLED")?.toBoolean()
+                ?: true,
+            enableGracefulTimeoutFallback = System.getenv("ENABLE_GRACEFUL_TIMEOUT_FALLBACK")?.toBoolean()
                 ?: true
         )
     }
