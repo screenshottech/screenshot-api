@@ -56,6 +56,7 @@ class GetUserActivityUseCase(
             UsageLogAction.PAYMENT_PROCESSED -> UserActivityType.PAYMENT_SUCCESS
             UsageLogAction.CREDITS_DEDUCTED -> UserActivityType.SCREENSHOT_CREATED // Credit usage implies screenshot
             UsageLogAction.CREDITS_ADDED -> UserActivityType.CREDITS_PROVISIONED_ADMIN
+            UsageLogAction.EMAIL_SENT -> UserActivityType.LOGIN // Email activity as engagement
         }
     }
     
@@ -85,6 +86,8 @@ class GetUserActivityUseCase(
                 "Plan changed"
             UsageLogAction.PAYMENT_PROCESSED -> 
                 "Payment processed successfully"
+            UsageLogAction.EMAIL_SENT -> 
+                "Email notification sent"
         }
     }
 }

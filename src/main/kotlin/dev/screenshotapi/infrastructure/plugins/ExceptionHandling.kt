@@ -36,6 +36,17 @@ fun Application.configureExceptionHandling() {
             )
         }
 
+        exception<UserAlreadyExistsException> { call, cause ->
+            call.respond(
+                HttpStatusCode.Conflict,
+                ErrorResponseDto(
+                    code = "USER_EXISTS",
+                    message = cause.message ?: "User with this email already exists",
+                    details = mapOf("email" to cause.email)
+                )
+            )
+        }
+
         exception<InsufficientCreditsException> { call, cause ->
             call.respond(
                 HttpStatusCode.PaymentRequired,

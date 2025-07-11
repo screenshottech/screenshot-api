@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>50% of credits used - Great progress!</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        /* Reset styles for email clients */
+        body, table, td, a { 
+            -webkit-text-size-adjust: 100%; 
+            -ms-text-size-adjust: 100%; 
+        }
+        table, td { 
+            mso-table-lspace: 0pt; 
+            mso-table-rspace: 0pt; 
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+        
+        /* Main styles - Modern minimal design */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, system-ui, sans-serif;
+            line-height: 1.5;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+            background-color: #f9fafb;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .email-wrapper {
+            width: 100%;
+            max-width: 560px;
+            margin: 0 auto;
+            background-color: #f9fafb;
+            padding: 20px;
+        }
+        
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 40px 32px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .logo {
+            font-size: 18px;
+            font-weight: 600;
+            color: #111827;
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .content {
+            padding: 40px 32px;
+        }
+        
+        .hero {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .hero h1 {
+            color: #111827;
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.025em;
+            line-height: 1.3;
+        }
+        
+        .hero p {
+            color: #6b7280;
+            font-size: 16px;
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        .progress-card {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            border-radius: 12px;
+            padding: 32px;
+            margin: 32px 0;
+            text-align: center;
+        }
+        
+        .progress-icon {
+            font-size: 48px;
+            margin: 0 0 16px 0;
+            line-height: 1;
+        }
+        
+        .progress-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .progress-subtitle {
+            color: #fef3c7;
+            font-size: 14px;
+            margin: 0;
+            font-weight: 500;
+        }
+        
+        .usage-stats {
+            display: flex;
+            justify-content: space-between;
+            margin: 32px 0;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .stat {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 4px 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin: 0;
+            font-weight: 500;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            margin: 24px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            width: 50%;
+            border-radius: 4px;
+        }
+        
+        .tips {
+            margin: 40px 0;
+        }
+        
+        .tips h3 {
+            color: #111827;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 20px 0;
+            letter-spacing: -0.025em;
+        }
+        
+        .tip {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding: 0;
+        }
+        
+        .tip-icon {
+            width: 20px;
+            height: 20px;
+            background-color: #10b981;
+            border-radius: 50%;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 12px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+        
+        .tip-text {
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        
+        .tip-text strong {
+            color: #111827;
+            font-weight: 600;
+        }
+        
+        .cta-buttons {
+            text-align: center;
+            margin: 40px 0 32px 0;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background-color: #6366f1;
+            color: #ffffff !important;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            margin: 0 4px;
+            transition: all 0.15s ease;
+        }
+        
+        .cta-button:hover {
+            background-color: #4f46e5;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .cta-button.secondary {
+            background-color: #ffffff;
+            color: #6366f1 !important;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .cta-button.secondary:hover {
+            background-color: #f9fafb;
+            border-color: #d1d5db;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 32px;
+            background-color: #f9fafb;
+        }
+        
+        .footer p {
+            color: #6b7280;
+            font-size: 13px;
+            margin: 0 0 8px 0;
+            line-height: 1.5;
+        }
+        
+        .footer a {
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 13px;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .footer-links {
+            margin-top: 12px;
+        }
+        
+        .footer-links a {
+            margin: 0 12px;
+            color: #6b7280;
+        }
+        
+        .footer-links a:hover {
+            color: #6366f1;
+        }
+        
+        .divider {
+            height: 1px;
+            background-color: #e5e7eb;
+            margin: 16px 0;
+        }
+        
+        /* Mobile responsive */
+        @media screen and (max-width: 600px) {
+            .email-wrapper {
+                padding: 12px;
+            }
+            
+            .content {
+                padding: 32px 24px;
+            }
+            
+            .header {
+                padding: 32px 24px;
+            }
+            
+            .hero h1 {
+                font-size: 22px;
+            }
+            
+            .usage-stats {
+                flex-direction: column;
+            }
+            
+            .stat {
+                margin-bottom: 16px;
+            }
+            
+            .stat:last-child {
+                margin-bottom: 0;
+            }
+            
+            .cta-button {
+                display: block;
+                margin: 8px 0;
+            }
+            
+            .footer-links a {
+                display: block;
+                margin: 8px 0;
+            }
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #111827 !important;
+                color: #e5e7eb !important;
+            }
+            
+            .email-wrapper {
+                background-color: #111827 !important;
+            }
+            
+            .container {
+                background-color: #1f2937 !important;
+                box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+            }
+            
+            .header {
+                background-color: #1f2937 !important;
+                border-bottom-color: #374151 !important;
+            }
+            
+            .logo {
+                color: #f3f4f6 !important;
+            }
+            
+            .hero h1 {
+                color: #f3f4f6 !important;
+            }
+            
+            .hero p {
+                color: #9ca3af !important;
+            }
+            
+            .usage-stats {
+                background-color: #111827 !important;
+                border-color: #374151 !important;
+            }
+            
+            .stat-value {
+                color: #f3f4f6 !important;
+            }
+            
+            .stat-label {
+                color: #9ca3af !important;
+            }
+            
+            .tips h3 {
+                color: #f3f4f6 !important;
+            }
+            
+            .tip-text {
+                color: #d1d5db !important;
+            }
+            
+            .tip-text strong {
+                color: #f3f4f6 !important;
+            }
+            
+            .footer {
+                background-color: #111827 !important;
+            }
+            
+            .footer p {
+                color: #9ca3af !important;
+            }
+            
+            .cta-button.secondary {
+                background-color: #374151 !important;
+                color: #f3f4f6 !important;
+                border-color: #4b5563 !important;
+            }
+            
+            .cta-button.secondary:hover {
+                background-color: #4b5563 !important;
+                border-color: #6b7280 !important;
+            }
+            
+            .divider {
+                background-color: #374151 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-wrapper">
+        <div class="container">
+            <div class="header">
+                <div class="logo">{{appLogo}} {{appName}}</div>
+            </div>
+            
+            <div class="content">
+                <div class="hero">
+                    <h1>Great progress, {{userName}}!</h1>
+                    <p>You're halfway through your monthly credits. Keep up the momentum!</p>
+                </div>
+                
+                <div class="progress-card">
+                    <div class="progress-icon">📊</div>
+                    <div class="progress-title">50% Credits Used</div>
+                    <p class="progress-subtitle">Right on track for the month</p>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                
+                <div class="usage-stats">
+                    <div class="stat">
+                        <div class="stat-value">{{creditsUsed}}</div>
+                        <div class="stat-label">Credits used</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">{{creditsRemaining}}</div>
+                        <div class="stat-label">Credits remaining</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">{{resetDate}}</div>
+                        <div class="stat-label">Reset date</div>
+                    </div>
+                </div>
+                
+                <div class="tips">
+                    <h3>Optimize your usage</h3>
+                    <div class="tip">
+                        <div class="tip-icon">💡</div>
+                        <div class="tip-text"><strong>Batch requests</strong> when possible to maximize efficiency</div>
+                    </div>
+                    <div class="tip">
+                        <div class="tip-icon">⚡</div>
+                        <div class="tip-text"><strong>Use webhooks</strong> to avoid frequent status polling</div>
+                    </div>
+                    <div class="tip">
+                        <div class="tip-icon">📈</div>
+                        <div class="tip-text"><strong>Monitor analytics</strong> to track usage patterns</div>
+                    </div>
+                    <div class="tip">
+                        <div class="tip-icon">🔄</div>
+                        <div class="tip-text"><strong>Consider upgrading</strong> if you need more credits</div>
+                    </div>
+                </div>
+                
+                <div class="cta-buttons">
+                    <a href="{{dashboardUrl}}" class="cta-button">View Usage</a>
+                    <a href="{{upgradeUrl}}" class="cta-button secondary">Upgrade Plan</a>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p><strong>Need help?</strong> Just reply to this email.</p>
+                <div class="divider"></div>
+                <div class="footer-links">
+                    <a href="{{dashboardUrl}}">Dashboard</a>
+                    <a href="{{docsUrl}}">Documentation</a>
+                    <a href="mailto:{{supportEmail}}">Support</a>
+                </div>
+                <p style="margin-top: 16px; font-size: 12px; color: #9ca3af;">{{teamName}}</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
