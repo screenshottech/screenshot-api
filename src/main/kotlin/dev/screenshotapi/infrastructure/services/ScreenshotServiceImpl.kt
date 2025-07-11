@@ -8,7 +8,6 @@ import com.microsoft.playwright.options.ScreenshotType
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest
 import dev.screenshotapi.core.domain.entities.ScreenshotResult
-import dev.screenshotapi.core.domain.entities.ScreenshotJob
 import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.StorageOutputPort
@@ -46,7 +45,7 @@ class ScreenshotServiceImpl(
     override suspend fun takeScreenshot(request: ScreenshotRequest): ScreenshotResult = withContext(Dispatchers.IO) {
         takeScreenshotInternal(request, null, null, null)
     }
-    
+
     override suspend fun takeSecureScreenshot(
         request: ScreenshotRequest,
         userId: String,
@@ -55,7 +54,7 @@ class ScreenshotServiceImpl(
     ): ScreenshotResult = withContext(Dispatchers.IO) {
         takeScreenshotInternal(request, userId, jobId, createdAtEpochSeconds)
     }
-    
+
     private suspend fun takeScreenshotInternal(
         request: ScreenshotRequest,
         userId: String? = null,
@@ -64,14 +63,14 @@ class ScreenshotServiceImpl(
     ): ScreenshotResult = withContext(Dispatchers.IO) {
         // Step 1: Validate request format
         validateRequest(request)
-        
+
         // Step 2: SSRF Protection - Validate URL security
         val urlValidation = urlSecurityPort.validateUrl(request.url)
         if (!urlValidation.isValid) {
             logger.warn("SSRF protection blocked URL: ${request.url} - ${urlValidation.reason}")
             throw ScreenshotException.InvalidUrl("URL blocked for security reasons: ${urlValidation.reason}")
         }
-        
+
         logger.debug("URL security validation passed: ${request.url} -> ${urlValidation.resolvedIp}")
 
         // Step 3: Limit concurrency
@@ -115,7 +114,7 @@ class ScreenshotServiceImpl(
     }
 
     private suspend fun takeImageScreenshot(
-        page: Page, 
+        page: Page,
         request: ScreenshotRequest,
         userId: String? = null,
         jobId: String? = null,
@@ -131,9 +130,8 @@ class ScreenshotServiceImpl(
             throw ScreenshotException.UrlNotAccessible(request.url, response.status())
         }
 
-        // Wait for page to load
-        page.waitForLoadState(LoadState.NETWORKIDLE,
-            Page.WaitForLoadStateOptions().setTimeout(config.networkIdleTimeout.toDouble()))
+        // Wait for page to load with graceful fallback strategy
+        waitForPageLoad(page, request.url)
 
         // Optional wait time
         request.waitTime?.let { delay(minOf(it, 5000)) }
@@ -172,7 +170,7 @@ class ScreenshotServiceImpl(
         val contentType = getContentType(request.format)
         val url = storagePort.upload(finalBytes, filename, contentType)
         val fileSizeBytes = finalBytes.size.toLong()
-        
+
         return ScreenshotResult(url, fileSizeBytes)
     }
 
@@ -197,9 +195,8 @@ class ScreenshotServiceImpl(
             throw ScreenshotException.UrlNotAccessible(request.url, response.status())
         }
 
-        // Wait for page load
-        page.waitForLoadState(LoadState.NETWORKIDLE,
-            Page.WaitForLoadStateOptions().setTimeout(config.networkIdleTimeout.toDouble()))
+        // Wait for page to load with graceful fallback strategy
+        waitForPageLoad(page, request.url)
 
         // Optional wait time
         request.waitTime?.let { delay(minOf(it.toLong(), 5000)) }
@@ -222,7 +219,7 @@ class ScreenshotServiceImpl(
         val filename = generateFilename(request, userId, jobId, createdAtEpochSeconds, "pdf")
         val url = storagePort.upload(pdfBytes, filename, "application/pdf")
         val fileSizeBytes = pdfBytes.size.toLong()
-        
+
         return ScreenshotResult(url, fileSizeBytes)
     }
 
@@ -261,7 +258,7 @@ class ScreenshotServiceImpl(
     }
 
     private fun generateFilename(
-        request: ScreenshotRequest, 
+        request: ScreenshotRequest,
         userId: String? = null,
         jobId: String? = null,
         createdAtEpochSeconds: Long? = null,
@@ -277,18 +274,18 @@ class ScreenshotServiceImpl(
                 extension = extension
             )
         }
-        
+
         // Fall back to legacy filename format
         val now = Clock.System.now()
         val instant = now.toLocalDateTime(TimeZone.UTC)
         val year = instant.year
         val month = instant.monthNumber.toString().padStart(2, '0')
-        
+
         val timestamp = now.toEpochMilliseconds()
         val urlHash = request.url.hashCode().toString().takeLast(8)
         val ext = extension ?: request.format.name.lowercase()
         val dimensions = "${request.width}x${request.height}"
-        
+
         logger.debug("Using legacy filename format for request without secure parameters")
         return "screenshots/$year/$month/${timestamp}_${urlHash}_${dimensions}.$ext"
     }
@@ -312,6 +309,47 @@ class ScreenshotServiceImpl(
         } catch (e: Exception) {
             logger.warn("WebP conversion failed, using PNG", e)
             pngBytes
+        }
+    }
+
+    /**
+     * Waits for page to load with graceful fallback strategy.
+     * First attempts network idle, then falls back to basic load state if enabled.
+     */
+    private suspend fun waitForPageLoad(page: Page, url: String) {
+        try {
+            // Primary strategy: Wait for network idle (best quality)
+            page.waitForLoadState(
+                LoadState.NETWORKIDLE,
+                Page.WaitForLoadStateOptions().setTimeout(config.networkIdleTimeout.toDouble())
+            )
+        } catch (networkIdleException: Exception) {
+            if (config.enableGracefulTimeoutFallback) {
+                logger.warn("Network idle timeout for $url, attempting graceful fallback")
+                handleGracefulFallback(page, url, networkIdleException)
+            } else {
+                logger.error("Network idle timeout for $url (fallback disabled)")
+                throw networkIdleException
+            }
+        }
+    }
+
+    /**
+     * Handles graceful fallback when network idle times out.
+     * Attempts basic load state as a last resort.
+     */
+    private suspend fun handleGracefulFallback(page: Page, url: String, originalException: Exception) {
+        try {
+            // Fallback strategy: Basic load state (acceptable quality)
+            page.waitForLoadState(
+                LoadState.LOAD,
+                Page.WaitForLoadStateOptions().setTimeout(15_000.0) // Fixed 15s for fallback
+            )
+            logger.info("Graceful fallback successful for $url")
+        } catch (fallbackException: Exception) {
+            logger.error("Complete page load failure for $url: both network idle and basic load failed")
+            // Return the original network idle exception for better debugging
+            throw ScreenshotException.UrlNotAccessible(url, 408)
         }
     }
 
