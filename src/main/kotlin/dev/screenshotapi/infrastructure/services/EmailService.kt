@@ -40,7 +40,7 @@ class EmailService(
                 to = user.email,
                 subject = subject,
                 htmlContent = htmlContent,
-                textContent = renderTextTemplate(templateName, templateData)
+                textContent = ""
             )
             
             if (result.success) {

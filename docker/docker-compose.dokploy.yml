@@ -92,6 +92,30 @@ services:
       DEFAULT_AUTH_PROVIDER: ${DEFAULT_AUTH_PROVIDER:-local}
       ENABLED_AUTH_PROVIDERS: ${ENABLED_AUTH_PROVIDERS:-local}
 
+      # Email configuration
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-true}
+      EMAIL_SERVICE_PROVIDER: ${EMAIL_SERVICE_PROVIDER:-gmail}
+      EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-screenshottech.dev@gmail.com}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Screenshot API Team}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-screenshottech.dev@gmail.com}
+      EMAIL_TEMPLATE_PATH: ${EMAIL_TEMPLATE_PATH:-/app/email-templates}
+      EMAIL_DEBUG_MODE: ${EMAIL_DEBUG_MODE:-false}
+      EMAIL_APP_NAME: ${EMAIL_APP_NAME:-Screenshot API}
+      EMAIL_APP_LOGO: ${EMAIL_APP_LOGO:-📸}
+      EMAIL_TEAM_NAME: ${EMAIL_TEAM_NAME:-Screenshot API Team}
+      EMAIL_API_BASE_URL: ${EMAIL_API_BASE_URL:-https://api.screenshotapi.dev}
+      EMAIL_DASHBOARD_URL: ${EMAIL_DASHBOARD_URL:-https://dashboard.screenshotapi.dev}
+      EMAIL_DOCS_URL: ${EMAIL_DOCS_URL:-https://docs.screenshotapi.dev}
+      EMAIL_UPGRADE_URL: ${EMAIL_UPGRADE_URL:-https://dashboard.screenshotapi.dev/billing}
+      
+      # Gmail SMTP configuration
+      GMAIL_SMTP_USERNAME: ${GMAIL_SMTP_USERNAME}
+      GMAIL_SMTP_APP_PASSWORD: ${GMAIL_SMTP_APP_PASSWORD}
+      
+      # AWS SES configuration (alternative)
+      AWS_SES_REGION: ${AWS_SES_REGION:-us-east-1}
+      AWS_SES_CONFIGURATION_SET: ${AWS_SES_CONFIGURATION_SET}
+
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
