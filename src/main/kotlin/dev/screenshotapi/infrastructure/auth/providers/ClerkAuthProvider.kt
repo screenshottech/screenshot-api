@@ -7,6 +7,8 @@ import dev.screenshotapi.core.domain.entities.User
 import dev.screenshotapi.core.domain.repositories.PlanRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.AuthProvider
+import dev.screenshotapi.core.usecases.email.SendWelcomeEmailUseCase
+import dev.screenshotapi.core.usecases.email.SendWelcomeEmailRequest
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -37,6 +39,7 @@ class ClerkAuthProvider(
     private val userRepository: UserRepository,
     private val planRepository: PlanRepository,
     private val httpClient: HttpClient,
+    private val sendWelcomeEmailUseCase: SendWelcomeEmailUseCase? = null,
     private val clerkDomain: String? = null
 ) : AuthProvider {
 
@@ -145,6 +148,28 @@ class ClerkAuthProvider(
         logger.info("Saving new user: ${newUser.email}")
         val savedUser = userRepository.save(newUser)
         logger.info("User created successfully with ID: ${savedUser.id}")
+        
+        // Send welcome email if email service is available
+        if (sendWelcomeEmailUseCase != null) {
+            try {
+                logger.info("CLERK_REGISTRATION_EMAIL_TRIGGER: Sending welcome email [userId=${savedUser.id}]")
+                
+                // For now, use a placeholder API key - in production this would be generated
+                val apiKey = "placeholder_api_key_${savedUser.id}"
+                
+                sendWelcomeEmailUseCase.invoke(SendWelcomeEmailRequest(
+                    userId = savedUser.id,
+                    apiKey = apiKey
+                ))
+                
+                logger.info("CLERK_REGISTRATION_EMAIL_SUCCESS: Welcome email triggered successfully [userId=${savedUser.id}]")
+            } catch (e: Exception) {
+                logger.error("CLERK_REGISTRATION_EMAIL_FAILED: Failed to send welcome email [userId=${savedUser.id}]", e)
+                // Don't fail user registration if email fails
+            }
+        } else {
+            logger.debug("CLERK_REGISTRATION_EMAIL_DISABLED: Welcome email service not available [userId=${savedUser.id}]")
+        }
         
         // Return AuthResult with internal user ID for new users
         return authResult.copy(userId = savedUser.id)

@@ -34,6 +34,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[roles] = user.roles.toPostgreSQLArray()
                 it[stripeCustomerId] = user.stripeCustomerId
                 it[lastActivity] = user.lastActivity
+                it[firstScreenshotCompletedAt] = user.firstScreenshotCompletedAt
                 it[authProvider] = user.authProvider
                 it[externalId] = user.externalId
                 it[updatedAt] = Clock.System.now()
@@ -58,6 +59,7 @@ class PostgreSQLUserRepository(private val database: Database) : UserRepository 
                 it[roles] = user.roles.toPostgreSQLArray()
                 it[stripeCustomerId] = user.stripeCustomerId
                 it[lastActivity] = user.lastActivity
+                it[firstScreenshotCompletedAt] = user.firstScreenshotCompletedAt
                 it[authProvider] = user.authProvider
                 it[externalId] = user.externalId
                 it[createdAt] = now

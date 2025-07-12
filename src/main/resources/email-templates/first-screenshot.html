@@ -101,7 +101,7 @@
         }
         
         .success-card {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background-color: #6366f1;
             border-radius: 12px;
             padding: 32px;
             margin: 32px 0;
@@ -123,31 +123,38 @@
         }
         
         .success-subtitle {
-            color: #d1fae5;
+            color: #e0e7ff;
             font-size: 14px;
             margin: 0;
             font-weight: 500;
         }
         
         .stats {
-            display: flex;
-            justify-content: space-between;
             margin: 32px 0;
-            background-color: #f9fafb;
-            border: 1px solid #e5e7eb;
+            background-color: #faf5ff;
+            border: 1px solid #e9d5ff;
             border-radius: 8px;
             padding: 20px;
+            text-align: center;
+        }
+        
+        .stats table {
+            width: 100%;
+            border: 0;
+            margin: 0;
+            padding: 0;
         }
         
         .stat {
             text-align: center;
-            flex: 1;
+            padding: 0 10px;
+            vertical-align: top;
         }
         
         .stat-value {
             font-size: 20px;
             font-weight: 700;
-            color: #111827;
+            color: #6366f1;
             margin: 0 0 4px 0;
             letter-spacing: -0.025em;
         }
@@ -161,10 +168,14 @@
         
         .next-steps {
             margin: 40px 0;
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 24px;
         }
         
         .next-steps h3 {
-            color: #111827;
+            color: #1e293b;
             font-size: 16px;
             font-weight: 600;
             margin: 0 0 20px 0;
@@ -172,10 +183,9 @@
         }
         
         .step {
-            display: flex;
-            align-items: flex-start;
             margin-bottom: 16px;
             padding: 0;
+            line-height: 24px;
         }
         
         .step-number {
@@ -184,20 +194,23 @@
             background-color: #6366f1;
             border-radius: 50%;
             margin-right: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: inline-block;
+            text-align: center;
+            line-height: 24px;
             color: #ffffff;
             font-weight: 700;
             font-size: 12px;
-            flex-shrink: 0;
+            vertical-align: top;
+            box-sizing: border-box;
         }
         
         .step-text {
             color: #374151;
             font-size: 14px;
-            line-height: 1.5;
+            line-height: 24px;
             margin: 0;
+            display: inline-block;
+            vertical-align: top;
         }
         
         .step-text strong {
@@ -301,16 +314,39 @@
                 font-size: 22px;
             }
             
-            .stats {
-                flex-direction: column;
+            .stats table {
+                width: 100% !important;
             }
             
-            .stat {
-                margin-bottom: 16px;
+            .stats td {
+                display: block !important;
+                width: 100% !important;
+                padding: 10px 0 !important;
             }
             
-            .stat:last-child {
-                margin-bottom: 0;
+            .stat-value {
+                font-size: 24px !important;
+            }
+            
+            .step {
+                text-align: center !important;
+                margin-bottom: 24px !important;
+            }
+            
+            .step-number {
+                display: block !important;
+                margin: 0 auto 8px auto !important;
+                width: 32px !important;
+                height: 32px !important;
+                line-height: 32px !important;
+                font-size: 14px !important;
+            }
+            
+            .step-text {
+                display: block !important;
+                text-align: center !important;
+                margin: 0 !important;
+                padding: 0 20px !important;
             }
             
             .cta-button {
@@ -427,18 +463,22 @@
                 </div>
                 
                 <div class="stats">
-                    <div class="stat">
-                        <div class="stat-value">{{creditsUsed}}</div>
-                        <div class="stat-label">Credits used</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">{{creditsRemaining}}</div>
-                        <div class="stat-label">Credits remaining</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-value">{{processingTime}}ms</div>
-                        <div class="stat-label">Processing time</div>
-                    </div>
+                    <table width="100%" style="width: 100%; border: 0; padding: 0; margin: 0;">
+                        <tr>
+                            <td style="text-align: center; padding: 0 5px;">
+                                <div class="stat-value">{{creditsUsed}}</div>
+                                <div class="stat-label">Credits used</div>
+                            </td>
+                            <td style="text-align: center; padding: 0 5px;">
+                                <div class="stat-value">{{creditsRemaining}}</div>
+                                <div class="stat-label">Credits remaining</div>
+                            </td>
+                            <td style="text-align: center; padding: 0 5px;">
+                                <div class="stat-value">{{processingTime}}ms</div>
+                                <div class="stat-label">Processing time</div>
+                            </td>
+                        </tr>
+                    </table>
                 </div>
                 
                 <div class="next-steps">

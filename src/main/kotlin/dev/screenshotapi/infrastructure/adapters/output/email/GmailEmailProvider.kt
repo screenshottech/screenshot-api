@@ -44,7 +44,7 @@ class GmailEmailProvider(
             put("mail.smtp.connectiontimeout", "10000")
             put("mail.smtp.timeout", "10000") 
             put("mail.smtp.writetimeout", "10000")
-            put("mail.debug", "true")
+            put("mail.debug", config.debugMode.toString())
             put("mail.smtp.user", username)
             put("mail.user", username)
         }

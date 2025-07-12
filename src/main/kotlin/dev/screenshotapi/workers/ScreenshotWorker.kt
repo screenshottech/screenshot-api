@@ -3,6 +3,7 @@ package dev.screenshotapi.workers
 import dev.screenshotapi.core.domain.entities.ScreenshotJob
 import dev.screenshotapi.core.domain.entities.ScreenshotResult
 import dev.screenshotapi.core.domain.entities.ScreenshotStatus
+import dev.screenshotapi.core.domain.entities.User
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
@@ -16,6 +17,7 @@ import dev.screenshotapi.core.domain.entities.JobType
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
+import dev.screenshotapi.infrastructure.services.EmailService
 import kotlinx.coroutines.*
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -36,7 +38,8 @@ class ScreenshotWorker(
     private val notificationService: NotificationService,
     private val metricsService: MetricsService,
     private val retryPolicy: RetryPolicy,
-    private val config: ScreenshotConfig
+    private val config: ScreenshotConfig,
+    private val emailService: EmailService? = null
 ) {
     private val logger = LoggerFactory.getLogger("${this::class.simpleName}-$id")
 
@@ -152,15 +155,7 @@ class ScreenshotWorker(
         currentState.set(WorkerState.PROCESSING)
         updateActivity()
 
-        logger.info(
-            """
-            Processing job ${job.id} for user ${job.userId}:
-            - Type: ${job.jobType.displayName}
-            - URL: ${job.request.url}
-            - Format: ${job.request.format.name}
-            - Credits: ${job.jobType.defaultCredits}
-            """.trimIndent()
-        )
+        logger.info("Processing job ${job.id} for user ${job.userId}: type=${job.jobType.displayName}, url=${job.request.url}, format=${job.request.format.name}, credits=${job.jobType.defaultCredits}")
 
         try {
             // 1. Update status to "processing"
@@ -232,6 +227,14 @@ class ScreenshotWorker(
 
             logger.info("Job completed successfully: jobId={}, userId={}, processingTime={}ms, resultUrl={}", 
                 job.id, job.userId, processingTime, screenshotResult.url)
+            
+            // 9. Send first screenshot email if this is user's first completed screenshot
+            val user = userRepository.findById(job.userId)
+            if (user != null) {
+                sendFirstScreenshotEmailIfNeeded(user, completedJob, screenshotResult, processingTime)
+            } else {
+                logger.warn("FIRST_SCREENSHOT_EMAIL_SKIPPED: User not found [userId=${job.userId}, jobId=${job.id}]")
+            }
 
         } catch (e: Exception) {
             handleJobFailure(job, e, System.currentTimeMillis() - startTime)
@@ -471,6 +474,48 @@ class ScreenshotWorker(
             isRunning = isRunning.get()
         )
     )
+    
+    /**
+     * Sends first screenshot email if this is the user's first successfully completed screenshot.
+     * Uses O(1) User entity flag instead of expensive COUNT(*) database query.
+     */
+    private suspend fun sendFirstScreenshotEmailIfNeeded(
+        user: User,
+        job: ScreenshotJob,
+        result: ScreenshotResult,
+        processingTimeMs: Long
+    ) {
+        if (emailService == null) {
+            logger.debug("FIRST_SCREENSHOT_EMAIL_DISABLED: Email service not available [userId=${user.id}]")
+            return
+        }
+        
+        try {
+            // O(1) check using User entity flag instead of COUNT(*) query
+            if (!user.hasCompletedFirstScreenshot()) {
+                logger.info("FIRST_SCREENSHOT_EMAIL_TRIGGER: Sending first screenshot email [userId=${user.id}, jobId=${job.id}]")
+                
+                // Mark user as having completed first screenshot to prevent duplicates
+                val updatedUser = user.markFirstScreenshotCompleted()
+                userRepository.save(updatedUser)
+                logger.debug("FIRST_SCREENSHOT_FLAG_UPDATED: User marked as having completed first screenshot [userId=${user.id}]")
+                
+                // Send celebration email
+                emailService.sendFirstScreenshotEmail(
+                    user = user,
+                    screenshotUrl = result.url,
+                    processingTimeMs = processingTimeMs
+                )
+                
+                logger.info("FIRST_SCREENSHOT_EMAIL_SUCCESS: First screenshot email sent successfully [userId=${user.id}, jobId=${job.id}]")
+            } else {
+                logger.debug("FIRST_SCREENSHOT_EMAIL_SKIPPED: User already completed first screenshot [userId=${user.id}, jobId=${job.id}, completedAt=${user.firstScreenshotCompletedAt}]")
+            }
+        } catch (e: Exception) {
+            logger.error("FIRST_SCREENSHOT_EMAIL_FAILED: Failed to send first screenshot email [userId=${user.id}, jobId=${job.id}]", e)
+            // Don't fail the job if email fails
+        }
+    }
 }
 
 // === DATA CLASSES ===

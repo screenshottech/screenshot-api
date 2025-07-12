@@ -19,6 +19,7 @@ object Users : IdTable<String>("users") {
     val roles = varchar("roles", 500).default("{USER}") // PostgreSQL array as string representation
     val stripeCustomerId = varchar("stripe_customer_id", 100).nullable()
     val lastActivity = timestamp("last_activity").nullable()
+    val firstScreenshotCompletedAt = timestamp("first_screenshot_completed_at").nullable()
     val authProvider = varchar("auth_provider", 50).default("local")
     val externalId = varchar("external_id", 255).nullable()
     val createdAt = timestamp("created_at")
