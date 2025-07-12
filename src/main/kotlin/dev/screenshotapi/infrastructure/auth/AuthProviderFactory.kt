@@ -3,6 +3,7 @@ package dev.screenshotapi.infrastructure.auth
 import dev.screenshotapi.core.domain.services.AuthProvider
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.repositories.PlanRepository
+import dev.screenshotapi.core.usecases.email.SendWelcomeEmailUseCase
 import dev.screenshotapi.infrastructure.auth.providers.ClerkAuthProvider
 import dev.screenshotapi.infrastructure.auth.providers.LocalAuthProvider
 import dev.screenshotapi.infrastructure.config.AuthConfig
@@ -13,7 +14,8 @@ class AuthProviderFactory(
     private val userRepository: UserRepository,
     private val planRepository: PlanRepository,
     private val httpClient: HttpClient,
-    private val authConfig: AuthConfig
+    private val authConfig: AuthConfig,
+    private val sendWelcomeEmailUseCase: SendWelcomeEmailUseCase? = null
 ) {
     
     private val logger = LoggerFactory.getLogger(AuthProviderFactory::class.java)
@@ -64,6 +66,7 @@ class AuthProviderFactory(
                 userRepository = userRepository,
                 planRepository = planRepository,
                 httpClient = httpClient,
+                sendWelcomeEmailUseCase = sendWelcomeEmailUseCase,
                 clerkDomain = authConfig.clerkDomain
             )
         }

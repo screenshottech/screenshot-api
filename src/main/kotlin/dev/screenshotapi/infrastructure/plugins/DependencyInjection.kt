@@ -310,7 +310,8 @@ fun serviceModule() = module {
             userRepository = get(),
             planRepository = get(),
             httpClient = get(),
-            authConfig = get()
+            authConfig = get(),
+            sendWelcomeEmailUseCase = getOrNull<SendWelcomeEmailUseCase>()
         )
     }
     single {
@@ -334,7 +335,8 @@ fun serviceModule() = module {
             metricsService = get(),
             retryPolicy = get(),
             jobRetryScheduler = get(),
-            config = get()
+            config = get(),
+            emailService = getOrNull<EmailService>()
         )
     }
 

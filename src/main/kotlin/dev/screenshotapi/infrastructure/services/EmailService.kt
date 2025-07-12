@@ -217,6 +217,67 @@ class EmailService(
                 </html>
             """.trimIndent()
             
+            fileName.startsWith("first-screenshot") -> """
+                <html>
+                <body style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #2563eb; margin-bottom: 10px;">🎉 Your First Screenshot is Ready!</h1>
+                        <p style="color: #64748b; font-size: 18px;">Congratulations, {{userName}}!</p>
+                    </div>
+                    
+                    <div style="background: #f8fafc; border-radius: 8px; padding: 25px; margin: 25px 0;">
+                        <h2 style="color: #334155; margin-top: 0;">📸 Screenshot Details</h2>
+                        <div style="margin-bottom: 15px;">
+                            <a href="{{screenshotUrl}}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Your Screenshot</a>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                            <div>
+                                <h4 style="margin: 0 0 5px 0; color: #475569;">Credits Used</h4>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #dc2626;">{{creditsUsed}}</p>
+                            </div>
+                            <div>
+                                <h4 style="margin: 0 0 5px 0; color: #475569;">Credits Remaining</h4>
+                                <p style="margin: 0; font-size: 18px; font-weight: bold; color: #059669;">{{creditsRemaining}}</p>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <h4 style="margin: 0 0 5px 0; color: #475569;">Processing Time</h4>
+                            <p style="margin: 0; font-size: 16px; color: #64748b;">{{processingTime}}ms</p>
+                        </div>
+                    </div>
+                    
+                    <div style="background: #eff6ff; border-left: 4px solid #2563eb; padding: 20px; margin: 25px 0;">
+                        <h3 style="color: #1e40af; margin-top: 0;">🚀 What's Next?</h3>
+                        <div style="color: #475569;">
+                            <div style="display: flex; align-items: flex-start; margin-bottom: 15px;">
+                                <div style="background: #2563eb; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; margin-right: 12px; flex-shrink: 0; margin-top: 2px;">1</div>
+                                <div>View your screenshot using the result URL in the API response</div>
+                            </div>
+                            <div style="display: flex; align-items: flex-start; margin-bottom: 15px;">
+                                <div style="background: #2563eb; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; margin-right: 12px; flex-shrink: 0; margin-top: 2px;">2</div>
+                                <div>Set up webhooks for real-time notifications</div>
+                            </div>
+                            <div style="display: flex; align-items: flex-start; margin-bottom: 15px;">
+                                <div style="background: #2563eb; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; margin-right: 12px; flex-shrink: 0; margin-top: 2px;">3</div>
+                                <div>Monitor usage in your <a href="{{dashboardUrl}}" style="color: #2563eb; text-decoration: none;">analytics dashboard</a></div>
+                            </div>
+                            <div style="display: flex; align-items: flex-start; margin-bottom: 0;">
+                                <div style="background: #2563eb; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; margin-right: 12px; flex-shrink: 0; margin-top: 2px;">4</div>
+                                <div>Explore formats - try PDF, WEBP, or different sizes</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                        <p style="color: #64748b; margin: 0;">Happy screenshotting!</p>
+                        <p style="color: #64748b; margin: 5px 0 0 0;">The {{teamName}} Team</p>
+                    </div>
+                </body>
+                </html>
+            """.trimIndent()
+            
             fileName.startsWith("credit-alert") -> """
                 <html>
                 <body>

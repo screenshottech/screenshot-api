@@ -17,6 +17,7 @@ fun ResultRow.toUser(): User {
         roles = parseRolesFromPostgreSQL(this[Users.roles]),
         stripeCustomerId = this[Users.stripeCustomerId],
         lastActivity = this[Users.lastActivity],
+        firstScreenshotCompletedAt = this[Users.firstScreenshotCompletedAt],
         authProvider = this[Users.authProvider],
         externalId = this[Users.externalId],
         createdAt = this[Users.createdAt],

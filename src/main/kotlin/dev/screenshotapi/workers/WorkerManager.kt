@@ -10,6 +10,7 @@ import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
+import dev.screenshotapi.infrastructure.services.EmailService
 import kotlinx.coroutines.*
 import kotlinx.datetime.Instant
 import org.slf4j.LoggerFactory
@@ -29,7 +30,8 @@ class WorkerManager(
     private val metricsService: MetricsService,
     private val retryPolicy: RetryPolicy,
     private val jobRetryScheduler: JobRetryScheduler,
-    private val config: AppConfig
+    private val config: AppConfig,
+    private val emailService: EmailService? = null
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
     private val workers = ConcurrentHashMap<String, ScreenshotWorker>()
@@ -144,7 +146,8 @@ class WorkerManager(
             notificationService = notificationService,
             metricsService = metricsService,
             retryPolicy = retryPolicy,
-            config = config.screenshot
+            config = config.screenshot,
+            emailService = emailService
         )
 
         workers[workerId] = worker

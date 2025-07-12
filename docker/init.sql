@@ -63,6 +63,7 @@ create table public.users
             on update restrict on delete restrict,
     stripe_customer_id varchar(100),
     last_activity      timestamp with time zone,
+    first_screenshot_completed_at timestamp with time zone,
     created_at         timestamp                                       not null,
     updated_at         timestamp                                       not null,
     auth_provider      varchar(50) default 'local'::character varying  not null,
@@ -74,6 +75,11 @@ alter table public.users
 
 create unique index "userEmailIndex"
     on public.users (email);
+
+-- Index for first screenshot analytics and optimizations
+create index idx_users_first_screenshot 
+    on public.users (first_screenshot_completed_at) 
+    where first_screenshot_completed_at is not null;
 
 create trigger update_users_updated_at
     before update
@@ -164,6 +170,7 @@ create index "screenshotCreatedAtIndex"
     on public.screenshots (created_at);
 
 CREATE INDEX IF NOT EXISTS "idx_screenshots_user_created" ON screenshots(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS "idx_screenshots_user_status" ON screenshots(user_id, status);
 
 CREATE INDEX IF NOT EXISTS "idx_screenshots_retry_ready" ON screenshots(next_retry_at) WHERE status = 'QUEUED' AND is_retryable = true AND next_retry_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "idx_screenshots_stuck_jobs" ON screenshots(status, updated_at) WHERE status = 'PROCESSING';
