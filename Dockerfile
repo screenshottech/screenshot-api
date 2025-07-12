@@ -68,6 +68,9 @@ WORKDIR /app
 # Copy the built JAR from builder stage
 COPY --from=builder /app/build/libs/*-all.jar app.jar
 
+# Copy email templates
+COPY src/main/resources/email-templates/ /app/email-templates/
+
 # Set environment variables
 ENV PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright \
     DEBIAN_FRONTEND=noninteractive
