@@ -48,18 +48,21 @@ class CreateCheckoutSessionUseCase(
             ?: throw ResourceNotFoundException("Plan not found with id: ${request.planId}")
         
         if (!plan.isActive) {
-            throw ValidationException("Plan is not available for subscription", "planId")
+            throw ValidationException.InvalidState("Plan", "inactive", "active")
         }
         
         // Validate URLs
-        if (request.successUrl.isBlank() || request.cancelUrl.isBlank()) {
-            throw ValidationException("Success and cancel URLs are required", "urls")
+        if (request.successUrl.isBlank()) {
+            throw ValidationException.Required("successUrl")
+        }
+        if (request.cancelUrl.isBlank()) {
+            throw ValidationException.Required("cancelUrl")
         }
         
         // Validate pricing exists for billing cycle
         val price = request.billingCycle.getPriceFromPlan(plan)
         if (price <= 0 && plan.name.lowercase() != "free") {
-            throw ValidationException("Plan does not support ${request.billingCycle.name.lowercase()} billing", "billingCycle")
+            throw ValidationException.Custom("Plan does not support ${request.billingCycle.name.lowercase()} billing", "billingCycle")
         }
         
         // Create checkout session via payment gateway

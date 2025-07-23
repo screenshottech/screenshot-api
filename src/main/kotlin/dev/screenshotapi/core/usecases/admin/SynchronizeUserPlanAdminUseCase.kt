@@ -72,7 +72,7 @@ class SynchronizeUserPlanAdminUseCase(
             // Verify subscription belongs to user
             if (subscription.userId != request.userId) {
                 logger.error("ADMIN_SYNC_PLAN_SUBSCRIPTION_MISMATCH: Subscription does not belong to user [subscriptionId=${request.subscriptionId}, subscriptionUserId=${subscription.userId}, requestUserId=${request.userId}, adminUserId=${request.adminUserId}]")
-                throw ValidationException("Subscription ${request.subscriptionId} does not belong to user ${request.userId}", "subscriptionId")
+                throw ValidationException.Custom("Subscription ${request.subscriptionId} does not belong to user ${request.userId}", "subscriptionId")
             }
             
             subscription
@@ -88,7 +88,7 @@ class SynchronizeUserPlanAdminUseCase(
         // 3. Validate subscription is active
         if (targetSubscription.status != SubscriptionStatus.ACTIVE) {
             logger.warn("ADMIN_SYNC_PLAN_INACTIVE_SUBSCRIPTION: Target subscription is not active [subscriptionId=${targetSubscription.id}, status=${targetSubscription.status}, adminUserId=${request.adminUserId}]")
-            throw ValidationException("Cannot synchronize with inactive subscription. Status: ${targetSubscription.status}", "subscriptionStatus")
+            throw ValidationException.Custom("Cannot synchronize with inactive subscription. Status: ${targetSubscription.status}", "subscriptionStatus")
         }
         
         val targetPlanId = targetSubscription.planId

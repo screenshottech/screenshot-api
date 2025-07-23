@@ -20,7 +20,7 @@ class CreateApiKeyUseCase(
     override suspend fun invoke(request: CreateApiKeyRequest): CreateApiKeyResponse {
         // Validate input
         if (request.name.isBlank()) {
-            throw ValidationException("API key name is required", "name")
+            throw ValidationException.Required("name")
         }
         
         // Check if user exists

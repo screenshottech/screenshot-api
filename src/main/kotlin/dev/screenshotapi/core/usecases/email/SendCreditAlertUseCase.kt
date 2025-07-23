@@ -28,16 +28,16 @@ class SendCreditAlertUseCase(
 
         // 1. Validate input
         if (request.userId.isBlank()) {
-            throw ValidationException("User ID is required", "userId")
+            throw ValidationException.Required("userId")
         }
         if (request.usagePercent !in 1..100) {
-            throw ValidationException("Usage percent must be between 1 and 100", "usagePercent")
+            throw ValidationException.InvalidRange("usagePercent", min = 1, max = 100)
         }
         if (request.creditsUsed < 0) {
-            throw ValidationException("Credits used cannot be negative", "creditsUsed")
+            throw ValidationException.NonNegative("creditsUsed")
         }
         if (request.creditsTotal <= 0) {
-            throw ValidationException("Credits total must be positive", "creditsTotal")
+            throw ValidationException.Positive("creditsTotal")
         }
 
         // 2. Load user (validation)
@@ -51,7 +51,7 @@ class SendCreditAlertUseCase(
             in 90..100 -> EmailType.CREDIT_ALERT_90
             else -> {
                 logger.warn("SEND_CREDIT_ALERT_INVALID_PERCENT: Invalid usage percent [userId=${request.userId}, percent=${request.usagePercent}]")
-                throw ValidationException("Invalid usage percent for alert: ${request.usagePercent}", "usagePercent")
+                throw ValidationException.Custom("Invalid usage percent for alert: ${request.usagePercent}", "usagePercent")
             }
         }
 

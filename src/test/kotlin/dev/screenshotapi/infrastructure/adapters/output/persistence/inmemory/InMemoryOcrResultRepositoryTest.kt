@@ -56,7 +56,7 @@ class InMemoryOcrResultRepositoryTest {
         assertEquals(updatedResult, result, "Should return updated OCR result")
         assertEquals("Updated text content", result.extractedText, "Should have updated text")
         assertEquals(0.95, result.confidence, "Should have updated confidence")
-        
+
         val foundResult = repository.findById(originalResult.id)
         assertEquals(updatedResult.extractedText, foundResult?.extractedText, "Should persist updated text")
     }
@@ -147,7 +147,7 @@ class InMemoryOcrResultRepositoryTest {
         assertEquals(3, firstPage.size, "First page should have 3 results")
         assertEquals(3, secondPage.size, "Second page should have 3 results")
         assertEquals(4, thirdPage.size, "Third page should have remaining 4 results")
-        
+
         // Verify no overlap between pages
         val allIds = (firstPage + secondPage + thirdPage).map { it.id }.toSet()
         assertEquals(totalResults, allIds.size, "Should have no duplicate results across pages")
@@ -223,7 +223,7 @@ class InMemoryOcrResultRepositoryTest {
         val now = Clock.System.now()
         val fromDate = now.minus(7.days)
         val toDate = now
-        
+
         val userResults = listOf(
             createTestOcrResult(userId = userId, success = true, confidence = 0.95, wordCount = 10, engine = OcrEngine.PADDLE_OCR, createdAt = now),
             createTestOcrResult(userId = userId, success = true, confidence = 0.88, wordCount = 15, engine = OcrEngine.TESSERACT, createdAt = now),
@@ -243,10 +243,10 @@ class InMemoryOcrResultRepositoryTest {
         assertEquals(3, analytics.successfulRequests, "Should count successful requests")
         assertEquals(1, analytics.failedRequests, "Should count failed requests")
         assertEquals(33, analytics.totalWordsExtracted, "Should sum word counts (10+15+0+8)")
-        
+
         // Calculate expected average confidence: (0.95 + 0.88 + 0.0 + 0.92) / 4 = 0.6875
         assertEquals(0.6875, analytics.averageConfidence, 0.001, "Should calculate correct average confidence")
-        
+
         // Engine usage
         assertEquals(3, analytics.engineUsage[OcrEngine.PADDLE_OCR], "Should count PaddleOCR usage")
         assertEquals(1, analytics.engineUsage[OcrEngine.TESSERACT], "Should count Tesseract usage")
@@ -259,10 +259,10 @@ class InMemoryOcrResultRepositoryTest {
         val now = Clock.System.now()
         val fromDate = now.minus(2.days)
         val toDate = now
-        
+
         val withinRangeResult = createTestOcrResult(userId = userId, createdAt = now.minus(1.days))
         val outsideRangeResult = createTestOcrResult(userId = userId, createdAt = now.minus(5.days))
-        
+
         repository.save(withinRangeResult)
         repository.save(outsideRangeResult)
 
@@ -281,7 +281,7 @@ class InMemoryOcrResultRepositoryTest {
         val now = Clock.System.now()
         val fromDate = now.minus(7.days)
         val toDate = now
-        
+
         val allResults = listOf(
             createTestOcrResult(userId = "user-1", success = true, wordCount = 10, createdAt = now),
             createTestOcrResult(userId = "user-2", success = true, wordCount = 20, createdAt = now),
@@ -306,10 +306,10 @@ class InMemoryOcrResultRepositoryTest {
         // Arrange
         val now = Clock.System.now()
         val cutoffDate = now.minus(7.days)
-        
+
         val oldResult = createTestOcrResult(createdAt = now.minus(10.days))
         val recentResult = createTestOcrResult(createdAt = now.minus(3.days))
-        
+
         repository.save(oldResult)
         repository.save(recentResult)
 
@@ -331,14 +331,14 @@ class InMemoryOcrResultRepositoryTest {
         val now = Clock.System.now()
         val fromDate = now.minus(7.days)
         val toDate = now
-        
+
         // Within range
         repository.save(createTestOcrResult(userId = userId, createdAt = now.minus(3.days)))
         repository.save(createTestOcrResult(userId = userId, createdAt = now.minus(1.days)))
-        
+
         // Outside range
         repository.save(createTestOcrResult(userId = userId, createdAt = now.minus(10.days)))
-        
+
         // Different user
         repository.save(createTestOcrResult(userId = "other-user", createdAt = now.minus(2.days)))
 
@@ -364,6 +364,7 @@ class InMemoryOcrResultRepositoryTest {
     ): OcrResult {
         return OcrResult(
             id = id,
+            userId = userId,
             success = success,
             extractedText = text,
             confidence = confidence,

@@ -62,6 +62,12 @@ class GetUserActivityUseCase(
             UsageLogAction.OCR_COMPLETED -> UserActivityType.SCREENSHOT_COMPLETED
             UsageLogAction.OCR_FAILED -> UserActivityType.SCREENSHOT_FAILED
             UsageLogAction.OCR_PRICE_EXTRACTION -> UserActivityType.SCREENSHOT_COMPLETED // Specialized OCR operation
+            
+            // AI Analysis Actions (NEW - Separate Flow)
+            UsageLogAction.AI_ANALYSIS_STARTED -> UserActivityType.SCREENSHOT_CREATED // Analysis start as creation activity
+            UsageLogAction.AI_ANALYSIS_COMPLETED -> UserActivityType.SCREENSHOT_COMPLETED // Analysis completion
+            UsageLogAction.AI_ANALYSIS_FAILED -> UserActivityType.SCREENSHOT_FAILED // Analysis failure
+            UsageLogAction.AI_ANALYSIS_CREDITS_DEDUCTED -> UserActivityType.SCREENSHOT_CREATED // Credit usage implies analysis activity
         }
     }
 
@@ -102,6 +108,16 @@ class GetUserActivityUseCase(
                 "OCR extraction failed"
             UsageLogAction.OCR_PRICE_EXTRACTION ->
                 "Performed price extraction analysis"
+                
+            // AI Analysis Actions (NEW - Separate Flow)
+            UsageLogAction.AI_ANALYSIS_STARTED ->
+                "Started AI analysis of screenshot"
+            UsageLogAction.AI_ANALYSIS_COMPLETED ->
+                "AI analysis completed successfully"
+            UsageLogAction.AI_ANALYSIS_FAILED ->
+                "AI analysis failed"
+            UsageLogAction.AI_ANALYSIS_CREDITS_DEDUCTED ->
+                "Used ${log.creditsUsed} credits for AI analysis"
         }
     }
 }

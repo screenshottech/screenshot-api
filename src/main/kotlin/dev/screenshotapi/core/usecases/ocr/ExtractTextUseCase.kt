@@ -27,21 +27,22 @@ class ExtractTextUseCase(
         val startTime = System.currentTimeMillis()
         
         try {
-            logger.info("Starting OCR extraction for user ${request.userId}, tier: ${request.tier}")
+            logger.info("Starting OCR extraction for user ${request.userId}, tier: ${request.tier}, analysisType: ${request.analysisType}")
             
             // Validate user and credits
             val user = userRepository.findById(request.userId)
                 ?: throw OcrException.ConfigurationException("User not found: ${request.userId}")
             
-            val requiredCredits = calculateRequiredCredits(request.tier)
+            val requiredCredits = calculateRequiredCredits(request.tier, request.analysisType)
             
             // Check and deduct credits upfront
+            val analysisType = request.analysisType ?: AnalysisType.BASIC_OCR
             try {
                 deductCreditsUseCase(
                     DeductCreditsRequest(
                         userId = request.userId,
                         amount = requiredCredits,
-                        reason = CreditDeductionReason.OCR,
+                        reason = getDeductionReason(analysisType),
                         jobId = request.id
                     )
                 )
@@ -61,12 +62,15 @@ class ExtractTextUseCase(
                     userId = request.userId,
                     action = UsageLogAction.OCR_CREATED,
                     creditsUsed = requiredCredits,
-                    screenshotId = request.id,
+                    screenshotId = request.screenshotJobId,
                     metadata = mapOf(
                         "tier" to request.tier.name,
+                        "analysis_type" to analysisType.name,
                         "engine" to (request.engine?.name ?: "AUTO"),
                         "language" to request.language,
-                        "use_case" to request.useCase.name
+                        "use_case" to request.useCase.name,
+                        "requires_ai" to analysisType.requiresAI.toString(),
+                        "ocrRequestId" to request.id
                     )
                 )
             )
@@ -81,13 +85,15 @@ class ExtractTextUseCase(
                 LogUsageUseCase.Request(
                     userId = request.userId,
                     action = UsageLogAction.OCR_COMPLETED,
-                    screenshotId = request.id,
+                    screenshotId = request.screenshotJobId,
                     metadata = mapOf(
                         "processing_time" to processingTime.toString(),
                         "confidence" to result.confidence.toString(),
                         "word_count" to result.wordCount.toString(),
+                        "analysis_type" to analysisType.name,
                         "engine" to result.engine.name,
-                        "success" to result.success.toString()
+                        "success" to result.success.toString(),
+                        "ocrRequestId" to request.id
                     )
                 )
             )
@@ -103,11 +109,12 @@ class ExtractTextUseCase(
                 LogUsageUseCase.Request(
                     userId = request.userId,
                     action = UsageLogAction.OCR_FAILED,
-                    screenshotId = request.id,
+                    screenshotId = request.screenshotJobId,
                     metadata = mapOf(
                         "processing_time" to processingTime.toString(),
                         "error" to e.message.orEmpty(),
-                        "error_type" to e::class.simpleName.orEmpty()
+                        "error_type" to e::class.simpleName.orEmpty(),
+                        "ocrRequestId" to request.id
                     )
                 )
             )
@@ -123,11 +130,12 @@ class ExtractTextUseCase(
                 LogUsageUseCase.Request(
                     userId = request.userId,
                     action = UsageLogAction.OCR_FAILED,
-                    screenshotId = request.id,
+                    screenshotId = request.screenshotJobId,
                     metadata = mapOf(
                         "processing_time" to processingTime.toString(),
                         "error" to e.message.orEmpty(),
-                        "error_type" to "UnexpectedException"
+                        "error_type" to "UnexpectedException",
+                        "ocrRequestId" to request.id
                     )
                 )
             )
@@ -141,13 +149,33 @@ class ExtractTextUseCase(
         }
     }
     
-    private fun calculateRequiredCredits(tier: OcrTier): Int {
-        return when (tier) {
-            OcrTier.BASIC -> 2
-            OcrTier.LOCAL_AI -> 2
-            OcrTier.AI_STANDARD -> 3
-            OcrTier.AI_PREMIUM -> 5
-            OcrTier.AI_ELITE -> 5
+    /**
+     * Calculate required credits based on analysis type and tier
+     * Analysis type takes precedence over tier for credit calculation
+     */
+    private fun calculateRequiredCredits(tier: OcrTier, analysisType: AnalysisType?): Int {
+        return if (analysisType != null) {
+            // Use analysis type credits (new system)
+            analysisType.credits
+        } else {
+            // Fallback to tier-based credits (legacy system)
+            when (tier) {
+                OcrTier.BASIC -> 2
+                OcrTier.LOCAL_AI -> 2
+                OcrTier.AI_STANDARD -> 3
+                OcrTier.AI_PREMIUM -> 5
+                OcrTier.AI_ELITE -> 5
+            }
+        }
+    }
+    
+    /**
+     * Get credit deduction reason based on analysis type
+     */
+    private fun getDeductionReason(analysisType: AnalysisType): CreditDeductionReason {
+        return when (analysisType) {
+            AnalysisType.BASIC_OCR -> CreditDeductionReason.OCR
+            AnalysisType.UX_ANALYSIS, AnalysisType.CONTENT_SUMMARY, AnalysisType.GENERAL -> CreditDeductionReason.AI_ANALYSIS
         }
     }
 }

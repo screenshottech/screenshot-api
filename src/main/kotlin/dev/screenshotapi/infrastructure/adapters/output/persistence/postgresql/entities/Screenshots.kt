@@ -33,4 +33,7 @@ object Screenshots : IdTable<String>("screenshots") {
     val retryType = varchar("retry_type", 20).default("AUTOMATIC") // AUTOMATIC, MANUAL
     val lockedBy = varchar("locked_by", 255).nullable()
     val lockedAt = timestamp("locked_at").nullable()
+    
+    // Page metadata - stored as JSON
+    val metadata = text("metadata").nullable() // JSON-serialized PageMetadata
 }

@@ -446,7 +446,7 @@ class AdminController : KoinComponent {
                 try {
                     SubscriptionStatus.valueOf(it.uppercase())
                 } catch (e: IllegalArgumentException) {
-                    throw ValidationException("Invalid status parameter: $it", "status")
+                    throw ValidationException.InvalidFormat("status", "must be a valid SubscriptionStatus")
                 }
             },
             planIdFilter = planId
@@ -463,7 +463,7 @@ class AdminController : KoinComponent {
         }
 
         val subscriptionId = call.parameters["subscriptionId"]
-            ?: throw ValidationException("Subscription ID is required", "subscriptionId")
+            ?: throw ValidationException.Required("subscriptionId")
 
         val request = GetSubscriptionDetailsRequest(subscriptionId = subscriptionId)
         val response = getSubscriptionDetailsUseCase(request)
@@ -482,7 +482,7 @@ class AdminController : KoinComponent {
             }
 
             val subscriptionId = call.parameters["subscriptionId"]
-                ?: throw ValidationException("Subscription ID is required", "subscriptionId")
+                ?: throw ValidationException.Required("subscriptionId")
 
             val body = call.receive<Map<String, String>>()
             val reason = body["reason"] ?: "admin_manual_provision"
@@ -527,7 +527,7 @@ class AdminController : KoinComponent {
             }
 
             val userId = call.parameters["userId"]
-                ?: throw ValidationException("User ID is required", "userId")
+                ?: throw ValidationException.Required("userId")
 
             val body = call.receive<Map<String, String>>()
             val subscriptionId = body["subscriptionId"] // Optional

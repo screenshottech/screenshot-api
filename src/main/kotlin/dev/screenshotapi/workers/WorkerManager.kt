@@ -3,10 +3,12 @@ package dev.screenshotapi.workers
 import dev.screenshotapi.core.domain.repositories.QueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
+import dev.screenshotapi.core.domain.repositories.OcrResultRepository
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
+import dev.screenshotapi.core.usecases.ocr.ExtractTextUseCase
 import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.services.MetricsService
 import dev.screenshotapi.infrastructure.services.NotificationService
@@ -33,7 +35,9 @@ class WorkerManager(
     private val jobRetryScheduler: JobRetryScheduler,
     private val config: AppConfig,
     private val emailService: EmailService? = null,
-    private val ocrWorkflowService: ScreenshotOcrWorkflowService?
+    private val ocrWorkflowService: ScreenshotOcrWorkflowService?,
+    private val ocrResultRepository: OcrResultRepository? = null,
+    private val extractTextUseCase: ExtractTextUseCase? = null
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
     private val workers = ConcurrentHashMap<String, ScreenshotWorker>()
@@ -151,6 +155,8 @@ class WorkerManager(
             config = config.screenshot,
             emailService = emailService,
             ocrWorkflowService = ocrWorkflowService,
+            ocrResultRepository = ocrResultRepository,
+            extractTextUseCase = extractTextUseCase
         )
 
         workers[workerId] = worker

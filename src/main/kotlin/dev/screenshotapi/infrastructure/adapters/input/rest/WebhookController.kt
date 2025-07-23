@@ -291,7 +291,7 @@ class WebhookController : KoinComponent {
     suspend fun testWebhook(call: ApplicationCall) {
         val userId = call.requireHybridUserId()
         val webhookId = call.parameters["webhookId"]
-            ?: throw ValidationException("webhookId is required")
+            ?: throw ValidationException.Required("webhookId")
 
         // Periodic cleanup of expired entries
         if (cleanupCounter.incrementAndGet() % CLEANUP_THRESHOLD == 0) {
@@ -340,6 +340,8 @@ class WebhookController : KoinComponent {
         return when (event) {
             WebhookEvent.SCREENSHOT_COMPLETED -> "Fired when a screenshot is successfully generated"
             WebhookEvent.SCREENSHOT_FAILED -> "Fired when a screenshot generation fails permanently"
+            WebhookEvent.ANALYSIS_COMPLETED -> "Fired when an AI analysis completes successfully"
+            WebhookEvent.ANALYSIS_FAILED -> "Fired when an AI analysis fails permanently"
             WebhookEvent.CREDITS_LOW -> "Fired when credits drop below 20%"
             WebhookEvent.CREDITS_EXHAUSTED -> "Fired when credits reach 0"
             WebhookEvent.SUBSCRIPTION_RENEWED -> "Fired when a subscription is renewed"

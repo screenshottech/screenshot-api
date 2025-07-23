@@ -17,5 +17,11 @@ enum class UsageLogAction {
     OCR_CREATED,
     OCR_COMPLETED,
     OCR_FAILED,
-    OCR_PRICE_EXTRACTION
+    OCR_PRICE_EXTRACTION,
+    
+    // Analysis events (NEW - Separate Flow)
+    AI_ANALYSIS_STARTED,
+    AI_ANALYSIS_COMPLETED,
+    AI_ANALYSIS_FAILED,
+    AI_ANALYSIS_CREDITS_DEDUCTED
 }

@@ -1,6 +1,7 @@
 package dev.screenshotapi.core.ports.output
 
 import dev.screenshotapi.core.domain.entities.*
+import dev.screenshotapi.core.domain.services.RateLimitOperationType
 import kotlinx.datetime.Instant
 
 interface UsageTrackingPort {
@@ -30,14 +31,24 @@ interface UsageTrackingPort {
     suspend fun getUserMonthlyStats(userId: String, year: Int): List<UserUsage>
 
     /**
-     * Get short-term usage for rate limiting
+     * Get short-term usage for rate limiting (backward compatibility)
      */
     fun getShortTermUsage(userId: String): ShortTermUsage
 
     /**
-     * Update short-term usage counters
+     * Get short-term usage for rate limiting by operation type
+     */
+    fun getShortTermUsage(userId: String, operationType: RateLimitOperationType): ShortTermUsage
+
+    /**
+     * Update short-term usage counters (backward compatibility)
      */
     suspend fun updateShortTermUsage(userId: String, now: Instant)
+
+    /**
+     * Update short-term usage counters by operation type
+     */
+    suspend fun updateShortTermUsage(userId: String, now: Instant, operationType: RateLimitOperationType)
 
     /**
      * Track daily usage

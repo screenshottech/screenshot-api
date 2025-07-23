@@ -12,7 +12,7 @@ class DeleteWebhookUseCase(
             ?: throw ResourceNotFoundException("Webhook", webhookId)
         
         if (webhook.userId != userId) {
-            throw ValidationException("Unauthorized access to webhook: $webhookId")
+            throw ValidationException.UnauthorizedAccess("webhook", webhookId)
         }
         
         return webhookRepository.delete(webhookId)

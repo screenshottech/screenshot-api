@@ -11,7 +11,9 @@ data class AppConfig(
     val billing: BillingConfig,
     val webhook: WebhookConfig,
     val email: EmailConfig,
-    val ocr: OcrConfig
+    val ocr: OcrConfig,
+    val analysis: AnalysisConfig,
+    val analysisWorker: AnalysisWorkerConfig
 ) {
     companion object {
         fun load(): AppConfig {
@@ -28,7 +30,9 @@ data class AppConfig(
                 billing = BillingConfig.load(),
                 webhook = WebhookConfig.load(),
                 email = EmailConfig.load(),
-                ocr = loadOcrConfig()
+                ocr = loadOcrConfig(),
+                analysis = AnalysisConfig.load(),
+                analysisWorker = AnalysisWorkerConfig.load()
             )
         }
     }
@@ -56,8 +60,8 @@ data class RedisConfig(
 ) {
     companion object {
         fun load(environment: Environment) = RedisConfig(
-            useInMemory = environment.isLocal,
-            url = if (environment.isLocal) null else System.getenv("REDIS_URL"),
+            useInMemory = System.getenv("REDIS_USE_IN_MEMORY")?.toBoolean() ?: environment.isLocal,
+            url = System.getenv("REDIS_URL"),
             maxConnections = System.getenv("REDIS_MAX_CONNECTIONS")?.toInt() ?: 10
         )
     }
@@ -87,6 +91,26 @@ data class StorageConfig(
             awsEndpointUrl = System.getenv("AWS_ENDPOINT_URL"),
             awsPublicEndpointUrl = System.getenv("AWS_PUBLIC_ENDPOINT_URL"),
             includeBucketInUrl = System.getenv("AWS_INCLUDE_BUCKET_IN_URL")?.toBoolean() ?: true
+        )
+    }
+}
+
+data class AnalysisWorkerConfig(
+    val enabled: Boolean,
+    val minWorkers: Int,
+    val maxWorkers: Int,
+    val pollingIntervalMs: Long,
+    val processingTimeoutMs: Long,
+    val autoScalingEnabled: Boolean
+) {
+    companion object {
+        fun load() = AnalysisWorkerConfig(
+            enabled = System.getenv("ANALYSIS_ENABLED")?.toBoolean() ?: true,
+            minWorkers = System.getenv("ANALYSIS_MIN_WORKERS")?.toInt() ?: 2,
+            maxWorkers = System.getenv("ANALYSIS_MAX_WORKERS")?.toInt() ?: 10,
+            pollingIntervalMs = System.getenv("ANALYSIS_POLLING_INTERVAL_MS")?.toLong() ?: 5000L,
+            processingTimeoutMs = System.getenv("ANALYSIS_PROCESSING_TIMEOUT_MS")?.toLong() ?: 300000L,
+            autoScalingEnabled = System.getenv("ANALYSIS_AUTO_SCALING_ENABLED")?.toBoolean() ?: true
         )
     }
 }

@@ -36,6 +36,10 @@ enum class WebhookEvent {
     SCREENSHOT_COMPLETED,
     SCREENSHOT_FAILED,
 
+    // Analysis events (NEW - Separate Flow)
+    ANALYSIS_COMPLETED,   // When AI analysis completes successfully
+    ANALYSIS_FAILED,      // When AI analysis fails
+
     // Credit events
     CREDITS_LOW,         // When credits drop below 20%
     CREDITS_EXHAUSTED,   // When credits reach 0

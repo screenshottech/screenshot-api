@@ -15,6 +15,7 @@ data class OcrExtractRequestDto(
     val imageData: String, // Base64 encoded image data
     val language: String = "en",
     val tier: String = "BASIC", // BASIC, LOCAL_AI, AI_STANDARD, AI_PREMIUM, AI_ELITE
+    val analysisType: String? = null, // BASIC_OCR, UX_ANALYSIS, CONTENT_SUMMARY, GENERAL
     val engine: String? = null, // Optional engine specification
     val extractPrices: Boolean = false,
     val extractTables: Boolean = false,
@@ -50,6 +51,15 @@ data class OcrExtractRequestDto(
             }
         }
 
+        // Parse analysis type if provided
+        val ocrAnalysisType = analysisType?.let {
+            try {
+                AnalysisType.valueOf(it.uppercase())
+            } catch (e: Exception) {
+                throw IllegalArgumentException("Invalid analysis type: $it")
+            }
+        }
+
         // Determine use case
         val useCase = when {
             extractPrices -> OcrUseCase.PRICE_MONITORING
@@ -67,6 +77,7 @@ data class OcrExtractRequestDto(
             tier = ocrTier,
             engine = ocrEngine,
             useCase = useCase,
+            analysisType = ocrAnalysisType,
             options = OcrOptions(
                 extractPrices = extractPrices,
                 extractTables = extractTables,
@@ -83,6 +94,7 @@ data class OcrBulkExtractRequestDto(
     val images: List<OcrImageDto>,
     val language: String = "en",
     val tier: String = "BASIC",
+    val analysisType: String? = null, // BASIC_OCR, UX_ANALYSIS, CONTENT_SUMMARY, GENERAL
     val engine: String? = null,
     val extractPrices: Boolean = false,
     val extractTables: Boolean = false,

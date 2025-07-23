@@ -34,18 +34,21 @@ data class ScreenshotJob(
     val lockedAt: Instant? = null,
     // OCR Integration - GitHub Issue #4
     val ocrResultId: String? = null,
-    val ocrRequested: Boolean = false
+    val ocrRequested: Boolean = false,
+    // Page metadata
+    val metadata: PageMetadata? = null
 ) {
     fun markAsProcessing(): ScreenshotJob = copy(
         status = ScreenshotStatus.PROCESSING,
         updatedAt = Clock.System.now()
     )
 
-    fun markAsCompleted(url: String, processingTime: Long, fileSize: Long? = null): ScreenshotJob = copy(
+    fun markAsCompleted(url: String, processingTime: Long, fileSize: Long? = null, metadata: PageMetadata? = null): ScreenshotJob = copy(
         status = ScreenshotStatus.COMPLETED,
         resultUrl = url,
         processingTimeMs = processingTime,
         fileSizeBytes = fileSize,
+        metadata = metadata,
         completedAt = Clock.System.now(),
         updatedAt = Clock.System.now()
     )
@@ -111,4 +114,44 @@ data class ScreenshotJob(
         lockedBy = null,
         lockedAt = null
     )
+
+    companion object {
+        /**
+         * Creates a ScreenshotJob for OCR operations on uploaded images.
+         * For OCR jobs, we create a synthetic ScreenshotRequest since the domain
+         * is built around screenshots, but OCR is conceptually similar work.
+         * 
+         * @param apiKeyId Required API key ID (controller should resolve from auth context)
+         */
+        fun createOcrJob(
+            id: String,
+            userId: String,
+            apiKeyId: String,
+            ocrRequest: OcrRequest,
+            webhookUrl: String? = null
+        ): ScreenshotJob {
+            // Create a synthetic ScreenshotRequest for OCR jobs
+            // We'll use a special "ocr://" URL scheme to distinguish from real URLs
+            val syntheticRequest = ScreenshotRequest(
+                url = "ocr://image/${ocrRequest.id}",
+                width = 1920, // Default dimensions for OCR context
+                height = 1080,
+                fullPage = false,
+                format = ScreenshotFormat.PNG // OCR typically works with PNG
+            )
+
+            return ScreenshotJob(
+                id = id,
+                userId = userId,
+                apiKeyId = apiKeyId,
+                request = syntheticRequest,
+                status = ScreenshotStatus.QUEUED,
+                jobType = JobType.OCR,
+                webhookUrl = webhookUrl,
+                ocrRequested = true, // Mark as OCR operation
+                createdAt = Clock.System.now(),
+                updatedAt = Clock.System.now()
+            )
+        }
+    }
 }

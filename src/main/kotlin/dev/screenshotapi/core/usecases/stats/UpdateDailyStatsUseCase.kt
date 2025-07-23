@@ -3,6 +3,7 @@ package dev.screenshotapi.core.usecases.stats
 import dev.screenshotapi.core.domain.entities.DailyUserStats
 import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.core.domain.repositories.DailyStatsRepository
+import dev.screenshotapi.core.domain.repositories.StatsField
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -137,20 +138,77 @@ class UpdateDailyStatsUseCase(
                 
                 // OCR Actions - treat as similar to screenshots for stats
                 UsageLogAction.OCR_CREATED -> {
-                    currentStats.incrementScreenshotsCreated()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.SCREENSHOTS_CREATED, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.OCR_COMPLETED -> {
-                    currentStats.incrementScreenshotsCompleted()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.SCREENSHOTS_COMPLETED, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.OCR_FAILED -> {
-                    currentStats.incrementScreenshotsFailed()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.SCREENSHOTS_FAILED, 
+                        1
+                    )
                 }
                 
                 UsageLogAction.OCR_PRICE_EXTRACTION -> {
                     // Price extraction is a specialized operation, count as completed
-                    currentStats.incrementScreenshotsCompleted()
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.SCREENSHOTS_COMPLETED, 
+                        1
+                    )
+                }
+                
+                // AI Analysis Actions (NEW - Separate Flow) - treat as analysis operations
+                UsageLogAction.AI_ANALYSIS_STARTED -> {
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.SCREENSHOTS_CREATED, // Count as creation activity
+                        1
+                    )
+                }
+                
+                UsageLogAction.AI_ANALYSIS_COMPLETED -> {
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.SCREENSHOTS_COMPLETED, // Count as completion
+                        1
+                    )
+                }
+                
+                UsageLogAction.AI_ANALYSIS_FAILED -> {
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.SCREENSHOTS_FAILED, // Count as failure
+                        1
+                    )
+                }
+                
+                UsageLogAction.AI_ANALYSIS_CREDITS_DEDUCTED -> {
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.CREDITS_USED, 
+                        request.creditsUsed
+                    )
                 }
             }
 

@@ -28,10 +28,10 @@ class SendWelcomeEmailUseCase(
         
         // 1. Validate input
         if (request.userId.isBlank()) {
-            throw ValidationException("User ID is required", "userId")
+            throw ValidationException.Required("userId")
         }
         if (request.apiKey.isBlank()) {
-            throw ValidationException("API key is required", "apiKey")
+            throw ValidationException.Required("apiKey")
         }
         
         // 2. Load user (validation)

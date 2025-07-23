@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.domain.repositories.PlanRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.RateLimitingService
+import dev.screenshotapi.core.domain.services.RateLimitOperationType
 import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import kotlinx.datetime.*
 import org.slf4j.LoggerFactory
@@ -26,14 +27,18 @@ class RateLimitingServiceImpl(
     }
 
     override suspend fun isAllowed(userId: String): Boolean {
+        return isAllowed(userId, RateLimitOperationType.SCREENSHOTS)
+    }
+
+    override suspend fun isAllowed(userId: String, operationType: RateLimitOperationType): Boolean {
         val now = Clock.System.now()
         
-        // FIRST: Update short-term usage counters for accurate rate limiting
-        usageTrackingService.updateShortTermUsage(userId, now)
+        // FIRST: Update short-term usage counters for accurate rate limiting by operation type
+        usageTrackingService.updateShortTermUsage(userId, now, operationType)
         
-        val status = getRateLimitStatus(userId)
+        val status = getRateLimitStatus(userId, operationType)
         
-        logger.info("Rate limit check for user $userId: allowed=${status.isAllowed}, " +
+        logger.info("Rate limit check for user $userId (${operationType.operationName}): allowed=${status.isAllowed}, " +
                 "remainingRequests=${status.remainingRequests}, " +
                 "remainingCredits=${status.remainingCredits}")
 
@@ -41,7 +46,7 @@ class RateLimitingServiceImpl(
             // Record the request in persistent storage (monthly tracking)
             usageTrackingService.trackUsage(userId, 1)
         } else {
-            logger.warn("Rate limit BLOCKED for user $userId: " +
+            logger.warn("Rate limit BLOCKED for user $userId (${operationType.operationName}): " +
                     "retryAfterSeconds=${status.retryAfterSeconds}, " +
                     "hasMonthlyCredits=${status.hasMonthlyCredits}")
         }
@@ -50,10 +55,14 @@ class RateLimitingServiceImpl(
     }
 
     override suspend fun checkRateLimit(userId: String): RateLimitResult {
+        return checkRateLimit(userId, RateLimitOperationType.SCREENSHOTS)
+    }
+
+    override suspend fun checkRateLimit(userId: String, operationType: RateLimitOperationType): RateLimitResult {
         val now = Clock.System.now()
-        // Update short-term usage first for accurate rate limiting
-        usageTrackingService.updateShortTermUsage(userId, now)
-        val shortTermUsage = usageTrackingService.getShortTermUsage(userId)
+        // Update short-term usage first for accurate rate limiting by operation type
+        usageTrackingService.updateShortTermUsage(userId, now, operationType)
+        val shortTermUsage = usageTrackingService.getShortTermUsage(userId, operationType)
         val remainingCredits = usageTrackingService.getRemainingCredits(userId)
 
         // Get user's plan
@@ -62,6 +71,46 @@ class RateLimitingServiceImpl(
         val rateLimitInfo = getRateLimitInfo(planId)
         val planType = user?.planId ?: "free"
 
+        // For analysis operations, check credits but skip rate limiting (no hourly/minutely limits)
+        if (operationType == RateLimitOperationType.ANALYSIS) {
+            // Check if user has remaining credits
+            if (remainingCredits <= 0) {
+                metricsService?.recordRateLimitCheck(userId, false, planType)
+                return RateLimitResult(
+                    allowed = false,
+                    remainingRequests = 0,
+                    resetTimeSeconds = getSecondsUntilNextMonth(),
+                    hasMonthlyCredits = false,
+                    remainingCredits = 0,
+                    requestsPerHour = rateLimitInfo.requestsPerHour,
+                    requestsPerMinute = rateLimitInfo.requestsPerMinute,
+                    remainingHourly = rateLimitInfo.requestsPerHour,
+                    remainingMinutely = rateLimitInfo.requestsPerMinute,
+                    resetTimeHourly = getNextMonthReset(),
+                    resetTimeMinutely = getNextMonthReset(),
+                    retryAfterSeconds = getSecondsUntilNextMonth().toInt()
+                )
+            }
+
+            // Allow analysis if user has credits (no rate limiting for analysis)
+            metricsService?.recordRateLimitCheck(userId, true, planType)
+            return RateLimitResult(
+                allowed = true,
+                remainingRequests = remainingCredits,
+                resetTimeSeconds = 0,
+                hasMonthlyCredits = true,
+                remainingCredits = remainingCredits,
+                requestsPerHour = rateLimitInfo.requestsPerHour,
+                requestsPerMinute = rateLimitInfo.requestsPerMinute,
+                remainingHourly = rateLimitInfo.requestsPerHour,
+                remainingMinutely = rateLimitInfo.requestsPerMinute,
+                resetTimeHourly = shortTermUsage.hourlyTimestamp.plus(1.hours),
+                resetTimeMinutely = shortTermUsage.minutelyTimestamp.plus(1.minutes),
+                retryAfterSeconds = 0
+            )
+        }
+
+        // For screenshots operations, apply normal rate limiting
         // Check if user has remaining credits
         if (remainingCredits <= 0) {
             metricsService?.recordRateLimitCheck(userId, false, planType)
@@ -149,10 +198,14 @@ class RateLimitingServiceImpl(
     }
 
     override suspend fun getRateLimitStatus(userId: String): RateLimitStatus {
+        return getRateLimitStatus(userId, RateLimitOperationType.SCREENSHOTS)
+    }
+
+    override suspend fun getRateLimitStatus(userId: String, operationType: RateLimitOperationType): RateLimitStatus {
         val now = Clock.System.now()
-        // Update short-term usage first for accurate rate limiting
-        usageTrackingService.updateShortTermUsage(userId, now)
-        val shortTermUsage = usageTrackingService.getShortTermUsage(userId)
+        // Update short-term usage first for accurate rate limiting by operation type
+        usageTrackingService.updateShortTermUsage(userId, now, operationType)
+        val shortTermUsage = usageTrackingService.getShortTermUsage(userId, operationType)
         val remainingCredits = usageTrackingService.getRemainingCredits(userId)
 
         // Get user's plan
@@ -160,11 +213,43 @@ class RateLimitingServiceImpl(
         val rateLimitInfo = getRateLimitInfo(user?.planId)
         val planType = user?.planId ?: "free"
         
-        logger.info("Rate limit status for user $userId (plan: $planType): " +
+        logger.info("Rate limit status for user $userId (plan: $planType, operation: ${operationType.operationName}): " +
                 "hourlyRequests=${shortTermUsage.hourlyRequests}/${rateLimitInfo.requestsPerHour}, " +
                 "minutelyRequests=${shortTermUsage.minutelyRequests}/${rateLimitInfo.requestsPerMinute}, " +
                 "remainingCredits=$remainingCredits")
 
+        // For analysis operations, check credits but skip rate limiting (no hourly/minutely limits)
+        if (operationType == RateLimitOperationType.ANALYSIS) {
+            // Check if user has remaining credits
+            if (remainingCredits <= 0) {
+                metricsService?.recordRateLimitCheck(userId, false, planType)
+                return RateLimitStatus(
+                    isAllowed = false,
+                    remainingRequests = 0,
+                    resetTimeHourly = now.plus(1.hours),
+                    resetTimeMinutely = now.plus(1.minutes),
+                    retryAfterSeconds = getSecondsUntilNextMonth().toInt(),
+                    hasMonthlyCredits = false,
+                    remainingCredits = 0,
+                    resetTimeSeconds = getSecondsUntilNextMonth()
+                )
+            }
+
+            // Allow analysis if user has credits (no rate limiting for analysis)
+            metricsService?.recordRateLimitCheck(userId, true, planType)
+            return RateLimitStatus(
+                isAllowed = true,
+                remainingRequests = remainingCredits,
+                resetTimeHourly = shortTermUsage.hourlyTimestamp.plus(1.hours),
+                resetTimeMinutely = shortTermUsage.minutelyTimestamp.plus(1.minutes),
+                retryAfterSeconds = 0,
+                hasMonthlyCredits = true,
+                remainingCredits = remainingCredits,
+                resetTimeSeconds = 0
+            )
+        }
+
+        // For screenshots operations, apply normal rate limiting
         // Check if user has remaining credits
         if (remainingCredits <= 0) {
             metricsService?.recordRateLimitCheck(userId, false, planType)
@@ -255,10 +340,10 @@ class RateLimitingServiceImpl(
         }
 
         return plan?.let { RateLimitInfo.fromPlan(it) } ?: RateLimitInfo(
-            requestsPerMinute = 3,
-            requestsPerHour = 60,
-            concurrentRequests = 2,
-            requestsPerDay = 100
+            requestsPerMinute = 50,  // Increased for testing
+            requestsPerHour = 200,   // Increased for testing
+            concurrentRequests = 10,
+            requestsPerDay = 1000
         )
     }
 

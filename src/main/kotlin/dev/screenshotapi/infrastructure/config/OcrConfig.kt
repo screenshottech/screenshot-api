@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 data class OcrConfig(
     val enabled: Boolean = true,
     val paddleOcr: PaddleOcrConfig = PaddleOcrConfig(),
+    val bedrock: BedrockOcrConfig = BedrockOcrConfig(),
     val general: GeneralOcrConfig = GeneralOcrConfig()
 )
 
@@ -24,6 +25,15 @@ data class PaddleOcrConfig(
         "en", "ch", "ta", "te", "ka", "ja", "ko", 
         "hi", "ar", "fr", "es", "pt", "de", "it", "ru"
     )
+)
+
+@Serializable
+data class BedrockOcrConfig(
+    val enabled: Boolean = false,
+    val region: String = "us-east-1",
+    val primaryModel: String = "claude3Haiku",
+    val enableFallback: Boolean = true,
+    val timeoutSeconds: Long = 10 // Much faster than PaddleOCR
 )
 
 @Serializable
@@ -58,13 +68,20 @@ fun loadOcrConfig(): OcrConfig {
         paddleOcr = PaddleOcrConfig(
             pythonPath = System.getenv("OCR_PYTHON_PATH") ?: "python3",
             paddleOcrPath = System.getenv("OCR_PADDLEOCR_PATH") ?: "/app/ocr/paddleocr",
-            workingDirectory = System.getenv("OCR_WORKING_DIRECTORY") ?: "/tmp/ocr",
-            timeoutSeconds = System.getenv("OCR_TIMEOUT_SECONDS")?.toLong() ?: 30,
+            workingDirectory = System.getenv("OCR_WORKING_DIRECTORY") ?: "/Users/luiscarbonel/Desktop/dev/git/dev-screenshot/screenshot-api/tmp/ocr",
+            timeoutSeconds = System.getenv("OCR_TIMEOUT_SECONDS")?.toLong() ?: 120,
             maxConcurrentJobs = System.getenv("OCR_MAX_CONCURRENT_JOBS")?.toInt() ?: 4,
             supportedLanguages = System.getenv("OCR_SUPPORTED_LANGUAGES")?.split(",") ?: listOf(
                 "en", "ch", "ta", "te", "ka", "ja", "ko", 
                 "hi", "ar", "fr", "es", "pt", "de", "it", "ru"
             )
+        ),
+        bedrock = BedrockOcrConfig(
+            enabled = System.getenv("BEDROCK_OCR_ENABLED")?.toBoolean() ?: false,
+            region = System.getenv("AWS_REGION") ?: "us-east-1",
+            primaryModel = System.getenv("BEDROCK_PRIMARY_MODEL") ?: "claude3Haiku",
+            enableFallback = System.getenv("BEDROCK_ENABLE_FALLBACK")?.toBoolean() ?: true,
+            timeoutSeconds = System.getenv("BEDROCK_TIMEOUT_SECONDS")?.toLong() ?: 10
         ),
         general = GeneralOcrConfig(
             maxImageSize = System.getenv("OCR_MAX_IMAGE_SIZE")?.toLong() ?: 10 * 1024 * 1024,

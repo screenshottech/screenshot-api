@@ -18,6 +18,7 @@ data class OcrRequest(
     val language: String = "en",
     val outputFormat: OcrOutputFormat = OcrOutputFormat.STRUCTURED,
     val useCase: OcrUseCase = OcrUseCase.GENERAL,
+    val analysisType: AnalysisType? = null, // null = use tier-based default
     val options: OcrOptions = OcrOptions()
 ) {
     override fun equals(other: Any?): Boolean {
@@ -39,6 +40,7 @@ data class OcrRequest(
         if (language != other.language) return false
         if (outputFormat != other.outputFormat) return false
         if (useCase != other.useCase) return false
+        if (analysisType != other.analysisType) return false
         if (options != other.options) return false
 
         return true
@@ -55,6 +57,7 @@ data class OcrRequest(
         result = 31 * result + language.hashCode()
         result = 31 * result + outputFormat.hashCode()
         result = 31 * result + useCase.hashCode()
+        result = 31 * result + (analysisType?.hashCode() ?: 0)
         result = 31 * result + options.hashCode()
         return result
     }

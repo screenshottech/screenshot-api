@@ -141,6 +141,7 @@ class ScreenshotOcrWorkflowService(
             tier = config.tier,
             engine = config.engine,
             useCase = determineOcrUseCase(config),
+            analysisType = determineAnalysisType(config),
             options = OcrOptions(
                 extractPrices = config.extractPrices,
                 extractTables = config.extractTables,
@@ -162,6 +163,25 @@ class ScreenshotOcrWorkflowService(
         }
     }
     
+    /**
+     * Determine analysis type based on OCR workflow configuration
+     * Maps legacy tier-based config to new analysis type system
+     */
+    private fun determineAnalysisType(config: OcrWorkflowConfig): AnalysisType {
+        return when {
+            // If extracting structured data, use appropriate AI analysis
+            config.extractPrices -> AnalysisType.CONTENT_SUMMARY  // Price extraction benefits from content analysis
+            config.extractTables || config.extractForms -> AnalysisType.UX_ANALYSIS  // Forms/tables are UX elements
+            
+            // Map tier to analysis type for general OCR
+            config.tier == OcrTier.AI_PREMIUM || config.tier == OcrTier.AI_ELITE -> AnalysisType.UX_ANALYSIS
+            config.tier == OcrTier.AI_STANDARD -> AnalysisType.CONTENT_SUMMARY
+            
+            // Default to basic OCR for BASIC and LOCAL_AI tiers
+            else -> AnalysisType.BASIC_OCR
+        }
+    }
+    
     private fun shouldExtractPrices(job: ScreenshotJob): Boolean {
         return false // Default: no price extraction for screenshot workflow
     }
@@ -171,6 +191,7 @@ class ScreenshotOcrWorkflowService(
         
         return OcrResult(
             id = UUID.randomUUID().toString(),
+            userId = job.userId,
             success = false,
             extractedText = "",
             confidence = 0.0,

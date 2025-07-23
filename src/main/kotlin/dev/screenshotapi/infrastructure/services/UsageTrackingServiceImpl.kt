@@ -5,6 +5,7 @@ import dev.screenshotapi.core.domain.entities.ShortTermUsage
 import dev.screenshotapi.core.domain.entities.UserUsage
 import dev.screenshotapi.core.domain.repositories.UsageRepository
 import dev.screenshotapi.core.domain.repositories.UserRepository
+import dev.screenshotapi.core.domain.services.RateLimitOperationType
 import dev.screenshotapi.core.ports.output.CachePort
 import dev.screenshotapi.core.ports.output.UsageTrackingPort
 import dev.screenshotapi.core.ports.output.get
@@ -24,7 +25,7 @@ class UsageTrackingServiceImpl(
 ) : UsageTrackingPort {
 
     companion object {
-        private const val SHORT_TERM_PREFIX = "short_term:"
+        private const val SHORT_TERM_PREFIX = "short_term"
         private const val MONTHLY_PREFIX = "monthly:"
         private const val DAILY_PREFIX = "daily:"
         private const val CONCURRENT_PREFIX = "concurrent:"
@@ -133,8 +134,12 @@ class UsageTrackingServiceImpl(
     }
 
     override fun getShortTermUsage(userId: String): ShortTermUsage {
+        return getShortTermUsage(userId, RateLimitOperationType.SCREENSHOTS)
+    }
+
+    override fun getShortTermUsage(userId: String, operationType: RateLimitOperationType): ShortTermUsage {
         val now = Clock.System.now()
-        val cacheKey = "$SHORT_TERM_PREFIX$userId"
+        val cacheKey = "$SHORT_TERM_PREFIX:${operationType.operationName}:$userId"
 
         return runCatching {
             // Use coroutine blocking call since this is called from non-suspend context
@@ -152,7 +157,11 @@ class UsageTrackingServiceImpl(
     }
 
     override suspend fun updateShortTermUsage(userId: String, now: Instant) {
-        val cacheKey = "$SHORT_TERM_PREFIX$userId"
+        updateShortTermUsage(userId, now, RateLimitOperationType.SCREENSHOTS)
+    }
+
+    override suspend fun updateShortTermUsage(userId: String, now: Instant, operationType: RateLimitOperationType) {
+        val cacheKey = "$SHORT_TERM_PREFIX:${operationType.operationName}:$userId"
         val current = shortTermCache.get<ShortTermUsage>(cacheKey) ?: ShortTermUsage(
             userId = userId,
             hourlyRequests = 0,
@@ -192,7 +201,7 @@ class UsageTrackingServiceImpl(
         }
 
         val logger = org.slf4j.LoggerFactory.getLogger(this::class.java)
-        logger.info("Short-term usage updated for user $userId: " +
+        logger.info("Short-term usage updated for user $userId (${operationType.operationName}): " +
                 "before=[hourly=${current.hourlyRequests}, minutely=${current.minutelyRequests}] " +
                 "after=[hourly=${updated.hourlyRequests}, minutely=${updated.minutelyRequests}] " +
                 "hoursPassed=$hoursPassed, minutesPassed=$minutesPassed")

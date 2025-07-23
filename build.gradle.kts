@@ -90,8 +90,9 @@ dependencies {
     implementation("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:$skiko_version") // Linux x64 (Docker/production)
     implementation("org.jetbrains.skiko:skiko:$skiko_version") // Core multiplatform
 
-    // AWS S3
+    // AWS Services
     implementation("aws.sdk.kotlin:s3:$aws_sdk_kotlin_version")
+    implementation("aws.sdk.kotlin:bedrockruntime:$aws_sdk_kotlin_version")
 
     // OpenAPI & Documentation
     implementation("io.ktor:ktor-server-swagger")

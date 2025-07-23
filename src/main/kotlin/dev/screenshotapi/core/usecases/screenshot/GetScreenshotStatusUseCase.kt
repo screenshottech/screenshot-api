@@ -1,6 +1,7 @@
 package dev.screenshotapi.core.usecases.screenshot
 
 import dev.screenshotapi.core.domain.entities.ScreenshotJob
+import dev.screenshotapi.core.domain.entities.PageMetadata
 import dev.screenshotapi.core.domain.entities.ScreenshotStatus as DomainStatus
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
@@ -31,7 +32,8 @@ class GetScreenshotStatusUseCase(
             processingTimeMs = job.processingTimeMs,
             fileSizeBytes = job.fileSizeBytes,
             errorMessage = job.errorMessage,
-            request = job.request
+            request = job.request,
+            metadata = job.metadata
         )
     }
 
@@ -48,6 +50,7 @@ class GetScreenshotStatusUseCase(
         val processingTimeMs: Long?,
         val fileSizeBytes: Long?,
         val errorMessage: String?,
-        val request: dev.screenshotapi.core.domain.entities.ScreenshotRequest
+        val request: dev.screenshotapi.core.domain.entities.ScreenshotRequest,
+        val metadata: PageMetadata? = null
     )
 }

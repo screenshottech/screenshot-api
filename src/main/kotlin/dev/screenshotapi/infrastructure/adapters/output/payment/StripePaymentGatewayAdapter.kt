@@ -302,7 +302,7 @@ class StripePaymentGatewayAdapter(
 
         } catch (e: Exception) {
             logger.error("Error processing Stripe webhook", e)
-            throw ValidationException("Invalid webhook signature or payload", "webhook")
+            throw ValidationException.InvalidFormat("webhook", "invalid signature or payload")
         }
     }
 
@@ -445,7 +445,7 @@ class StripePaymentGatewayAdapter(
         
         // Get plan from database
         val plan = planRepository.findById(planId)
-            ?: throw ValidationException("Plan not found: $planId", "planId")
+            ?: throw ValidationException.Custom("Plan not found: $planId", "planId")
         
         // Determine which Stripe price ID to use based on billing cycle
         val stripePriceId = when (billingCycle) {
@@ -455,7 +455,7 @@ class StripePaymentGatewayAdapter(
         
         // Validate that Stripe price ID exists
         if (stripePriceId.isNullOrBlank()) {
-            throw ValidationException(
+            throw ValidationException.Custom(
                 "No Stripe price ID configured for plan: ${plan.name} (${billingCycle.name.lowercase()})", 
                 "planId"
             )

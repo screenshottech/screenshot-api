@@ -38,7 +38,8 @@ class ExtractPriceDataUseCase(
     )
 
     suspend fun invoke(request: OcrRequest): OcrResult {
-        logger.info("Starting price data extraction for user ${request.userId}")
+        val analysisType = request.analysisType ?: AnalysisType.BASIC_OCR
+        logger.info("Starting price data extraction for user ${request.userId}, analysisType: ${analysisType.name}")
         
         // Enhance request for price monitoring
         val priceRequest = request.copy(
@@ -78,17 +79,19 @@ class ExtractPriceDataUseCase(
                 LogUsageUseCase.Request(
                     userId = request.userId,
                     action = UsageLogAction.OCR_PRICE_EXTRACTION,
-                    screenshotId = request.id,
+                    screenshotId = request.screenshotJobId,
                     metadata = mapOf(
+                        "analysis_type" to analysisType.name,
                         "prices_extracted" to extractedPrices.size.toString(),
                         "currencies_found" to extractedPrices.map { it.currency }.distinct().joinToString(","),
                         "max_price" to (extractedPrices.maxByOrNull { it.numericValue ?: 0.0 }?.value ?: "N/A"),
-                        "min_price" to (extractedPrices.minByOrNull { it.numericValue ?: Double.MAX_VALUE }?.value ?: "N/A")
+                        "min_price" to (extractedPrices.minByOrNull { it.numericValue ?: Double.MAX_VALUE }?.value ?: "N/A"),
+                        "ocrRequestId" to request.id
                     )
                 )
             )
             
-            logger.info("Price extraction completed: found ${extractedPrices.size} prices for user ${request.userId}")
+            logger.info("Price extraction completed: found ${extractedPrices.size} prices for user ${request.userId} using ${analysisType.name}")
             return enhancedResult
             
         } catch (e: Exception) {

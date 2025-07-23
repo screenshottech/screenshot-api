@@ -47,13 +47,13 @@ class ExtractPriceDataUseCaseTest {
         assertTrue(result.success, "Should successfully extract price data")
         assertNotNull(result.structuredData, "Should have structured data")
         assertEquals(2, result.structuredData!!.prices.size, "Should extract correct number of prices")
-        
+
         val firstPrice = result.structuredData!!.prices[0]
         assertEquals("$19.99", firstPrice.value, "Should extract correct price value")
         assertEquals(19.99, firstPrice.numericValue, "Should extract correct numeric value")
         assertEquals("USD", firstPrice.currency, "Should extract correct currency")
         assertTrue(firstPrice.confidence >= 0.8, "Should have reasonable confidence for price extraction")
-        
+
         val secondPrice = result.structuredData!!.prices[1]
         assertEquals("€25.50", secondPrice.value, "Should extract second price value")
         assertEquals(25.50, secondPrice.numericValue, "Should extract second numeric value")
@@ -118,7 +118,7 @@ class ExtractPriceDataUseCaseTest {
         extractPriceDataUseCase.invoke(testRequest)
 
         // Assert
-        coVerify { 
+        coVerify {
             mockExtractTextUseCase.invoke(match { ocrRequest ->
                 ocrRequest.useCase == OcrUseCase.PRICE_MONITORING &&
                 ocrRequest.options.extractPrices == true &&
@@ -144,7 +144,7 @@ class ExtractPriceDataUseCaseTest {
         assertTrue(result.success, "Should handle multiple currencies")
         assertNotNull(result.structuredData, "Should have structured data")
         assertEquals(4, result.structuredData!!.prices.size, "Should extract all prices with different currencies")
-        
+
         val currencies = result.structuredData!!.prices.map { it.currency }.toSet()
         assertTrue(currencies.contains("USD"), "Should handle USD currency")
         assertTrue(currencies.contains("EUR"), "Should handle EUR currency")
@@ -168,13 +168,13 @@ class ExtractPriceDataUseCaseTest {
         assertTrue(result.success, "Should handle prices with various confidence levels")
         assertNotNull(result.structuredData, "Should have structured data")
         assertEquals(3, result.structuredData!!.prices.size, "Should extract all prices from text regardless of lines")
-        
+
         val highConfidencePrice = result.structuredData!!.prices.find { it.confidence >= 0.9 }
         val mediumConfidencePrice = result.structuredData!!.prices.find { it.confidence in 0.7..0.89 }
         val defaultConfidencePrice = result.structuredData!!.prices.find { it.confidence == 0.8 }
-        
+
         assertNotNull(highConfidencePrice, "Should include high confidence price")
-        assertNotNull(mediumConfidencePrice, "Should include medium confidence price") 
+        assertNotNull(mediumConfidencePrice, "Should include medium confidence price")
         assertNotNull(defaultConfidencePrice, "Should include default confidence price for text-extracted prices")
     }
 
@@ -191,7 +191,7 @@ class ExtractPriceDataUseCaseTest {
         extractPriceDataUseCase.invoke(testRequest)
 
         // Assert
-        coVerify { 
+        coVerify {
             mockLogUsageUseCase(match { logRequest ->
                 logRequest.action == UsageLogAction.OCR_PRICE_EXTRACTION &&
                 logRequest.userId == testRequest.userId &&
@@ -216,7 +216,7 @@ class ExtractPriceDataUseCaseTest {
         assertTrue(result.success, "Should handle edge case price formats")
         assertNotNull(result.structuredData, "Should have structured data")
         assertTrue(result.structuredData!!.prices.isNotEmpty(), "Should extract prices even with edge case formats")
-        
+
         // Check for various price formats
         val priceValues = result.structuredData!!.prices.map { it.value }
         assertTrue(priceValues.any { it.contains(".") }, "Should handle decimal prices")
@@ -246,6 +246,7 @@ class ExtractPriceDataUseCaseTest {
     private fun createOcrResultWithPrices(): OcrResult {
         return OcrResult(
             id = UUID.randomUUID().toString(),
+            userId = "test-user-id",
             success = true,
             extractedText = "Product A: $19.99\nProduct B: €25.50",
             confidence = 0.92,
@@ -318,6 +319,7 @@ class ExtractPriceDataUseCaseTest {
     private fun createOcrResultWithoutPrices(): OcrResult {
         return OcrResult(
             id = UUID.randomUUID().toString(),
+            userId = "test-user-id",
             success = true,
             extractedText = "This is some text without any prices or currency symbols",
             confidence = 0.88,
@@ -334,6 +336,7 @@ class ExtractPriceDataUseCaseTest {
     private fun createFailedOcrResult(): OcrResult {
         return OcrResult(
             id = UUID.randomUUID().toString(),
+            userId = "test-user-id",
             success = false,
             extractedText = "",
             confidence = 0.0,

@@ -20,7 +20,7 @@ class RegenerateWebhookSecretUseCase(
             ?: throw ResourceNotFoundException("Webhook", webhookId)
         
         if (existingWebhook.userId != userId) {
-            throw ValidationException("Unauthorized access to webhook: $webhookId")
+            throw ValidationException.UnauthorizedAccess("webhook", webhookId)
         }
         
         val newSecret = generateSecureSecret()

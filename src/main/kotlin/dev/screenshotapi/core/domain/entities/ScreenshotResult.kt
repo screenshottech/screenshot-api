@@ -5,5 +5,6 @@ package dev.screenshotapi.core.domain.entities
  */
 data class ScreenshotResult(
     val url: String,
-    val fileSizeBytes: Long
+    val fileSizeBytes: Long,
+    val metadata: PageMetadata? = null
 )

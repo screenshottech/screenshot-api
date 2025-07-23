@@ -52,7 +52,7 @@ class PostgreSQLOcrResultRepository(private val database: Database) : OcrResultR
                     // Insert new
                     OcrResults.insert {
                         it[id] = entityId
-                        it[userId] = result.metadata["userId"] ?: "unknown"
+                        it[userId] = result.userId
                         it[screenshotJobId] = result.metadata["screenshotJobId"]
                         it[success] = result.success
                         it[extractedText] = result.extractedText
@@ -232,6 +232,7 @@ class PostgreSQLOcrResultRepository(private val database: Database) : OcrResultR
     private fun mapRowToOcrResult(row: ResultRow): OcrResult {
         return OcrResult(
             id = row[OcrResults.id].value,
+            userId = row[OcrResults.userId].value,
             success = row[OcrResults.success],
             extractedText = row[OcrResults.extractedText],
             confidence = row[OcrResults.confidence],

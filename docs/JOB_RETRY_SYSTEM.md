@@ -74,7 +74,7 @@ interface RetryPolicy {
 if (job.nextRetryAt != null && job.nextRetryAt > Clock.System.now()) {
     val cancelled = queueRepository.cancelDelayedJob(job.id)
     if (!cancelled) {
-        throw ValidationException("Cannot cancel automatic retry")
+        throw ValidationException.InvalidState("job", "scheduled for automatic retry", "available for manual retry")
     }
 }
 ```
@@ -244,7 +244,7 @@ val lockedJob = screenshotRepository.tryLockJob(job.id, "manual-retry-user123")
 if (job.nextRetryAt != null && job.nextRetryAt > Clock.System.now()) {
     val cancelled = queueRepository.cancelDelayedJob(job.id)
     if (!cancelled) {
-        throw ValidationException("Cannot cancel automatic retry")
+        throw ValidationException.InvalidState("job", "scheduled for automatic retry", "available for manual retry")
     }
 }
 ```
@@ -252,7 +252,7 @@ if (job.nextRetryAt != null && job.nextRetryAt > Clock.System.now()) {
 #### 3. Status Validation
 ```kotlin
 if (job.status != ScreenshotStatus.FAILED && !job.isStuck()) {
-    throw ValidationException("Job must be FAILED or stuck for retry")
+    throw ValidationException.InvalidState("job", "current status", "FAILED or stuck")
 }
 ```
 

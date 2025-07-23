@@ -10,7 +10,10 @@ enum class JobType(
     val defaultCredits: Int
 ) {
     SCREENSHOT("Screenshot", "Website screenshot generation", 1),
-    OCR("OCR Processing", "Optical character recognition", 2),
+    OCR("OCR Processing", "Basic optical character recognition", 2),
+    UX_ANALYSIS("UX Analysis", "AI-powered user experience analysis", 3),
+    CONTENT_SUMMARY("Content Summary", "AI-powered content analysis and summarization", 3),
+    GENERAL_ANALYSIS("General Analysis", "AI-powered general image analysis", 3),
     PDF_GENERATION("PDF Generation", "PDF document creation", 1),
     BATCH_SCREENSHOT("Batch Screenshot", "Multiple screenshots processing", 1), // per item
     IMAGE_PROCESSING("Image Processing", "Image manipulation and optimization", 1),
@@ -45,6 +48,7 @@ enum class JobType(
             return when(jobType) {
                 SCREENSHOT -> CreditDeductionReason.SCREENSHOT
                 OCR -> CreditDeductionReason.OCR
+                UX_ANALYSIS, CONTENT_SUMMARY, GENERAL_ANALYSIS -> CreditDeductionReason.AI_ANALYSIS
                 PDF_GENERATION -> CreditDeductionReason.PDF_GENERATION
                 BATCH_SCREENSHOT -> CreditDeductionReason.BATCH_PROCESSING
                 IMAGE_PROCESSING -> CreditDeductionReason.PREMIUM_FEATURE

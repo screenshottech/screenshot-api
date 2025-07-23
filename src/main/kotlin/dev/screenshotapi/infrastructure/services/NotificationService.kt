@@ -1,9 +1,13 @@
 package dev.screenshotapi.infrastructure.services
 
 import dev.screenshotapi.core.domain.entities.ScreenshotJob
+import dev.screenshotapi.core.domain.entities.AnalysisJob
 import dev.screenshotapi.core.domain.entities.WebhookEvent
 import dev.screenshotapi.core.usecases.webhook.SendWebhookUseCase
 import dev.screenshotapi.infrastructure.services.models.WebhookPayload
+import dev.screenshotapi.infrastructure.services.models.AnalysisWebhookPayload
+import dev.screenshotapi.infrastructure.services.models.toWebhookPayload
+import dev.screenshotapi.infrastructure.services.models.toMap
 import org.slf4j.LoggerFactory
 
 class NotificationService(
@@ -22,20 +26,11 @@ class NotificationService(
                 else -> return // Only notify on completion or failure
             }
 
-            val eventData = mapOf(
-                "jobId" to job.id,
-                "status" to job.status.name.lowercase(),
-                "url" to job.request.url,
-                "resultUrl" to (job.resultUrl ?: ""),
-                "errorMessage" to (job.errorMessage ?: ""),
-                "processingTimeMs" to (job.processingTimeMs ?: 0),
-                "completedAt" to (job.completedAt?.toString() ?: ""),
-                "createdAt" to job.createdAt.toString(),
-                "userId" to job.userId,
-                "format" to job.request.format.name,
-                "width" to job.request.width,
-                "height" to job.request.height
-            )
+            // Convert domain entity to DTO following Clean Architecture pattern
+            val webhookPayload = job.toWebhookPayload()
+            
+            // Convert DTO to Map for webhook use case compatibility
+            val eventData = webhookPayload.toMap()
 
             logger.info("Sending webhook notifications for job: ${job.id}, event: ${event.name}, user: ${job.userId}")
             
@@ -49,6 +44,32 @@ class NotificationService(
 
         } catch (e: Exception) {
             logger.error("Failed to send webhook notifications for job ${job.id}", e)
+        }
+    }
+
+    /**
+     * Send webhook notifications for analysis job events
+     */
+    suspend fun sendAnalysisWebhook(userId: String, analysisJob: AnalysisJob, event: WebhookEvent) {
+        try {
+            // Convert domain entity to DTO following Clean Architecture pattern
+            val webhookPayload = analysisJob.toWebhookPayload(userId)
+            
+            // Convert DTO to Map for webhook use case compatibility
+            val eventData = webhookPayload.toMap()
+
+            logger.info("Sending analysis webhook notifications for job: ${analysisJob.id}, event: ${event.name}, user: $userId")
+            
+            val deliveries = sendWebhookUseCase.sendForEvent(event, eventData, userId)
+            
+            if (deliveries.isNotEmpty()) {
+                logger.info("Analysis webhook notifications sent: ${deliveries.size} deliveries for job ${analysisJob.id}")
+            } else {
+                logger.debug("No webhook configurations found for user $userId and event ${event.name}")
+            }
+
+        } catch (e: Exception) {
+            logger.error("Failed to send analysis webhook notifications for job ${analysisJob.id}", e)
         }
     }
 

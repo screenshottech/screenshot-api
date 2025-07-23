@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class OcrResult(
     val id: String,
+    val userId: String,
     val success: Boolean,
     val extractedText: String,
     val confidence: Double,

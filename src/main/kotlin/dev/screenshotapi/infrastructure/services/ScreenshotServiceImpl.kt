@@ -8,6 +8,7 @@ import com.microsoft.playwright.options.ScreenshotType
 import dev.screenshotapi.core.domain.entities.ScreenshotFormat
 import dev.screenshotapi.core.domain.entities.ScreenshotRequest
 import dev.screenshotapi.core.domain.entities.ScreenshotResult
+import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.domain.exceptions.ScreenshotException
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.ports.output.StorageOutputPort
@@ -94,7 +95,7 @@ class ScreenshotServiceImpl(
                 val browser = playwright.chromium().launch(
                     BrowserType.LaunchOptions()
                         .setHeadless(true)
-                        .setArgs(getSimpleBrowserArgs())
+                        .setArgs(config.getOptimalBrowserArgs())
                 )
 
                 browser.use {
@@ -102,6 +103,11 @@ class ScreenshotServiceImpl(
                     val page = browser.newPage()
 
                     page.use {
+                        // Configure stealth mode if enabled
+                        if (config.enableStealthMode) {
+                            configureStealthMode(page)
+                        }
+                        
                         // Configure and take screenshot
                         when (request.format) {
                             ScreenshotFormat.PDF -> takePdfScreenshot(page, request, userId, jobId, createdAtEpochSeconds)
@@ -136,7 +142,8 @@ class ScreenshotServiceImpl(
         // Optional wait time
         request.waitTime?.let { delay(minOf(it, 5000)) }
 
-        // Take screenshot
+        // Take screenshot first (performance optimization)
+        logger.debug("Taking screenshot for request: ${request.url}")
         val screenshotBytes = page.screenshot(
             Page.ScreenshotOptions()
                 .setFullPage(request.fullPage)
@@ -165,13 +172,21 @@ class ScreenshotServiceImpl(
             throw ScreenshotException.FileTooLarge(finalBytes.size.toLong(), config.maxFileSize)
         }
 
+        // Extract metadata AFTER screenshot is taken (performance optimization)
+        val metadata = if (request.includeMetadata) {
+            logger.debug("Extracting page metadata after screenshot for: ${request.url}")
+            extractPageMetadata(page)
+        } else {
+            null
+        }
+
         // Upload and return
         val filename = generateFilename(request, userId, jobId, createdAtEpochSeconds, null)
         val contentType = getContentType(request.format)
         val url = storagePort.upload(finalBytes, filename, contentType)
         val fileSizeBytes = finalBytes.size.toLong()
 
-        return ScreenshotResult(url, fileSizeBytes)
+        return ScreenshotResult(url, fileSizeBytes, metadata)
     }
 
     private suspend fun takePdfScreenshot(
@@ -201,7 +216,8 @@ class ScreenshotServiceImpl(
         // Optional wait time
         request.waitTime?.let { delay(minOf(it.toLong(), 5000)) }
 
-        // Generate PDF
+        // Generate PDF first (performance optimization)
+        logger.debug("Generating PDF for request: ${request.url}")
         val pdfBytes = page.pdf(
             Page.PdfOptions()
                 .setFormat("A4")
@@ -215,14 +231,303 @@ class ScreenshotServiceImpl(
             throw ScreenshotException.FileTooLarge(pdfBytes.size.toLong(), config.maxFileSize)
         }
 
+        // Extract metadata AFTER PDF is generated (performance optimization)
+        val metadata = if (request.includeMetadata) {
+            logger.debug("Extracting page metadata after PDF generation for: ${request.url}")
+            extractPageMetadata(page)
+        } else {
+            null
+        }
+
         // Upload and return
         val filename = generateFilename(request, userId, jobId, createdAtEpochSeconds, "pdf")
         val url = storagePort.upload(pdfBytes, filename, "application/pdf")
         val fileSizeBytes = pdfBytes.size.toLong()
 
-        return ScreenshotResult(url, fileSizeBytes)
+        return ScreenshotResult(url, fileSizeBytes, metadata)
     }
 
+    private suspend fun configureStealthMode(page: Page) {
+        try {
+            // Inject stealth JavaScript
+            val stealthScript = config.getStealthJavaScript()
+            if (stealthScript.isNotEmpty()) {
+                page.addInitScript(stealthScript)
+            }
+            
+            // Configure additional stealth headers
+            page.setExtraHTTPHeaders(mapOf(
+                "Accept-Language" to "en-US,en;q=0.9",
+                "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Encoding" to "gzip, deflate, br",
+                "DNT" to "1",
+                "Connection" to "keep-alive",
+                "Sec-Fetch-Dest" to "document",
+                "Sec-Fetch-Mode" to "navigate",
+                "Sec-Fetch-Site" to "none"
+            ))
+            
+            logger.debug("Stealth mode configured successfully")
+        } catch (e: Exception) {
+            logger.warn("Failed to configure stealth mode: ${e.message}", e)
+            // Continue without stealth mode - not critical for operation
+        }
+    }
+
+    private suspend fun extractPageMetadata(page: Page): PageMetadata? {
+        return try {
+            val extractedAt = Clock.System.now()
+            logger.debug("Starting metadata extraction with 10s timeout")
+            
+            // Add timeout protection for metadata extraction (10 seconds max)
+            return withTimeout(10_000L) {
+            
+            // Extract all metadata using JavaScript evaluation
+            val metadataRaw = page.evaluate("""
+                () => {
+                    // SEO Data
+                    const title = document.title || null;
+                    const metaDescription = document.querySelector('meta[name="description"]')?.content || null;
+                    const metaKeywords = document.querySelector('meta[name="keywords"]')?.content || null;
+                    const canonicalUrl = document.querySelector('link[rel="canonical"]')?.href || null;
+                    const robotsMeta = document.querySelector('meta[name="robots"]')?.content || null;
+                    
+                    // Headings
+                    const h1 = Array.from(document.querySelectorAll('h1')).map(h => h.textContent?.trim()).filter(Boolean);
+                    const h2 = Array.from(document.querySelectorAll('h2')).map(h => h.textContent?.trim()).filter(Boolean);
+                    const h3 = Array.from(document.querySelectorAll('h3')).map(h => h.textContent?.trim()).filter(Boolean);
+                    const h4 = Array.from(document.querySelectorAll('h4')).map(h => h.textContent?.trim()).filter(Boolean);
+                    const h5 = Array.from(document.querySelectorAll('h5')).map(h => h.textContent?.trim()).filter(Boolean);
+                    const h6 = Array.from(document.querySelectorAll('h6')).map(h => h.textContent?.trim()).filter(Boolean);
+                    
+                    // Images and links
+                    const images = Array.from(document.querySelectorAll('img'));
+                    const imageAlts = images.map(img => img.alt).filter(Boolean);
+                    const imageCount = images.length;
+                    
+                    const links = Array.from(document.querySelectorAll('a[href]'));
+                    const currentDomain = window.location.hostname;
+                    const internalLinks = links.filter(a => {
+                        try {
+                            const href = a.href;
+                            return href.includes(currentDomain) || href.startsWith('/') || !href.includes('://');
+                        } catch (e) { return false; }
+                    }).length;
+                    const externalLinks = links.length - internalLinks;
+                    
+                    // Schema markup
+                    const schemaScripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+                    const schemaMarkup = schemaScripts.map(script => {
+                        try {
+                            const data = JSON.parse(script.textContent || '');
+                            return data['@type'] || 'Unknown';
+                        } catch (e) { return 'Invalid'; }
+                    });
+                    
+                    // Content analysis
+                    const bodyText = document.body?.textContent || '';
+                    const wordCount = bodyText.trim().split(/\s+/).filter(word => word.length > 0).length;
+                    const textLength = bodyText.length;
+                    const language = document.documentElement.lang || null;
+                    
+                    // Open Graph
+                    const ogTitle = document.querySelector('meta[property="og:title"]')?.content || null;
+                    const ogDescription = document.querySelector('meta[property="og:description"]')?.content || null;
+                    const ogImage = document.querySelector('meta[property="og:image"]')?.content || null;
+                    const ogUrl = document.querySelector('meta[property="og:url"]')?.content || null;
+                    const ogType = document.querySelector('meta[property="og:type"]')?.content || null;
+                    const ogSiteName = document.querySelector('meta[property="og:site_name"]')?.content || null;
+                    
+                    // Twitter Card
+                    const twitterCard = document.querySelector('meta[name="twitter:card"]')?.content || null;
+                    const twitterTitle = document.querySelector('meta[name="twitter:title"]')?.content || null;
+                    const twitterDescription = document.querySelector('meta[name="twitter:description"]')?.content || null;
+                    const twitterImage = document.querySelector('meta[name="twitter:image"]')?.content || null;
+                    const twitterSite = document.querySelector('meta[name="twitter:site"]')?.content || null;
+                    const twitterCreator = document.querySelector('meta[name="twitter:creator"]')?.content || null;
+                    
+                    // Technical data
+                    const viewport = document.querySelector('meta[name="viewport"]')?.content || null;
+                    const charset = document.querySelector('meta[charset]')?.getAttribute('charset') || 
+                                  document.querySelector('meta[http-equiv="content-type"]')?.content || null;
+                    const generator = document.querySelector('meta[name="generator"]')?.content || null;
+                    
+                    // Performance timing
+                    const performanceTiming = performance.timing;
+                    const loadTime = performanceTiming.loadEventEnd - performanceTiming.navigationStart;
+                    const domContentLoaded = performanceTiming.domContentLoadedEventEnd - performanceTiming.navigationStart;
+                    
+                    // Resource counts
+                    const scripts = document.querySelectorAll('script').length;
+                    const stylesheets = document.querySelectorAll('link[rel="stylesheet"]').length;
+                    const totalResources = images.length + scripts + stylesheets;
+                    
+                    return {
+                        seo: {
+                            title, metaDescription, metaKeywords, canonicalUrl, robotsMeta,
+                            headings: { h1, h2, h3, h4, h5, h6 },
+                            imageAlts, internalLinks, externalLinks, schemaMarkup
+                        },
+                        performance: {
+                            loadTimeMs: loadTime > 0 ? loadTime : null,
+                            domContentLoadedMs: domContentLoaded > 0 ? domContentLoaded : null,
+                            resourceCount: {
+                                total: totalResources,
+                                images: imageCount,
+                                scripts: scripts,
+                                stylesheets: stylesheets,
+                                fonts: 0, // Hard to detect reliably
+                                others: Math.max(0, totalResources - imageCount - scripts - stylesheets)
+                            }
+                        },
+                        content: {
+                            wordCount, textLength, language,
+                            headingCount: h1.length + h2.length + h3.length + h4.length + h5.length + h6.length,
+                            imageCount, linkCount: links.length,
+                            hasContactInfo: bodyText.toLowerCase().includes('contact') || 
+                                          bodyText.toLowerCase().includes('email') ||
+                                          bodyText.toLowerCase().includes('phone')
+                        },
+                        social: {
+                            openGraph: { title: ogTitle, description: ogDescription, image: ogImage, url: ogUrl, type: ogType, siteName: ogSiteName },
+                            twitterCard: { card: twitterCard, title: twitterTitle, description: twitterDescription, image: twitterImage, site: twitterSite, creator: twitterCreator },
+                            facebookData: { appId: null, admins: [], pages: [] }
+                        },
+                        technical: {
+                            hasStructuredData: schemaMarkup.length > 0,
+                            schemaTypes: schemaMarkup,
+                            hasRobotsTxt: false, // Would need separate request
+                            hasSitemap: false, // Would need separate request
+                            viewport, charset, contentType: document.contentType || null, generator
+                        }
+                    };
+                }
+            """.trimIndent())
+            
+            // Convert the raw data to our domain entities
+            @Suppress("UNCHECKED_CAST")
+            val data = metadataRaw as Map<String, Any?>
+            
+            val seoData = data["seo"] as Map<String, Any?>
+            val performanceData = data["performance"] as Map<String, Any?>
+            val contentData = data["content"] as Map<String, Any?>
+            val socialData = data["social"] as Map<String, Any?>
+            val technicalData = data["technical"] as Map<String, Any?>
+            
+            // Build headings structure
+            val headingsRaw = seoData["headings"] as Map<String, Any?>
+            val headings = HeadingStructure(
+                h1 = (headingsRaw["h1"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                h2 = (headingsRaw["h2"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                h3 = (headingsRaw["h3"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                h4 = (headingsRaw["h4"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                h5 = (headingsRaw["h5"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                h6 = (headingsRaw["h6"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            )
+            
+            // Build resource count
+            val resourceCountRaw = performanceData["resourceCount"] as Map<String, Any?>
+            val resourceCount = ResourceCount(
+                total = (resourceCountRaw["total"] as? Number)?.toInt() ?: 0,
+                images = (resourceCountRaw["images"] as? Number)?.toInt() ?: 0,
+                scripts = (resourceCountRaw["scripts"] as? Number)?.toInt() ?: 0,
+                stylesheets = (resourceCountRaw["stylesheets"] as? Number)?.toInt() ?: 0,
+                fonts = (resourceCountRaw["fonts"] as? Number)?.toInt() ?: 0,
+                others = (resourceCountRaw["others"] as? Number)?.toInt() ?: 0
+            )
+            
+            // Build social media data
+            val openGraphRaw = (socialData["openGraph"] as? Map<String, Any?>) ?: emptyMap()
+            val twitterCardRaw = (socialData["twitterCard"] as? Map<String, Any?>) ?: emptyMap()
+            val facebookRaw = (socialData["facebookData"] as? Map<String, Any?>) ?: emptyMap()
+            
+            val pageMetadata = PageMetadata(
+                seo = SeoData(
+                    title = seoData["title"] as? String,
+                    metaDescription = seoData["metaDescription"] as? String,
+                    metaKeywords = seoData["metaKeywords"] as? String,
+                    canonicalUrl = seoData["canonicalUrl"] as? String,
+                    robotsMeta = seoData["robotsMeta"] as? String,
+                    headings = headings,
+                    imageAlts = (seoData["imageAlts"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                    internalLinks = (seoData["internalLinks"] as? Number)?.toInt() ?: 0,
+                    externalLinks = (seoData["externalLinks"] as? Number)?.toInt() ?: 0,
+                    schemaMarkup = (seoData["schemaMarkup"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                ),
+                performance = PerformanceData(
+                    loadTimeMs = (performanceData["loadTimeMs"] as? Number)?.toLong(),
+                    domContentLoadedMs = (performanceData["domContentLoadedMs"] as? Number)?.toLong(),
+                    resourceCount = resourceCount,
+                    pageSize = PageSize(
+                        totalBytes = 0L, // Would need detailed resource analysis
+                        htmlBytes = 0L,
+                        cssBytes = 0L,
+                        jsBytes = 0L,
+                        imageBytes = 0L,
+                        fontBytes = 0L,
+                        otherBytes = 0L
+                    ),
+                    httpStatus = 200 // We'll get this from response
+                ),
+                content = ContentData(
+                    wordCount = (contentData["wordCount"] as? Number)?.toInt() ?: 0,
+                    textLength = (contentData["textLength"] as? Number)?.toInt() ?: 0,
+                    language = contentData["language"] as? String,
+                    headingCount = (contentData["headingCount"] as? Number)?.toInt() ?: 0,
+                    imageCount = (contentData["imageCount"] as? Number)?.toInt() ?: 0,
+                    linkCount = (contentData["linkCount"] as? Number)?.toInt() ?: 0,
+                    hasContactInfo = (contentData["hasContactInfo"] as? Boolean) ?: false
+                ),
+                social = SocialMediaData(
+                    openGraph = OpenGraphData(
+                        title = openGraphRaw["title"] as? String,
+                        description = openGraphRaw["description"] as? String,
+                        image = openGraphRaw["image"] as? String,
+                        url = openGraphRaw["url"] as? String,
+                        type = openGraphRaw["type"] as? String,
+                        siteName = openGraphRaw["siteName"] as? String
+                    ),
+                    twitterCard = TwitterCardData(
+                        card = twitterCardRaw["card"] as? String,
+                        title = twitterCardRaw["title"] as? String,
+                        description = twitterCardRaw["description"] as? String,
+                        image = twitterCardRaw["image"] as? String,
+                        site = twitterCardRaw["site"] as? String,
+                        creator = twitterCardRaw["creator"] as? String
+                    ),
+                    facebookData = FacebookData(
+                        appId = facebookRaw["appId"] as? String,
+                        admins = (facebookRaw["admins"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                        pages = (facebookRaw["pages"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                    )
+                ),
+                technical = TechnicalData(
+                    hasStructuredData = (technicalData["hasStructuredData"] as? Boolean) ?: false,
+                    schemaTypes = (technicalData["schemaTypes"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+                    hasRobotsTxt = (technicalData["hasRobotsTxt"] as? Boolean) ?: false,
+                    hasSitemap = (technicalData["hasSitemap"] as? Boolean) ?: false,
+                    viewport = technicalData["viewport"] as? String,
+                    charset = technicalData["charset"] as? String,
+                    contentType = technicalData["contentType"] as? String,
+                    generator = technicalData["generator"] as? String
+                ),
+                extractedAt = extractedAt
+            )
+            
+            logger.debug("Metadata extraction completed successfully")
+            pageMetadata
+            }
+            
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            logger.warn("Metadata extraction timed out after 10 seconds for URL: ${page.url()}")
+            null // Return null if extraction times out - screenshot still succeeds
+        } catch (e: Exception) {
+            logger.warn("Failed to extract page metadata: ${e.message}", e)
+            null // Return null if extraction fails - screenshot still succeeds
+        }
+    }
+
+    // Legacy browser args - kept as fallback in case stealth mode fails
     private fun getSimpleBrowserArgs(): List<String> {
         return listOf(
             // Essential args only - keep it simple

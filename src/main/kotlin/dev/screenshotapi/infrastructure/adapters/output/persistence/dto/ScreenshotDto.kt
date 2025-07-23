@@ -39,7 +39,8 @@ data class ScreenshotRequestDto(
     val waitTime: Long? = null,
     val waitForSelector: String? = null,
     val quality: Int = 80,
-    val format: ScreenshotFormatDto = ScreenshotFormatDto.PNG
+    val format: ScreenshotFormatDto = ScreenshotFormatDto.PNG,
+    val includeMetadata: Boolean = false
 ) {
     fun toDomain(): ScreenshotRequest = ScreenshotRequest(
         url = url,
@@ -49,7 +50,8 @@ data class ScreenshotRequestDto(
         waitTime = waitTime,
         waitForSelector = waitForSelector,
         quality = quality,
-        format = format.toDomain()
+        format = format.toDomain(),
+        includeMetadata = includeMetadata
     )
 
     companion object {
@@ -61,7 +63,8 @@ data class ScreenshotRequestDto(
             waitTime = request.waitTime,
             waitForSelector = request.waitForSelector,
             quality = request.quality,
-            format = ScreenshotFormatDto.fromDomain(request.format)
+            format = ScreenshotFormatDto.fromDomain(request.format),
+            includeMetadata = request.includeMetadata
         )
     }
 }

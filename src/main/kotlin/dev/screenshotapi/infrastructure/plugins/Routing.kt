@@ -17,6 +17,7 @@ import java.io.File
 
 fun Application.configureRouting() {
     val screenshotController by inject<ScreenshotController>()
+    val analysisController by inject<AnalysisController>()
     val authController by inject<AuthController>()
     val billingController by inject<BillingController>()
     val adminController by inject<AdminController>()
@@ -80,6 +81,24 @@ fun Application.configureRouting() {
 
                 // Bulk screenshot status endpoint for efficient polling
                 post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
+                
+                // Analysis endpoint uses dedicated analysis rate limiting (AI operations are more resource intensive)
+                rateLimit(RateLimitName("analysis")) {
+                    post("/screenshots/{jobId}/analyze") { analysisController.createAnalysis(call) }
+                }
+                
+                get("/screenshots/{jobId}/analyses") { analysisController.getScreenshotAnalyses(call) }
+            }
+            
+            // Analysis operations - Hybrid authentication (JWT OR API Key OR X-API-Key)
+            authenticate(*AuthCombinations.OPERATIONS) {
+                route("/analysis") {
+                    // Get analysis status and results
+                    get("/{analysisJobId}") { analysisController.getAnalysisStatus(call) }
+                    
+                    // List user's analyses with pagination and filtering
+                    get { analysisController.listAnalyses(call) }
+                }
             }
 
             // OCR operations - API Key authentication

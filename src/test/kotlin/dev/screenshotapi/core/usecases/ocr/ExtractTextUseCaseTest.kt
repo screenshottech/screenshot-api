@@ -365,6 +365,7 @@ class ExtractTextUseCaseTest {
     ): OcrResult {
         return OcrResult(
             id = requestId,
+            userId = "user-test-123",
             success = true,
             extractedText = "Extracted text content for testing",
             confidence = confidence,

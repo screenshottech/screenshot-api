@@ -27,6 +27,7 @@ class OcrResultTest {
         // Act
         val result = OcrResult(
             id = testId,
+            userId = "test-user-id",
             success = true,
             extractedText = testText,
             confidence = testConfidence,
@@ -68,6 +69,7 @@ class OcrResultTest {
         // Act
         val result = OcrResult(
             id = "ocr-result-123",
+            userId = "test-user-id",
             success = true,
             extractedText = "Test text",
             confidence = 0.85,
@@ -98,6 +100,7 @@ class OcrResultTest {
         // Act
         val result = OcrResult(
             id = testId,
+            userId = "test-user-id",
             success = false,
             extractedText = "",
             confidence = 0.0,
@@ -131,6 +134,7 @@ class OcrResultTest {
         // Act
         val result = OcrResult(
             id = "ocr-high-confidence",
+            userId = "test-user-id",
             success = true,
             extractedText = "High quality text Perfect recognition Clear content",
             confidence = 0.98,
@@ -160,6 +164,7 @@ class OcrResultTest {
         // Act
         val result = OcrResult(
             id = "ocr-low-confidence",
+            userId = "test-user-id",
             success = true,
             extractedText = "blurry text unclear words poor quality",
             confidence = 0.45,
@@ -194,6 +199,7 @@ class OcrResultTest {
         // Act
         val result = OcrResult(
             id = "ocr-with-metadata",
+            userId = "test-user-id",
             success = true,
             extractedText = "Text with metadata",
             confidence = 0.87,
