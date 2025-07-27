@@ -1,6 +1,7 @@
 package dev.screenshotapi.infrastructure.adapters.output.ocr
 
 import aws.sdk.kotlin.runtime.auth.credentials.DefaultChainCredentialsProvider
+import aws.sdk.kotlin.runtime.auth.credentials.StaticCredentialsProvider
 import aws.sdk.kotlin.services.bedrockruntime.BedrockRuntimeClient
 import aws.sdk.kotlin.services.bedrockruntime.model.InvokeModelRequest
 import dev.screenshotapi.core.domain.entities.*
@@ -64,9 +65,25 @@ class AwsBedrockOcrService(
 
     // Lazy initialization of Bedrock client
     private val bedrockClient by lazy {
+        val hasExplicitCredentials = config.aws.accessKeyId != null && config.aws.secretAccessKey != null
+        logger.info("🔑 Bedrock credentials: ${if (hasExplicitCredentials) "Using explicit BEDROCK_AWS_* credentials" else "Using DefaultChainCredentialsProvider"}")
+        if (hasExplicitCredentials) {
+            logger.info("🔑 Access Key ID: ${config.aws.accessKeyId?.take(8)}...")
+        }
+        
         BedrockRuntimeClient {
             region = config.region
-            credentialsProvider = DefaultChainCredentialsProvider()
+            credentialsProvider = if (hasExplicitCredentials) {
+                // Use explicit Bedrock credentials
+                StaticCredentialsProvider {
+                    accessKeyId = config.aws.accessKeyId!!
+                    secretAccessKey = config.aws.secretAccessKey!!
+                    sessionToken = config.aws.sessionToken
+                }
+            } else {
+                // Fallback to default chain only if no explicit credentials
+                DefaultChainCredentialsProvider()
+            }
         }
     }
 

@@ -145,15 +145,15 @@ data class BedrockCostConfig(
 fun loadBedrockConfig(): BedrockConfig {
     return BedrockConfig(
         enabled = System.getenv("BEDROCK_ENABLED")?.toBoolean() ?: false,
-        region = System.getenv("AWS_REGION") ?: "us-east-2",
+        region = System.getenv("BEDROCK_AWS_REGION") ?: "us-east-2",
         aws = AwsConfig(
-            accessKeyId = System.getenv("AWS_ACCESS_KEY_ID"),
-            secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY"),
-            sessionToken = System.getenv("AWS_SESSION_TOKEN"),
-            profile = System.getenv("AWS_PROFILE"),
-            roleArn = System.getenv("AWS_ROLE_ARN"),
-            assumeRoleSessionName = System.getenv("AWS_ASSUME_ROLE_SESSION_NAME") ?: "screenshot-api-bedrock",
-            credentialsRefreshMinutes = System.getenv("AWS_CREDENTIALS_REFRESH_MINUTES")?.toInt() ?: 45
+            accessKeyId = System.getenv("BEDROCK_AWS_ACCESS_KEY_ID"),
+            secretAccessKey = System.getenv("BEDROCK_AWS_SECRET_ACCESS_KEY"),
+            sessionToken = System.getenv("BEDROCK_AWS_SESSION_TOKEN"),
+            profile = System.getenv("BEDROCK_AWS_PROFILE"),
+            roleArn = System.getenv("BEDROCK_AWS_ROLE_ARN"),
+            assumeRoleSessionName = System.getenv("BEDROCK_AWS_ASSUME_ROLE_SESSION_NAME") ?: "screenshot-api-bedrock",
+            credentialsRefreshMinutes = System.getenv("BEDROCK_AWS_CREDENTIALS_REFRESH_MINUTES")?.toInt() ?: 45
         ),
         models = BedrockModelsConfig(
             primaryModel = System.getenv("BEDROCK_PRIMARY_MODEL") ?: "claude3Haiku",
