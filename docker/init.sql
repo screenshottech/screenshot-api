@@ -694,4 +694,99 @@ comment on column public.ocr_results.structured_data
 comment on column public.ocr_results.metadata
     is 'JSON metadata with processing parameters, image info, tier settings, etc.';
 
+-- ==========================================
+-- ANALYSIS JOBS TABLE
+-- ==========================================
+
+-- Table for storing AI analysis jobs and results
+create table public.analysis_jobs (
+    id                 varchar(255)                                not null
+        primary key,
+    user_id            varchar(255)                                not null
+        constraint fk_analysis_jobs_user_id__id
+            references public.users
+            on update restrict on delete restrict,
+    screenshot_job_id  varchar(255)                                not null
+        constraint fk_analysis_jobs_screenshot_job_id__id
+            references public.screenshots
+            on update restrict on delete restrict,
+    screenshot_url     text                                        not null,
+    analysis_type      varchar(50)                                 not null,
+    status             varchar(50)                                 not null,
+    language           varchar(10) default 'en'::character varying not null,
+    webhook_url        text,
+    result_data        text,
+    confidence         double precision,
+    metadata           text,
+    processing_time_ms bigint,
+    tokens_used        integer,
+    cost_usd           double precision,
+    error_message      text,
+    created_at         timestamp                                   not null,
+    started_at         timestamp,
+    completed_at       timestamp,
+    updated_at         timestamp                                   not null
+);
+
+alter table public.analysis_jobs
+    owner to screenshotuser;
+
+-- Performance indexes following codebase patterns
+create index analysis_jobs_user_id
+    on public.analysis_jobs (user_id);
+
+create index analysis_jobs_screenshot_job_id
+    on public.analysis_jobs (screenshot_job_id);
+
+create index analysis_jobs_status
+    on public.analysis_jobs (status);
+
+create index analysis_jobs_analysis_type
+    on public.analysis_jobs (analysis_type);
+
+create index analysis_jobs_created_at
+    on public.analysis_jobs (created_at);
+
+-- Composite indexes for common filtering patterns
+create index analysis_jobs_user_id_status
+    on public.analysis_jobs (user_id, status);
+
+create index analysis_jobs_user_id_analysis_type
+    on public.analysis_jobs (user_id, analysis_type);
+
+create index analysis_jobs_status_created_at
+    on public.analysis_jobs (status, created_at);
+
+-- Create trigger for updated_at
+create trigger update_analysis_jobs_updated_at
+    before update
+    on public.analysis_jobs
+    for each row
+    execute procedure public.update_updated_at_column();
+
+-- Comments for documentation
+comment on table public.analysis_jobs
+    is 'Stores AI analysis jobs and results with support for custom prompts and validation';
+
+comment on column public.analysis_jobs.analysis_type
+    is 'Type of analysis: TEXT_EXTRACTION, CUSTOM, PRICE_DETECTION, etc.';
+
+comment on column public.analysis_jobs.status
+    is 'Job status: QUEUED, PROCESSING, COMPLETED, FAILED, CANCELLED';
+
+comment on column public.analysis_jobs.result_data
+    is 'JSON serialized analysis result containing extracted data and insights';
+
+comment on column public.analysis_jobs.metadata
+    is 'JSON metadata with processing parameters, model info, tier settings, etc.';
+
+comment on column public.analysis_jobs.confidence
+    is 'Overall confidence score (0.0-1.0) for the analysis result';
+
+comment on column public.analysis_jobs.tokens_used
+    is 'Number of AI tokens consumed during analysis processing';
+
+comment on column public.analysis_jobs.cost_usd
+    is 'Cost in USD for processing this analysis job';
+
 
