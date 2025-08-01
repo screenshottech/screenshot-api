@@ -77,8 +77,8 @@ create unique index "userEmailIndex"
     on public.users (email);
 
 -- Index for first screenshot analytics and optimizations
-create index idx_users_first_screenshot 
-    on public.users (first_screenshot_completed_at) 
+create index idx_users_first_screenshot
+    on public.users (first_screenshot_completed_at)
     where first_screenshot_completed_at is not null;
 
 create trigger update_users_updated_at
@@ -119,8 +119,8 @@ create index idx_api_keys_user_id
     on public.api_keys (user_id);
 
 -- Unique constraint: only one default API key per user
-create unique index idx_api_keys_user_default 
-    on public.api_keys (user_id) 
+create unique index idx_api_keys_user_default
+    on public.api_keys (user_id)
     where is_default = true and is_active = true;
 
 create table public.screenshots
@@ -154,7 +154,8 @@ create table public.screenshots
     is_retryable       boolean default true  not null,
     retry_type         varchar(20) default 'AUTOMATIC' not null,
     locked_by          varchar(255),
-    locked_at          timestamp with time zone
+    locked_at          timestamp with time zone,
+    metadata           text
 );
 
 alter table public.screenshots
@@ -176,6 +177,10 @@ CREATE INDEX IF NOT EXISTS "idx_screenshots_retry_ready" ON screenshots(next_ret
 CREATE INDEX IF NOT EXISTS "idx_screenshots_stuck_jobs" ON screenshots(status, updated_at) WHERE status = 'PROCESSING';
 CREATE INDEX IF NOT EXISTS "idx_screenshots_failed_retryable" ON screenshots(status, is_retryable, retry_count, max_retries) WHERE status = 'FAILED' AND is_retryable = true;
 CREATE INDEX IF NOT EXISTS "idx_screenshots_locked_jobs" ON screenshots(locked_by, locked_at) WHERE locked_by IS NOT NULL;
+CREATE INDEX IF NOT EXISTS "idx_screenshots_metadata_not_null" ON screenshots(id) WHERE metadata IS NOT NULL;
+
+-- Add comment for metadata column
+COMMENT ON COLUMN screenshots.metadata IS 'JSON-serialized PageMetadata containing SEO, performance, content, and social media data extracted during screenshot generation';
 
 create trigger update_screenshots_updated_at
     before update
@@ -557,16 +562,16 @@ create index idx_webhook_deliveries_config_created
     on public.webhook_deliveries (webhook_config_id, created_at);
 
 -- Comments for documentation
-comment on table public.webhook_configurations 
+comment on table public.webhook_configurations
     is 'Stores user webhook configurations with HMAC secrets for secure payload verification';
 
-comment on table public.webhook_deliveries 
+comment on table public.webhook_deliveries
     is 'Tracks webhook delivery attempts with retry logic and comprehensive status tracking';
 
-comment on column public.webhook_configurations.secret 
+comment on column public.webhook_configurations.secret
     is 'HMAC secret for webhook payload verification - never exposed after creation';
 
-comment on column public.webhook_deliveries.signature 
+comment on column public.webhook_deliveries.signature
     is 'HMAC-SHA256 signature of the payload for verification';
 
 -- ==========================================
@@ -596,7 +601,7 @@ create table public.email_logs (
 );
 
 alter table public.email_logs
-    owner to screenshotapi_user;
+    owner to screenshotuser;
 
 -- Create indexes for performance
 create index idx_email_logs_user_id on public.email_logs (user_id);
@@ -616,19 +621,77 @@ create trigger update_email_logs_updated_at
     execute procedure public.update_updated_at_column();
 
 -- Comments for documentation
-comment on table public.email_logs 
+comment on table public.email_logs
     is 'Tracks email delivery and engagement metrics for the email growth system';
 
-comment on column public.email_logs.email_type 
+comment on column public.email_logs.email_type
     is 'Type of email: WELCOME, CREDIT_ALERT_50, CREDIT_ALERT_80, CREDIT_ALERT_90, UPGRADE_CAMPAIGN, etc.';
 
-comment on column public.email_logs.metadata 
+comment on column public.email_logs.metadata
     is 'JSON metadata with email-specific data like template variables, provider info, etc.';
 
-comment on column public.email_logs.opened 
+comment on column public.email_logs.opened
     is 'Whether the email was opened (tracked via pixel or other means)';
 
-comment on column public.email_logs.clicked 
+comment on column public.email_logs.clicked
     is 'Whether any link in the email was clicked';
+
+-- ==========================================
+-- OCR RESULTS TABLE
+-- ==========================================
+
+-- Table for storing OCR processing results
+create table public.ocr_results (
+    id                  varchar(255)                                 not null
+        primary key,
+    user_id             varchar(255)                                 not null
+        constraint fk_ocr_results_user_id__id
+            references public.users
+            on update restrict on delete restrict,
+    screenshot_job_id   varchar(255)
+        constraint fk_ocr_results_screenshot_job_id__id
+            references public.screenshots
+            on update restrict on delete restrict,
+    success             boolean                                      not null,
+    extracted_text      text                                         not null,
+    confidence          double precision                             not null,
+    word_count          integer                                      not null,
+    lines               text                                         not null, -- JSON serialized array
+    processing_time     double precision                             not null,
+    language            varchar(10)                                  not null,
+    engine              varchar(50)                                  not null,
+    structured_data     text,                                                  -- JSON serialized
+    metadata            text,                                                  -- JSON serialized
+    created_at          timestamp                                    not null,
+    updated_at          timestamp                                    not null
+);
+
+alter table public.ocr_results
+    owner to screenshotuser;
+
+-- Performance indexes following codebase patterns
+create index idx_ocr_results_user_id on public.ocr_results (user_id);
+create index idx_ocr_results_screenshot_job_id on public.ocr_results (screenshot_job_id);
+create index idx_ocr_results_created_at on public.ocr_results (created_at);
+
+-- Create trigger for updated_at
+create trigger update_ocr_results_updated_at
+    before update
+    on public.ocr_results
+    for each row
+    execute procedure public.update_updated_at_column();
+
+-- Comments for documentation
+comment on table public.ocr_results
+    is 'Stores OCR processing results with extracted text and metadata';
+
+comment on column public.ocr_results.lines
+    is 'JSON array of OCR text lines with position and confidence data';
+
+comment on column public.ocr_results.structured_data
+    is 'JSON object containing structured data like tables, forms, prices if extracted';
+
+comment on column public.ocr_results.metadata
+    is 'JSON metadata with processing parameters, image info, tier settings, etc.';
 
 

@@ -46,7 +46,10 @@ data class ScreenshotConfig(
     val selectorTimeoutDuration: Duration = 10.seconds,
     val maxConcurrentRequests: Int,
     val retrySchedulerEnabled: Boolean,
-    val enableGracefulTimeoutFallback: Boolean
+    val enableGracefulTimeoutFallback: Boolean,
+    val enableStealthMode: Boolean,
+    val stealthUserAgent: String?,
+    val enableStealthJavaScript: Boolean
 ) {
     companion object {
         fun load(): ScreenshotConfig = ScreenshotConfig(
@@ -126,6 +129,11 @@ data class ScreenshotConfig(
             retrySchedulerEnabled = System.getenv("RETRY_SCHEDULER_ENABLED")?.toBoolean()
                 ?: true,
             enableGracefulTimeoutFallback = System.getenv("ENABLE_GRACEFUL_TIMEOUT_FALLBACK")?.toBoolean()
+                ?: true,
+            enableStealthMode = System.getenv("ENABLE_STEALTH_MODE")?.toBoolean()
+                ?: true,
+            stealthUserAgent = System.getenv("STEALTH_USER_AGENT"),
+            enableStealthJavaScript = System.getenv("ENABLE_STEALTH_JAVASCRIPT")?.toBoolean()
                 ?: true
         )
     }
@@ -201,7 +209,65 @@ data class ScreenshotConfig(
     }
 
     fun getOptimalBrowserArgs(): List<String> {
+        return if (enableStealthMode) {
+            getStealthBrowserArgs()
+        } else {
+            getStandardBrowserArgs()
+        }
+    }
+
+    fun getStealthBrowserArgs(): List<String> {
         return buildList {
+            // Core stealth args
+            add("--headless=new") // New headless mode - harder to detect
+            add("--no-sandbox")
+            add("--disable-setuid-sandbox")
+            add("--disable-dev-shm-usage")
+            
+            // Anti-detection specific
+            add("--disable-blink-features=AutomationControlled")
+            add("--disable-features=VizDisplayCompositor")
+            add("--disable-extensions-except=")
+            add("--disable-plugins-discovery")
+            add("--disable-default-apps")
+            
+            // Simulate real browser
+            add("--enable-features=NetworkService,NetworkServiceLogging")
+            add("--disable-background-timer-throttling")
+            add("--disable-backgrounding-occluded-windows")
+            add("--disable-renderer-backgrounding")
+            add("--disable-features=TranslateUI")
+            add("--disable-component-extensions-with-background-pages")
+            
+            // Performance in container
+            add("--disable-gpu")
+            add("--hide-scrollbars")
+            add("--mute-audio")
+            add("--no-first-run")
+            add("--disable-sync")
+            add("--disable-background-networking")
+            
+            // Memory optimization
+            add("--memory-pressure-off")
+            add("--max_old_space_size=4096")
+
+            // Custom user agent
+            val userAgentToUse = getEffectiveUserAgent()
+            add("--user-agent=$userAgentToUse")
+
+            if (!enableImages) {
+                add("--blink-settings=imagesEnabled=false")
+            }
+
+            if (!enableJavaScript) {
+                add("--disable-javascript")
+            }
+        }
+    }
+
+    fun getStandardBrowserArgs(): List<String> {
+        return buildList {
+            add("--headless") // Standard headless mode
             add("--no-sandbox")
             add("--disable-setuid-sandbox")
             add("--disable-dev-shm-usage")
@@ -221,6 +287,59 @@ data class ScreenshotConfig(
             // Memory optimization
             add("--memory-pressure-off")
             add("--max_old_space_size=4096")
+        }
+    }
+
+    fun getEffectiveUserAgent(): String {
+        return stealthUserAgent ?: 
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+    }
+
+    fun getStealthJavaScript(): String {
+        return if (enableStealthJavaScript) {
+            """
+            // Hide webdriver property
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+            });
+            
+            // Hide automation characteristics
+            window.navigator.chrome = {
+                runtime: {},
+            };
+            
+            // Mock plugins to simulate real browser
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5],
+            });
+            
+            // Mock languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en'],
+            });
+            
+            // Permissions API mock
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' ?
+                    Promise.resolve({ state: Notification.permission }) :
+                    originalQuery(parameters)
+            );
+            
+            // WebGL vendor info
+            const getParameter = WebGLRenderingContext.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                if (parameter === 37445) {
+                    return 'Intel Inc.';
+                }
+                if (parameter === 37446) {
+                    return 'Intel Iris OpenGL Engine';
+                }
+                return getParameter(parameter);
+            };
+            """.trimIndent()
+        } else {
+            ""
         }
     }
 

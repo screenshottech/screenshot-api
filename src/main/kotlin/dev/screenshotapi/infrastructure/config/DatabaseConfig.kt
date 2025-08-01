@@ -70,7 +70,9 @@ fun Application.initializeDatabase() {
                     DailyUserStatsTable,
                     StripeCustomers,
                     WebhookConfigurations,
-                    WebhookDeliveries
+                    WebhookDeliveries,
+                    OcrResults,
+                    AnalysisJobs  // NEW: Analysis jobs table for separate flow
                 )
             }
 

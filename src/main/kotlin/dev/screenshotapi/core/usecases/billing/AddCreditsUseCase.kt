@@ -14,7 +14,7 @@ class AddCreditsUseCase(
             ?: throw ResourceNotFoundException("User", request.userId)
 
         if (request.amount <= 0) {
-            throw ValidationException("Credits amount must be positive")
+            throw ValidationException.Positive("amount")
         }
 
         val updatedUser = user.copy(

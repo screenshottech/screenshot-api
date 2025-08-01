@@ -29,7 +29,7 @@ enum class SubscriptionStatus {
                 "incomplete_expired" -> INCOMPLETE_EXPIRED
                 "unpaid" -> UNPAID
                 "trialing" -> TRIALING
-                else -> throw ValidationException("Unknown subscription status: $status", "status")
+                else -> throw ValidationException.Custom("Unknown subscription status: $status", "status")
             }
         }
         

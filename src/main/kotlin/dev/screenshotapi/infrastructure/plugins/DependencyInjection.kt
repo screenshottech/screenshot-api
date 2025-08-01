@@ -5,6 +5,7 @@ import dev.screenshotapi.core.domain.services.EmailProvider
 import dev.screenshotapi.core.domain.services.RateLimitingService
 import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.domain.services.ScreenshotService
+import dev.screenshotapi.core.domain.services.OcrService
 import dev.screenshotapi.core.ports.output.*
 import dev.screenshotapi.core.usecases.admin.*
 import dev.screenshotapi.core.usecases.auth.*
@@ -16,6 +17,8 @@ import dev.screenshotapi.core.usecases.stats.AggregateStatsUseCase
 import dev.screenshotapi.core.usecases.stats.UpdateDailyStatsUseCase
 import dev.screenshotapi.core.usecases.webhook.*
 import dev.screenshotapi.core.usecases.email.*
+import dev.screenshotapi.core.usecases.ocr.*
+import dev.screenshotapi.core.usecases.analysis.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.output.TokenGenerationAdapter
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
@@ -25,8 +28,13 @@ import dev.screenshotapi.infrastructure.adapters.output.email.MockEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.email.AwsSesEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.email.GmailEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.*
+import dev.screenshotapi.infrastructure.adapters.output.ocr.PaddleOcrService
+import dev.screenshotapi.infrastructure.adapters.output.ocr.AwsBedrockOcrService
+import dev.screenshotapi.core.services.AnalysisResultFormatter
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
+import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryAnalysisJobQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
+import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisAnalysisJobQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.BCryptHashingAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.HmacAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.UrlSecurityAdapter
@@ -37,11 +45,23 @@ import dev.screenshotapi.infrastructure.config.AppConfig
 import dev.screenshotapi.infrastructure.config.AuthConfig
 import dev.screenshotapi.infrastructure.config.ScreenshotConfig
 import dev.screenshotapi.infrastructure.config.StripeConfig
+import dev.screenshotapi.infrastructure.config.WebhookConfig
+import dev.screenshotapi.infrastructure.config.OcrConfig
+import dev.screenshotapi.infrastructure.config.BedrockConfig
+import dev.screenshotapi.infrastructure.config.BedrockFeatureFlags
+import dev.screenshotapi.infrastructure.config.loadBedrockConfig
+import dev.screenshotapi.infrastructure.config.loadBedrockFeatureFlags
+import dev.screenshotapi.infrastructure.config.AnalysisConfig
+import dev.screenshotapi.infrastructure.config.AnalysisTypeConfig
+import dev.screenshotapi.infrastructure.config.loadAnalysisConfig
+import dev.screenshotapi.infrastructure.config.loadAnalysisTypeConfig
 import dev.screenshotapi.infrastructure.services.*
 import dev.screenshotapi.infrastructure.config.EmailConfig
 import dev.screenshotapi.workers.JobRetryScheduler
+import org.slf4j.LoggerFactory
 import dev.screenshotapi.workers.WebhookRetryWorker
 import dev.screenshotapi.workers.WorkerManager
+import dev.screenshotapi.workers.AnalysisWorkerManager
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -81,7 +101,15 @@ fun configModule(config: AppConfig) = module {
     single { config.billing }
     single { config.billing.stripe }
     single { config.webhook }
+    single { config.ocr }
     single { config.email }
+    single { config.analysis }
+    single<BedrockConfig> { loadBedrockConfig() }
+    single<BedrockFeatureFlags> { loadBedrockFeatureFlags() }
+    single<AnalysisConfig> { loadAnalysisConfig() }
+    single<AnalysisTypeConfig> { loadAnalysisTypeConfig() }
+    single { AnalysisResultFormatter() }
+    single { AnalysisRetryService(get<AnalysisConfig>()) }
 }
 
 fun repositoryModule(config: AppConfig) = module {
@@ -98,6 +126,9 @@ fun repositoryModule(config: AppConfig) = module {
     single<WebhookConfigurationRepository> { createWebhookConfigurationRepository(config, getOrNull()) }
     single<WebhookDeliveryRepository> { createWebhookDeliveryRepository(config, getOrNull()) }
     single<EmailLogRepository> { createEmailLogRepository(config, getOrNull()) }
+    single<OcrResultRepository> { createOcrResultRepository(config, getOrNull()) }
+    single<AnalysisJobRepository> { createAnalysisJobRepository(config, getOrNull()) }
+    single<AnalysisJobQueueRepository> { createAnalysisJobQueueRepository(config, getOrNull<StatefulRedisConnection<String, String>>()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
     single<HmacPort> { HmacAdapter(get()) }
@@ -171,6 +202,45 @@ private fun createEmailProvider(config: EmailConfig): EmailProvider {
         "mock" -> MockEmailProvider()
         else -> MockEmailProvider()
     }
+}
+
+private fun createOcrResultRepository(config: AppConfig, database: Database?): OcrResultRepository =
+    if (config.database.useInMemory) InMemoryOcrResultRepository() else PostgreSQLOcrResultRepository(database!!)
+
+private fun createAnalysisJobRepository(config: AppConfig, database: Database?): AnalysisJobRepository =
+    if (config.database.useInMemory) InMemoryAnalysisJobRepository() else PostgreSQLAnalysisJobRepository(database!!)
+
+/**
+ * Create OCR service based on configuration and feature flags
+ * Primary service: AWS Bedrock with Claude 3 Haiku
+ * Note: PaddleOCR classes preserved but not used by default due to reliability issues
+ */
+private fun createOcrService(
+    bedrockConfig: BedrockConfig,
+    featureFlags: BedrockFeatureFlags,
+    ocrConfig: OcrConfig
+): OcrService {
+    val logger = LoggerFactory.getLogger("DependencyInjection")
+    logger.info("Creating Bedrock-only OCR service (PaddleOCR fallback disabled for reliability)")
+    logger.info("Bedrock enabled: ${bedrockConfig.enabled}, OCR enabled: ${featureFlags.enableBedrockOcr}")
+    
+    // Create Bedrock service as primary and only OCR engine
+    return AwsBedrockOcrService(
+        config = bedrockConfig,
+        featureFlags = featureFlags
+    )
+    
+    // Note: PaddleOCR service creation preserved for future microservice use:
+    /*
+    val paddleOcrService = PaddleOcrService(
+        pythonPath = ocrConfig.paddleOcr.pythonPath,
+        paddleOcrPath = ocrConfig.paddleOcr.paddleOcrPath,
+        workingDirectory = ocrConfig.paddleOcr.workingDirectory,
+        timeoutSeconds = ocrConfig.paddleOcr.timeoutSeconds,
+        maxConcurrentJobs = ocrConfig.paddleOcr.maxConcurrentJobs,
+        memoryOptimization = ocrConfig.paddleOcr.memoryOptimization
+    )
+    */
 }
 
 private fun createDatabase(config: AppConfig): Database =
@@ -260,6 +330,21 @@ fun useCaseModule() = module {
     single { SendWelcomeEmailUseCase(get<UserRepository>(), get<EmailLogRepository>(), get<EmailService>(), get<LogUsageUseCase>()) }
     single { SendCreditAlertUseCase(get<UserRepository>(), get<EmailLogRepository>(), get<EmailService>(), get<LogUsageUseCase>()) }
     single { GetEmailLogsByUserUseCase(get<EmailLogRepository>(), get<UserRepository>()) }
+
+    // OCR use cases
+    single { CreateOcrJobUseCase(get<OcrResultRepository>(), get<ScreenshotRepository>(), get<QueueRepository>()) }
+    single { GetOcrResultUseCase(get<OcrResultRepository>()) }
+    single { ListOcrResultsUseCase(get<OcrResultRepository>()) }
+    single { GetOcrAnalyticsUseCase(get<OcrResultRepository>()) }
+    single { ExtractTextUseCase(get<OcrService>(), get<UserRepository>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
+    single { ExtractPriceDataUseCase(get<ExtractTextUseCase>(), get<LogUsageUseCase>()) }
+    
+    // Analysis use cases (NEW - Separate Flow)
+    single { CreateAnalysisUseCase(get<AnalysisJobRepository>(), get<AnalysisJobQueueRepository>(), get<ScreenshotRepository>(), get<ValidateApiKeyOwnershipUseCase>(), get<CheckCreditsUseCase>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
+    single { GetAnalysisStatusUseCase(get<AnalysisJobRepository>()) }
+    single { GetScreenshotAnalysesUseCase(get<AnalysisJobRepository>(), get<ScreenshotRepository>()) }
+    single { ListAnalysesUseCase(get<AnalysisJobRepository>()) }
+    single { ProcessAnalysisUseCase(get<AnalysisJobRepository>(), get<OcrResultRepository>(), get<OcrService>(), get<HttpClient>()) }
     single { ProvisionSubscriptionCreditsUseCase(get<SubscriptionRepository>(), get<UserRepository>(), get<PlanRepository>(), get<AddCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { HandleSubscriptionWebhookUseCase(get<PaymentGatewayPort>(), get<SubscriptionRepository>(), get<UserRepository>(), get<ProvisionSubscriptionCreditsUseCase>()) }
 
@@ -285,17 +370,27 @@ fun serviceModule() = module {
     single { EmailService(get<EmailProvider>(), get<EmailConfig>()) }
     single { NotificationService(get<SendWebhookUseCase>()) }
     single { MetricsService() }
+    single { AnalysisMetricsCollector(get()) }
     single<RetryPolicy> { DefaultRetryPolicyImpl() }
     single { JobRetryScheduler(get(), get(), get()) }
     single<UsageTrackingPort> {
         UsageTrackingServiceImpl(
             userRepository = get(),
             usageRepository = get(),
-            shortTermCache = CacheFactory.createRateLimitCache(get(), get()),
-            monthlyCache = CacheFactory.createUsageCache(get(), get())
+            shortTermCache = CacheFactory.createRateLimitCache(get(), getOrNull()),
+            monthlyCache = CacheFactory.createUsageCache(get(), getOrNull())
         )
     }
     single<RateLimitingService> { RateLimitingServiceImpl(get(), get(), get()) }
+    single<OcrService> { createOcrService(get<BedrockConfig>(), get<BedrockFeatureFlags>(), get<OcrConfig>()) }
+    single { ScreenshotOcrWorkflowService(
+        screenshotRepository = get(),
+        ocrResultRepository = get(),
+        extractTextUseCase = get(),
+        extractPriceDataUseCase = get(),
+        storagePort = get(),
+        httpClient = get()
+    ) }
     single<HttpClient> {
         HttpClient(CIO) {
             install(ContentNegotiation) {
@@ -336,14 +431,39 @@ fun serviceModule() = module {
             retryPolicy = get(),
             jobRetryScheduler = get(),
             config = get(),
-            emailService = getOrNull<EmailService>()
+            emailService = getOrNull<EmailService>(),
+            ocrWorkflowService = getOrNull<ScreenshotOcrWorkflowService>(),
+            ocrResultRepository = get(),
+            extractTextUseCase = get<ExtractTextUseCase>()
+        )
+    }
+    single {
+        AnalysisWorkerManager(
+            analysisJobRepository = get(),
+            analysisJobQueueRepository = get(),
+            userRepository = get(),
+            processAnalysisUseCase = get(),
+            logUsageUseCase = get(),
+            notificationService = get(),
+            metricsService = get(),
+            metricsCollector = get(),
+            config = get(),
+            analysisConfig = get()
         )
     }
 
 }
 
+private fun createAnalysisJobQueueRepository(config: AppConfig, redisConnection: StatefulRedisConnection<String, String>?): AnalysisJobQueueRepository =
+    if (config.redis.useInMemory) {
+        InMemoryAnalysisJobQueueAdapter()
+    } else {
+        RedisAnalysisJobQueueAdapter(redisConnection!!)
+    }
+
 fun controllerModule() = module {
     single { ScreenshotController() }
+    single { AnalysisController() }
     single { AuthController() }
     single { BillingController() }
     single { AdminController() }

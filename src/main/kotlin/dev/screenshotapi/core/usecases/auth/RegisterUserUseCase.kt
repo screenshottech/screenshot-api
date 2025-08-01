@@ -23,10 +23,10 @@ class RegisterUserUseCase(
     override suspend fun invoke(request: RegisterUserRequest): RegisterUserResponse {
         // Validate input
         if (request.email.isBlank()) {
-            throw ValidationException("Email is required", "email")
+            throw ValidationException.Required("email")
         }
         if (request.password.isBlank()) {
-            throw ValidationException("Password is required", "password")
+            throw ValidationException.Required("password")
         }
         
         // Check if user already exists
@@ -38,7 +38,7 @@ class RegisterUserUseCase(
         // Get the free plan (default for new users)
         val freePlan = planRepository.findById("plan_free")
             ?: planRepository.findAll().firstOrNull()
-            ?: throw ValidationException("No plans available", "plan")
+            ?: throw ValidationException.Custom("No plans available", "plan")
         
         // Create user with hashed password
         val passwordHash = request.password.hashCode().toString()

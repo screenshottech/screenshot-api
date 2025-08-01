@@ -61,7 +61,10 @@ fun Application.configureSecurity() {
                     .build()
             )
             validate { credential ->
-                jwtAuthProvider.validateJwt(credential)
+                logger.info("🔑 JWT validation attempt - Subject: ${credential.subject}, Issuer: ${credential.issuer}")
+                val result = jwtAuthProvider.validateJwt(credential)
+                logger.info("🔑 JWT validation result - Principal: $result")
+                result
             }
         }
 

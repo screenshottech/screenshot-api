@@ -56,6 +56,10 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     it[retryType] = job.retryType.name
                     it[lockedBy] = job.lockedBy
                     it[lockedAt] = job.lockedAt
+                    // Metadata field
+                    it[metadata] = job.metadata?.let { pageMetadata ->
+                        json.encodeToString(PageMetadata.serializer(), pageMetadata)
+                    }
                 }
 
                 job.copy(id = insertedId.value.toString())
@@ -160,6 +164,10 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
                     it[retryType] = job.retryType.name
                     it[lockedBy] = job.lockedBy
                     it[lockedAt] = job.lockedAt
+                    // Metadata field
+                    it[metadata] = job.metadata?.let { pageMetadata ->
+                        json.encodeToString(PageMetadata.serializer(), pageMetadata)
+                    }
                 }
 
                 if (updatedRows == 0) {
@@ -549,7 +557,16 @@ class PostgreSQLScreenshotRepository(private val database: Database) : Screensho
             isRetryable = row[Screenshots.isRetryable],
             retryType = RetryType.valueOf(row[Screenshots.retryType]),
             lockedBy = row[Screenshots.lockedBy],
-            lockedAt = row[Screenshots.lockedAt]
+            lockedAt = row[Screenshots.lockedAt],
+            // Page metadata
+            metadata = row[Screenshots.metadata]?.let { metadataJson ->
+                try {
+                    json.decodeFromString(PageMetadata.serializer(), metadataJson)
+                } catch (e: Exception) {
+                    logger.warn("Failed to parse page metadata: $metadataJson", e)
+                    null
+                }
+            }
         )
     }
 }

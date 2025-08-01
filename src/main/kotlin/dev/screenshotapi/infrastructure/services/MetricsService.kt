@@ -87,18 +87,52 @@ class MetricsService {
         incrementCounter("plan_cache_lookups_total", mapOf("hit" to hit.toString()))
     }
     
+    // Analysis metrics (NEW - Separate Flow)
+    fun recordAnalysisProcessingTime(processingTimeMs: Long) {
+        recordHistogram("analysis_processing_time", processingTimeMs)
+        logger.debug("Analysis processing time recorded: ${processingTimeMs}ms")
+    }
+    
+    fun recordAnalysisTokensUsed(tokensUsed: Int) {
+        recordHistogram("analysis_tokens_used", tokensUsed.toLong())
+        logger.debug("Analysis tokens used: $tokensUsed")
+    }
+    
+    fun recordAnalysisFailure(analysisType: String) {
+        incrementCounter("analysis_failures_total", mapOf("type" to analysisType))
+        logger.warn("Analysis failure recorded: type=$analysisType")
+    }
+    
+    fun recordAnalysisWorkerCount(count: Int) {
+        setGauge("analysis_workers_active", count.toLong())
+    }
+    
+    fun recordAnalysisWorkerHealthy(count: Int) {
+        setGauge("analysis_workers_healthy", count.toLong())
+    }
+    
+    fun recordAnalysisQueueDepth(depth: Int) {
+        setGauge("analysis_queue_depth", depth.toLong())
+    }
+    
+    fun recordAnalysisWorkerStats(workerId: String, processed: Long, successful: Long, failed: Long) {
+        setGauge("analysis_worker_processed", processed, mapOf("worker_id" to workerId))
+        setGauge("analysis_worker_successful", successful, mapOf("worker_id" to workerId))
+        setGauge("analysis_worker_failed", failed, mapOf("worker_id" to workerId))
+    }
+    
     // Generic metrics methods
-    private fun incrementCounter(name: String, labels: Map<String, String> = emptyMap()) {
+    fun incrementCounter(name: String, labels: Map<String, String> = emptyMap()) {
         val key = buildMetricKey(name, labels)
         counters.computeIfAbsent(key) { AtomicLong(0) }.incrementAndGet()
     }
     
-    private fun setGauge(name: String, value: Long, labels: Map<String, String> = emptyMap()) {
+    fun setGauge(name: String, value: Long, labels: Map<String, String> = emptyMap()) {
         val key = buildMetricKey(name, labels)
         gauges[key] = AtomicLong(value)
     }
     
-    private fun recordHistogram(name: String, value: Long) {
+    fun recordHistogram(name: String, value: Long) {
         // For now, just log the histogram value
         // In a real implementation, this would feed into a proper metrics system
         logger.debug("Histogram $name: $value")

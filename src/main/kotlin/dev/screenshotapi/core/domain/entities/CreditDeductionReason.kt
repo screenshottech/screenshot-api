@@ -10,6 +10,7 @@ enum class CreditDeductionReason(
 ) {
     SCREENSHOT("Screenshot", "Credit deducted for screenshot generation"),
     OCR("OCR", "Credit deducted for optical character recognition"),
+    AI_ANALYSIS("AI Analysis", "Credit deducted for AI-powered image analysis"),
     PDF_GENERATION("PDF Generation", "Credit deducted for PDF document generation"),
     BATCH_PROCESSING("Batch Processing", "Credit deducted for batch operations"),
     API_CALL("API Call", "Credit deducted for general API usage"),

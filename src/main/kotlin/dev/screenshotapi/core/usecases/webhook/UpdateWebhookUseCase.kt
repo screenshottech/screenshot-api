@@ -22,7 +22,7 @@ class UpdateWebhookUseCase(
             ?: throw ResourceNotFoundException("Webhook", webhookId)
         
         if (existingWebhook.userId != userId) {
-            throw ValidationException("Unauthorized access to webhook: $webhookId")
+            throw ValidationException.UnauthorizedAccess("webhook", webhookId)
         }
         
         url?.let { validateWebhookUrl(it) }
@@ -41,13 +41,13 @@ class UpdateWebhookUseCase(
     private fun validateWebhookUrl(url: String) {
         when {
             !url.startsWith("https://") && !url.startsWith("http://") -> {
-                throw ValidationException("Webhook URL must start with http:// or https://")
+                throw ValidationException.InvalidFormat("url", "must start with http:// or https://")
             }
             url.startsWith("http://") && !url.contains("localhost") && !url.contains("127.0.0.1") -> {
-                throw ValidationException("HTTP webhooks are only allowed for localhost")
+                throw ValidationException.Custom("HTTP webhooks are only allowed for localhost", "url")
             }
             url.length > 2048 -> {
-                throw ValidationException("Webhook URL is too long (max 2048 characters)")
+                throw ValidationException.InvalidRange("url", max = 2048)
             }
         }
     }

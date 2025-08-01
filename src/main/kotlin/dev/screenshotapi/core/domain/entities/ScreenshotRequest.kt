@@ -23,7 +23,8 @@ data class ScreenshotRequest(
     val waitTime: Long? = null,
     val waitForSelector: String? = null,
     val quality: Int = 80,
-    val format: ScreenshotFormat = ScreenshotFormat.PNG
+    val format: ScreenshotFormat = ScreenshotFormat.PNG,
+    val includeMetadata: Boolean = false
 ) {
     init {
         require(url.isNotBlank()) { "URL cannot be blank" }

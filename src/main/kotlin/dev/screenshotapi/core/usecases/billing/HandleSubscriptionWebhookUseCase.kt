@@ -53,7 +53,7 @@ class HandleSubscriptionWebhookUseCase(
             paymentGatewayPort.handleWebhookEvent(request.payload, request.signature)
         } catch (e: Exception) {
             logger.error("WEBHOOK_SIGNATURE_ERROR: Invalid webhook signature or payload [error=${e.message}, payloadPreview=${request.payload.take(100)}]", e)
-            throw ValidationException("Invalid webhook signature or payload", "webhook")
+            throw ValidationException.InvalidFormat("webhook", "invalid signature or payload")
         }
         
         logger.info("WEBHOOK_EVENT_PARSED: Event parsed successfully [eventType=${webhookEvent.eventType}, objectId=${webhookEvent.objectId}, objectType=${webhookEvent.objectType}, dataKeys=${webhookEvent.data.keys.joinToString()}]")
@@ -115,7 +115,7 @@ class HandleSubscriptionWebhookUseCase(
         val userId = subscriptionData["userId"] as? String
             ?: run {
                 logger.error("SUBSCRIPTION_CREATE_MISSING_USER: Missing userId in subscription data [availableKeys=${subscriptionData.keys}]")
-                throw ValidationException("Missing userId in subscription data. Available keys: ${subscriptionData.keys}", "userId")
+                throw ValidationException.Required("userId")
             }
         
         logger.info("SUBSCRIPTION_CREATE_USER_CHECK: Checking if user exists [userId=$userId]")

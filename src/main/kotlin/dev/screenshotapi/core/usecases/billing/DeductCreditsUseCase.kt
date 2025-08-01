@@ -3,6 +3,7 @@ package dev.screenshotapi.core.usecases.billing
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
 import dev.screenshotapi.core.domain.entities.UsageLogAction
+import dev.screenshotapi.core.domain.entities.CreditDeductionReason
 import dev.screenshotapi.core.usecases.email.SendCreditAlertUseCase
 import dev.screenshotapi.core.usecases.email.SendCreditAlertRequest
 import kotlinx.datetime.*
@@ -37,16 +38,25 @@ class DeductCreditsUseCase(
 
         val deductedAt = Clock.System.now()
 
+        // Determine the appropriate log action based on deduction reason
+        val logAction = when (request.reason) {
+            CreditDeductionReason.AI_ANALYSIS -> UsageLogAction.AI_ANALYSIS_CREDITS_DEDUCTED
+            else -> UsageLogAction.CREDITS_DEDUCTED
+        }
+        
         // Log the credit deduction in usage logs
         logUsageUseCase.invoke(LogUsageUseCase.Request(
             userId = request.userId,
-            action = UsageLogAction.CREDITS_DEDUCTED,
+            action = logAction,
             creditsUsed = request.amount,
-            screenshotId = request.jobId, // Associate with job if provided
+            screenshotId = null, // Only for Screenshots table IDs, not AnalysisJobs or other job types
             metadata = mapOf(
                 "previousCredits" to user.creditsRemaining.toString(),
                 "newCredits" to updatedUser.creditsRemaining.toString(),
                 "deductedAmount" to request.amount.toString()
+            ).plus(
+                // Add job context in metadata instead of screenshotId field
+                request.jobId?.let { mapOf("jobId" to it) } ?: emptyMap()
             ).plus(
                 // Add optional business context
                 request.reason?.let {

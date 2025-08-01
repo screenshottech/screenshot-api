@@ -23,7 +23,7 @@ class GetWebhookDeliveriesUseCase(
             ?: throw ResourceNotFoundException("Webhook", webhookId)
         
         if (webhook.userId != userId) {
-            throw ValidationException("Unauthorized access to webhook: $webhookId")
+            throw ValidationException.UnauthorizedAccess("webhook", webhookId)
         }
         
         return webhookDeliveryRepository.findByWebhookConfigId(webhookId, limit)
@@ -45,7 +45,7 @@ class GetWebhookDeliveriesUseCase(
             ?: throw ResourceNotFoundException("Webhook", webhookId)
         
         if (webhook.userId != userId) {
-            throw ValidationException("Unauthorized access to webhook: $webhookId")
+            throw ValidationException.UnauthorizedAccess("webhook", webhookId)
         }
         
         val sinceTime = since ?: Clock.System.now().minus(30.days)
@@ -61,7 +61,7 @@ class GetWebhookDeliveriesUseCase(
             ?: throw ResourceNotFoundException("Webhook", webhookId)
         
         if (webhook.userId != userId) {
-            throw ValidationException("Unauthorized access to webhook: $webhookId")
+            throw ValidationException.UnauthorizedAccess("webhook", webhookId)
         }
         
         val sinceTime = since ?: Clock.System.now().minus(30.days)
@@ -76,7 +76,7 @@ class GetWebhookDeliveriesUseCase(
             ?: throw ResourceNotFoundException("WebhookDelivery", deliveryId)
         
         if (delivery.userId != userId) {
-            throw ValidationException("Unauthorized access to webhook delivery: $deliveryId")
+            throw ValidationException.UnauthorizedAccess("webhook delivery", deliveryId)
         }
         
         return delivery

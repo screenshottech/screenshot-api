@@ -20,6 +20,7 @@ data class TakeScreenshotRequestDto(
     val waitForSelector: String? = null,
     val quality: Int = 80,
     val format: String = "PNG",
+    val includeMetadata: Boolean = false,
     val webhookUrl: String? = null
 )
 
@@ -41,7 +42,8 @@ data class GetScreenshotStatusResponseDto(
     val processingTimeMs: Long?,
     val fileSizeBytes: Long?,
     val errorMessage: String?,
-    val request: ScreenshotRequestDto
+    val request: ScreenshotRequestDto,
+    val metadata: PageMetadataDto? = null
 )
 
 @Serializable
@@ -60,7 +62,8 @@ data class ScreenshotResponseDto(
     val processingTimeMs: Long?,
     val fileSizeBytes: Long?,
     val errorMessage: String?,
-    val request: ScreenshotRequestDto
+    val request: ScreenshotRequestDto,
+    val metadata: PageMetadataDto? = null
 )
 
 @Serializable
@@ -72,7 +75,8 @@ data class ScreenshotRequestDto(
     val waitTime: Long? = null,
     val waitForSelector: String? = null,
     val quality: Int = 80,
-    val format: String = "PNG"
+    val format: String = "PNG",
+    val includeMetadata: Boolean = false
 )
 
 @Serializable
@@ -133,7 +137,8 @@ fun GetScreenshotStatusUseCase.Response.toDto() = GetScreenshotStatusResponseDto
     processingTimeMs = processingTimeMs,
     fileSizeBytes = fileSizeBytes,
     errorMessage = errorMessage,
-    request = request.toDto()
+    request = request.toDto(),
+    metadata = metadata?.toDto()
 )
 
 fun ListScreenshotsUseCase.Response.toDto() = ListScreenshotsResponseDto(
@@ -181,7 +186,8 @@ fun TakeScreenshotRequestDto.toDomainRequest(userId: String, apiKeyId: String): 
         waitTime = waitTime,
         waitForSelector = waitForSelector,
         quality = quality,
-        format = DomainFormat.fromString(format)
+        format = DomainFormat.fromString(format),
+        includeMetadata = includeMetadata
     )
 
     return TakeScreenshotUseCase.Request(
@@ -200,7 +206,8 @@ fun ScreenshotRequestDto.toDomain() = DomainScreenshotRequest(
     waitTime = waitTime,
     waitForSelector = waitForSelector,
     quality = quality,
-    format = DomainFormat.fromString(format)
+    format = DomainFormat.fromString(format),
+    includeMetadata = includeMetadata
 )
 
 // Helper mapping functions
@@ -212,7 +219,8 @@ fun DomainScreenshotRequest.toDto() = ScreenshotRequestDto(
     waitTime = waitTime,
     waitForSelector = waitForSelector,
     quality = quality,
-    format = format.name
+    format = format.name,
+    includeMetadata = includeMetadata
 )
 
 fun ScreenshotJob.toResponseDto() = ScreenshotResponseDto(
@@ -224,5 +232,6 @@ fun ScreenshotJob.toResponseDto() = ScreenshotResponseDto(
     processingTimeMs = processingTimeMs,
     fileSizeBytes = fileSizeBytes,
     errorMessage = errorMessage,
-    request = request.toDto()
+    request = request.toDto(),
+    metadata = metadata?.toDto()
 )

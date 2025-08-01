@@ -4,17 +4,36 @@ import dev.screenshotapi.core.domain.entities.UsageLog
 import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.core.domain.repositories.UsageLogRepository
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.UsageLogs
+import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.Screenshots
+import dev.screenshotapi.infrastructure.exceptions.DatabaseException
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.statements.UpsertStatement
 
 class PostgreSQLUsageLogRepository(
     private val database: Database
 ) : UsageLogRepository {
 
     override suspend fun save(usageLog: UsageLog): UsageLog = dbQuery(database) {
-        UsageLogs.insert {
+        // Validate screenshot exists if screenshot_id is provided
+        usageLog.screenshotId?.let { screenshotId ->
+            val screenshotExists = Screenshots.select {
+                Screenshots.id eq screenshotId
+            }.singleOrNull() != null
+            
+            if (!screenshotExists) {
+                throw DatabaseException.OperationFailed(
+                    "Cannot create usage log: Screenshot with ID $screenshotId does not exist"
+                )
+            }
+        }
+        
+        // Use upsert to handle potential duplicates (idempotent operations)
+        UsageLogs.upsert(
+            keys = arrayOf(UsageLogs.id)
+        ) {
             it[id] = usageLog.id
             it[userId] = usageLog.userId
             it[apiKeyId] = usageLog.apiKeyId

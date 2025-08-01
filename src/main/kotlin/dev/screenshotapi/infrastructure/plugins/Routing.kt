@@ -2,6 +2,9 @@ package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.auth.AuthCombinations
+import dev.screenshotapi.infrastructure.adapters.input.rest.BillingController
+import dev.screenshotapi.infrastructure.adapters.input.rest.webhookRoutes
+import dev.screenshotapi.infrastructure.adapters.input.rest.configureOcrRoutes
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.config.AppConfig
 import io.ktor.server.application.*
@@ -14,6 +17,7 @@ import java.io.File
 
 fun Application.configureRouting() {
     val screenshotController by inject<ScreenshotController>()
+    val analysisController by inject<AnalysisController>()
     val authController by inject<AuthController>()
     val billingController by inject<BillingController>()
     val adminController by inject<AdminController>()
@@ -77,7 +81,28 @@ fun Application.configureRouting() {
 
                 // Bulk screenshot status endpoint for efficient polling
                 post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
+                
+                // Analysis endpoint uses dedicated analysis rate limiting (AI operations are more resource intensive)
+                rateLimit(RateLimitName("analysis")) {
+                    post("/screenshots/{jobId}/analyze") { analysisController.createAnalysis(call) }
+                }
+                
+                get("/screenshots/{jobId}/analyses") { analysisController.getScreenshotAnalyses(call) }
             }
+            
+            // Analysis operations - Hybrid authentication (JWT OR API Key OR X-API-Key)
+            authenticate(*AuthCombinations.OPERATIONS) {
+                route("/analysis") {
+                    // Get analysis status and results
+                    get("/{analysisJobId}") { analysisController.getAnalysisStatus(call) }
+                    
+                    // List user's analyses with pagination and filtering
+                    get { analysisController.listAnalyses(call) }
+                }
+            }
+
+            // OCR operations - API Key authentication
+            configureOcrRoutes()
 
             // User management endpoints - JWT authentication only
             authenticate(*AuthCombinations.USER_MANAGEMENT) {

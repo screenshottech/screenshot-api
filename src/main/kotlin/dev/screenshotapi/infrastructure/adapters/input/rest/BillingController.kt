@@ -162,17 +162,11 @@ class BillingController : KoinComponent {
             // Get raw body and signature header
             val payload = call.receiveText()
             val signature = call.request.headers["stripe-signature"]
-                ?: throw dev.screenshotapi.core.domain.exceptions.ValidationException(
-                    "Missing Stripe signature header",
-                    "stripe-signature"
-                )
+                ?: throw dev.screenshotapi.core.domain.exceptions.ValidationException.Required("stripe-signature")
 
             // Validate payload is not empty
             if (payload.isBlank()) {
-                throw dev.screenshotapi.core.domain.exceptions.ValidationException(
-                    "Webhook payload cannot be empty",
-                    "payload"
-                )
+                throw dev.screenshotapi.core.domain.exceptions.ValidationException.Required("payload")
             }
 
             logger.info("WEBHOOK_START: Processing webhook request [requestId=$requestId, payloadSize=${payload.length}, hasSignature=${signature.isNotEmpty()}]")

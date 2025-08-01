@@ -36,7 +36,7 @@ class ManualRetryScreenshotUseCase(
         }
 
         if (job.status != ScreenshotStatus.FAILED && !job.isStuck()) {
-            throw ValidationException("Job must be in FAILED status or stuck (>30 min processing). Current status: ${job.status}")
+            throw ValidationException.InvalidState("job", job.status.toString(), "FAILED or stuck")
         }
 
         // Check if job is already scheduled for automatic retry
@@ -46,9 +46,10 @@ class ManualRetryScreenshotUseCase(
             if (cancelled) {
                 logger.info("Cancelled scheduled automatic retry for manual retry: jobId=${job.id}, was scheduled for=${job.nextRetryAt}")
             } else {
-                throw ValidationException(
-                    "Job is already scheduled for automatic retry at ${job.nextRetryAt}. " +
-                    "Could not cancel automatic retry. Please wait for automatic retry or try again later."
+                throw ValidationException.InvalidState(
+                    "job", 
+                    "scheduled for automatic retry", 
+                    "available for manual retry"
                 )
             }
         }

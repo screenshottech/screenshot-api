@@ -7,6 +7,7 @@ import dev.screenshotapi.infrastructure.services.StatsAggregationScheduler
 import dev.screenshotapi.infrastructure.services.ScreenshotServiceImpl
 import dev.screenshotapi.workers.WebhookRetryWorker
 import dev.screenshotapi.workers.WorkerManager
+import dev.screenshotapi.workers.AnalysisWorkerManager
 import io.ktor.server.application.*
 import org.koin.ktor.ext.get
 
@@ -21,6 +22,10 @@ fun Application.initializeApplication() {
     get<WorkerManager>().start()
     log.info("Worker manager started")
 
+    log.info("Starting analysis worker manager...")
+    get<AnalysisWorkerManager>().start()
+    log.info("Analysis worker manager started")
+
     // Start stats aggregation scheduler
     log.info("Starting stats aggregation scheduler...")
     get<StatsAggregationScheduler>().start()
@@ -34,6 +39,7 @@ fun Application.initializeApplication() {
     monitor.subscribe(ApplicationStopping) {
         try {
             get<WorkerManager>().shutdown()
+            get<AnalysisWorkerManager>().shutdown()
 
             // Stop stats aggregation scheduler
             get<StatsAggregationScheduler>().stop()
