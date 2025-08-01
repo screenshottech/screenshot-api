@@ -44,6 +44,13 @@ class GetAnalysisStatusUseCase(
             language = analysisJob.language,
             webhookUrl = analysisJob.webhookUrl,
             
+            // Custom prompts (for CUSTOM analysis type)
+            customSystemPrompt = analysisJob.customSystemPrompt,
+            customUserPrompt = analysisJob.customUserPrompt,
+            promptValidationScore = analysisJob.promptValidationScore,
+            securityFlags = analysisJob.securityFlags,
+            usesCustomPrompts = analysisJob.usesCustomPrompts(),
+            
             // Results (only available when completed)
             resultData = if (analysisJob.status == AnalysisStatus.COMPLETED) {
                 analysisJob.resultData
@@ -85,6 +92,13 @@ class GetAnalysisStatusUseCase(
         val screenshotUrl: String,
         val language: String,
         val webhookUrl: String?,
+        
+        // Custom prompts (for CUSTOM analysis type)
+        val customSystemPrompt: String?,
+        val customUserPrompt: String?,
+        val promptValidationScore: Double?,
+        val securityFlags: Map<String, String>,
+        val usesCustomPrompts: Boolean,
         
         // Results (null until completed)
         val resultData: String?,

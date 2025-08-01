@@ -268,6 +268,12 @@ class AwsBedrockOcrService(
         // Detect media type from image header
         val mediaType = detectImageType(imageBytes)
 
+        // Determine prompts to use (custom prompts override analysis type defaults)
+        val effectiveUserPrompt = request.options.customPrompt ?: analysisType.userPrompt
+        val effectiveSystemPrompt = analysisType.systemPrompt // System prompt stays from type for now
+        
+        logger.debug("Using prompts for analysis ${request.id}: Custom=${request.options.customPrompt != null}, Type=${analysisType.name}")
+
         // Build messages with system and user prompts
         val messages = listOf(
             ClaudeMessage(
@@ -283,7 +289,7 @@ class AwsBedrockOcrService(
                     ),
                     ClaudeContent(
                         type = "text",
-                        text = buildLanguageAwarePrompt(analysisType.userPrompt, request.language)
+                        text = buildLanguageAwarePrompt(effectiveUserPrompt, request.language)
                     )
                 )
             )
@@ -296,7 +302,7 @@ class AwsBedrockOcrService(
             topP = config.models.claude3Haiku.topP,
             topK = config.models.claude3Haiku.topK,
             stopSequences = config.models.claude3Haiku.stopSequences,
-            system = buildLanguageAwareSystemPrompt(analysisType.systemPrompt, request.language),
+            system = buildLanguageAwareSystemPrompt(effectiveSystemPrompt, request.language),
             messages = messages
         )
     }

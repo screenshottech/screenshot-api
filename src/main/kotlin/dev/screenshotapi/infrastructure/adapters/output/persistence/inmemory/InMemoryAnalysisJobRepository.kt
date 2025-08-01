@@ -225,11 +225,64 @@ class InMemoryAnalysisJobRepository : AnalysisJobRepository {
             processingTimeMs = 6000L
         )
         
+        // Mock custom prompt analysis
+        val customPromptAnalysis = AnalysisJob(
+            id = "analysis-005",
+            userId = "test-user-123",
+            screenshotJobId = "screenshot-005",
+            screenshotUrl = "https://test-bucket.s3.amazonaws.com/screenshots/screenshot-005.png",
+            analysisType = AnalysisType.CUSTOM,
+            status = AnalysisStatus.COMPLETED,
+            language = "en",
+            customUserPrompt = "Analyze this e-commerce page and identify all pricing information, promotional offers, and call-to-action buttons. Also evaluate the trust signals present on the page.",
+            customSystemPrompt = null, // Using default system prompt
+            promptValidationScore = 0.95,
+            securityFlags = mapOf("clean" to "true"),
+            resultData = """
+                {
+                    "customAnalysis": {
+                        "pricing": [
+                            {"product": "Premium Plan", "price": "$99/month", "discount": "20% off"},
+                            {"product": "Standard Plan", "price": "$49/month", "discount": "none"}
+                        ],
+                        "promotions": [
+                            "Limited time: Get 2 months free with annual billing",
+                            "Student discount: 50% off all plans"
+                        ],
+                        "ctaButtons": [
+                            {"text": "Start Free Trial", "position": "header", "style": "primary"},
+                            {"text": "Buy Now", "position": "pricing-section", "style": "secondary"}
+                        ],
+                        "trustSignals": [
+                            "SSL certificate visible",
+                            "Customer testimonials section",
+                            "Security badges (McAfee, Norton)",
+                            "Money-back guarantee badge"
+                        ]
+                    }
+                }
+            """.trimIndent(),
+            confidence = 0.92,
+            processingTimeMs = 3200L,
+            tokensUsed = 1250,
+            costUsd = 0.0058,
+            createdAt = now.minus(kotlin.time.Duration.parse("30m")),
+            startedAt = now.minus(kotlin.time.Duration.parse("30m")).plus(kotlin.time.Duration.parse("3s")),
+            completedAt = now.minus(kotlin.time.Duration.parse("30m")).plus(kotlin.time.Duration.parse("6s")),
+            metadata = mapOf(
+                "model" to "claude-3-haiku",
+                "region" to "us-east-2",
+                "imageSize" to "1920x1080",
+                "customPromptLength" to "178"
+            )
+        )
+        
         // Add mock data to repository
         jobs[completedAnalysis.id] = completedAnalysis
         jobs[processingAnalysis.id] = processingAnalysis
         jobs[queuedAnalysis.id] = queuedAnalysis
         jobs[failedAnalysis.id] = failedAnalysis
+        jobs[customPromptAnalysis.id] = customPromptAnalysis
         
         logger.info("Initialized InMemoryAnalysisJobRepository with ${jobs.size} mock analysis jobs")
     }

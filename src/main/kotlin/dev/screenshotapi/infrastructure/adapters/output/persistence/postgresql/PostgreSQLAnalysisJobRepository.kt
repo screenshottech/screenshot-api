@@ -308,6 +308,13 @@ class PostgreSQLAnalysisJobRepository(
         stmt[AnalysisJobs.status] = job.status.name
         stmt[AnalysisJobs.language] = job.language
         stmt[AnalysisJobs.webhookUrl] = job.webhookUrl
+        
+        // Custom prompts support
+        stmt[AnalysisJobs.customSystemPrompt] = job.customSystemPrompt
+        stmt[AnalysisJobs.customUserPrompt] = job.customUserPrompt
+        stmt[AnalysisJobs.promptValidationScore] = job.promptValidationScore
+        stmt[AnalysisJobs.securityFlags] = job.securityFlags.takeIf { it.isNotEmpty() }?.let { Json.encodeToString(it) }
+        
         stmt[AnalysisJobs.resultData] = job.resultData
         stmt[AnalysisJobs.confidence] = job.confidence
         stmt[AnalysisJobs.metadata] = job.metadata.takeIf { it.isNotEmpty() }?.let { Json.encodeToString(it) }
@@ -334,6 +341,15 @@ class PostgreSQLAnalysisJobRepository(
             status = AnalysisStatus.valueOf(row[AnalysisJobs.status]),
             language = row[AnalysisJobs.language],
             webhookUrl = row[AnalysisJobs.webhookUrl],
+            
+            // Custom prompts support
+            customSystemPrompt = row[AnalysisJobs.customSystemPrompt],
+            customUserPrompt = row[AnalysisJobs.customUserPrompt],
+            promptValidationScore = row[AnalysisJobs.promptValidationScore],
+            securityFlags = row[AnalysisJobs.securityFlags]?.let {
+                Json.decodeFromString<Map<String, String>>(it)
+            } ?: emptyMap(),
+            
             resultData = row[AnalysisJobs.resultData],
             confidence = row[AnalysisJobs.confidence],
             metadata = row[AnalysisJobs.metadata]?.let {

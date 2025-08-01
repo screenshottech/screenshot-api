@@ -17,7 +17,9 @@ import kotlinx.serialization.Serializable
 data class CreateAnalysisRequestDto(
     val analysisType: String, // AnalysisType enum name
     val language: String = "en",
-    val webhookUrl: String? = null
+    val webhookUrl: String? = null,
+    val customSystemPrompt: String? = null,
+    val customUserPrompt: String? = null
 )
 
 // ==================== RESPONSE DTOs ====================
@@ -47,6 +49,13 @@ data class GetAnalysisStatusResponseDto(
     val screenshotUrl: String,
     val language: String,
     val webhookUrl: String?,
+    
+    // Custom prompts (for CUSTOM analysis type)
+    val customSystemPrompt: String?,
+    val customUserPrompt: String?,
+    val promptValidationScore: Double?,
+    val securityFlags: Map<String, String>?,
+    val usesCustomPrompts: Boolean,
     
     // Results (null until completed)
     val resultData: String?,
@@ -136,7 +145,9 @@ fun CreateAnalysisRequestDto.toDomainRequest(
         analysisType = AnalysisType.valueOf(analysisType),
         language = language,
         webhookUrl = webhookUrl,
-        apiKeyId = apiKeyId
+        apiKeyId = apiKeyId,
+        customSystemPrompt = customSystemPrompt,
+        customUserPrompt = customUserPrompt
     )
 }
 
@@ -166,6 +177,11 @@ fun GetAnalysisStatusUseCase.Response.toDto(): GetAnalysisStatusResponseDto {
         screenshotUrl = screenshotUrl,
         language = language,
         webhookUrl = webhookUrl,
+        customSystemPrompt = customSystemPrompt,
+        customUserPrompt = customUserPrompt,
+        promptValidationScore = promptValidationScore,
+        securityFlags = securityFlags,
+        usesCustomPrompts = usesCustomPrompts,
         resultData = resultData,
         confidence = confidence,
         processingTimeMs = processingTimeMs,

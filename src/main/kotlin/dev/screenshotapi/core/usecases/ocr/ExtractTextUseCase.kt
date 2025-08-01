@@ -175,7 +175,7 @@ class ExtractTextUseCase(
     private fun getDeductionReason(analysisType: AnalysisType): CreditDeductionReason {
         return when (analysisType) {
             AnalysisType.BASIC_OCR -> CreditDeductionReason.OCR
-            AnalysisType.UX_ANALYSIS, AnalysisType.CONTENT_SUMMARY, AnalysisType.GENERAL -> CreditDeductionReason.AI_ANALYSIS
+            AnalysisType.UX_ANALYSIS, AnalysisType.CONTENT_SUMMARY, AnalysisType.GENERAL, AnalysisType.CUSTOM -> CreditDeductionReason.AI_ANALYSIS
         }
     }
 }

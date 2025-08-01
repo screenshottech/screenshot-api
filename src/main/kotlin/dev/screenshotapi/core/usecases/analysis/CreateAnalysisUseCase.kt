@@ -4,6 +4,7 @@ import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.domain.repositories.AnalysisJobRepository
 import dev.screenshotapi.core.domain.repositories.AnalysisJobQueueRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
+import dev.screenshotapi.core.domain.services.CustomPromptValidator
 import dev.screenshotapi.core.usecases.auth.ValidateApiKeyOwnershipUseCase
 import dev.screenshotapi.core.usecases.billing.CheckCreditsUseCase
 import dev.screenshotapi.core.usecases.billing.CheckCreditsRequest
@@ -28,6 +29,7 @@ class CreateAnalysisUseCase(
     private val analysisJobRepository: AnalysisJobRepository,
     private val analysisJobQueueRepository: AnalysisJobQueueRepository,
     private val screenshotRepository: ScreenshotRepository,
+    private val customPromptValidator: CustomPromptValidator,
     private val validateApiKeyOwnershipUseCase: ValidateApiKeyOwnershipUseCase,
     private val checkCreditsUseCase: CheckCreditsUseCase,
     private val deductCreditsUseCase: DeductCreditsUseCase,
@@ -49,7 +51,39 @@ class CreateAnalysisUseCase(
                 )
             }
             
-            // 2. Validate screenshot exists and is completed
+            // 2. Validate custom prompts if using CUSTOM analysis type
+            var promptValidationScore: Double? = null
+            var securityFlags: Map<String, String> = emptyMap()
+            
+            if (request.analysisType == AnalysisType.CUSTOM) {
+                val validation = customPromptValidator.validate(
+                    systemPrompt = request.customSystemPrompt,
+                    userPrompt = request.customUserPrompt
+                )
+                
+                if (!validation.isValid) {
+                    throw ValidationException.Custom(
+                        "Custom prompt validation failed: ${validation.errors.joinToString(", ")}"
+                    )
+                }
+                
+                if (validation.hasHighSecurityRisk()) {
+                    throw ValidationException.Custom(
+                        "Custom prompt poses security risk (score: ${validation.securityScore})"
+                    )
+                }
+                
+                promptValidationScore = validation.securityScore
+                securityFlags = validation.securityFlags
+                
+                logger.info(
+                    "Custom prompt validation passed for user ${request.userId}. " +
+                    "Security score: $promptValidationScore, " +
+                    "Warnings: ${validation.warnings.size}"
+                )
+            }
+            
+            // 3. Validate screenshot exists and is completed
             val screenshot = screenshotRepository.findByIdAndUserId(request.screenshotJobId, request.userId)
                 ?: throw ValidationException.Custom("Screenshot not found or access denied")
             
@@ -89,6 +123,10 @@ class CreateAnalysisUseCase(
                 status = AnalysisStatus.QUEUED,
                 language = request.language,
                 webhookUrl = request.webhookUrl,
+                customSystemPrompt = request.customSystemPrompt,
+                customUserPrompt = request.customUserPrompt,
+                promptValidationScore = promptValidationScore,
+                securityFlags = securityFlags,
                 createdAt = Clock.System.now()
             )
             
@@ -116,6 +154,27 @@ class CreateAnalysisUseCase(
             )
             
             // 8. Log analysis creation
+            val logMetadata = mutableMapOf(
+                "analysisType" to request.analysisType.name,
+                "analysisJobId" to savedJob.id,
+                "screenshotJobId" to request.screenshotJobId,
+                "language" to request.language,
+                "hasWebhook" to (request.webhookUrl != null).toString()
+            )
+            
+            // Add custom prompt metadata if applicable
+            if (request.analysisType == AnalysisType.CUSTOM) {
+                logMetadata["usesCustomPrompts"] = "true"
+                logMetadata["customSystemPromptLength"] = (request.customSystemPrompt?.length ?: 0).toString()
+                logMetadata["customUserPromptLength"] = (request.customUserPrompt?.length ?: 0).toString()
+                promptValidationScore?.let { score ->
+                    logMetadata["promptValidationScore"] = score.toString()
+                }
+                if (securityFlags.isNotEmpty()) {
+                    logMetadata["securityFlags"] = securityFlags.keys.joinToString(",")
+                }
+            }
+            
             logUsageUseCase(
                 LogUsageUseCase.Request(
                     userId = request.userId,
@@ -123,13 +182,7 @@ class CreateAnalysisUseCase(
                     creditsUsed = requiredCredits,
                     apiKeyId = request.apiKeyId,
                     screenshotId = null, // This is for Screenshots table, not ScreenshotJobs
-                    metadata = mapOf(
-                        "analysisType" to request.analysisType.name,
-                        "analysisJobId" to savedJob.id,
-                        "screenshotJobId" to request.screenshotJobId, // Store the actual job ID in metadata
-                        "language" to request.language,
-                        "hasWebhook" to (request.webhookUrl != null).toString()
-                    )
+                    metadata = logMetadata
                 )
             )
             
@@ -178,7 +231,9 @@ class CreateAnalysisUseCase(
         val analysisType: AnalysisType,
         val language: String = "en",
         val webhookUrl: String? = null,
-        val apiKeyId: String? = null
+        val apiKeyId: String? = null,
+        val customSystemPrompt: String? = null,
+        val customUserPrompt: String? = null
     )
 
     data class Response(

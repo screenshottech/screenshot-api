@@ -24,6 +24,12 @@ object AnalysisJobs : IdTable<String>("analysis_jobs") {
     val language = varchar("language", 10).default("en")
     val webhookUrl = text("webhook_url").nullable()
     
+    // Custom prompts support
+    val customSystemPrompt = text("custom_system_prompt").nullable()
+    val customUserPrompt = text("custom_user_prompt").nullable()
+    val promptValidationScore = double("prompt_validation_score").nullable()
+    val securityFlags = text("security_flags").nullable() // JSON serialized Map<String, String>
+    
     // Results
     val resultData = text("result_data").nullable() // JSON serialized analysis result
     val confidence = double("confidence").nullable()

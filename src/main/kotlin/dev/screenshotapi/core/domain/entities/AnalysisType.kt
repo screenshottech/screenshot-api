@@ -90,6 +90,19 @@ Structure your response clearly with the above sections."""
 6. **Insights**: Any notable observations or recommendations
 
 Provide detailed, actionable insights in a well-structured format."""
+    ),
+    
+    /**
+     * Custom Analysis - User-provided custom prompts for specialized analysis
+     * Premium feature with enhanced security and validation
+     */
+    CUSTOM(
+        displayName = "Custom Analysis",
+        description = "AI analysis with user-provided custom prompts for specialized requirements",
+        credits = 4,
+        systemPrompt = "", // Will be provided by user or default
+        userPrompt = "", // Will be provided by user
+        requiresAI = true
     );
     
     companion object {
@@ -134,7 +147,7 @@ Provide detailed, actionable insights in a well-structured format."""
         fun getDeductionReason(analysisType: AnalysisType): CreditDeductionReason {
             return when (analysisType) {
                 BASIC_OCR -> CreditDeductionReason.OCR
-                UX_ANALYSIS, CONTENT_SUMMARY, GENERAL -> CreditDeductionReason.AI_ANALYSIS
+                UX_ANALYSIS, CONTENT_SUMMARY, GENERAL, CUSTOM -> CreditDeductionReason.AI_ANALYSIS
             }
         }
     }

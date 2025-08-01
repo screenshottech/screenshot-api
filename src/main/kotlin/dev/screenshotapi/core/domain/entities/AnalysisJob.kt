@@ -19,6 +19,12 @@ data class AnalysisJob(
     val language: String = "en",
     val webhookUrl: String? = null,
     
+    // Custom prompts support
+    val customSystemPrompt: String? = null,
+    val customUserPrompt: String? = null,
+    val promptValidationScore: Double? = null,
+    val securityFlags: Map<String, String> = emptyMap(),
+    
     // Results
     val resultData: String? = null,
     val confidence: Double? = null,
@@ -76,6 +82,43 @@ data class AnalysisJob(
             completedAt = null,
             updatedAt = createdAt
         )
+    }
+    
+    /**
+     * Check if this job uses custom prompts
+     */
+    fun usesCustomPrompts(): Boolean {
+        return analysisType == AnalysisType.CUSTOM && 
+               (!customUserPrompt.isNullOrBlank() || !customSystemPrompt.isNullOrBlank())
+    }
+    
+    /**
+     * Get effective system prompt (custom or default)
+     */
+    fun getEffectiveSystemPrompt(): String {
+        return if (analysisType == AnalysisType.CUSTOM && !customSystemPrompt.isNullOrBlank()) {
+            customSystemPrompt!!
+        } else {
+            analysisType.systemPrompt
+        }
+    }
+    
+    /**
+     * Get effective user prompt (custom or default)
+     */
+    fun getEffectiveUserPrompt(): String {
+        return if (analysisType == AnalysisType.CUSTOM && !customUserPrompt.isNullOrBlank()) {
+            customUserPrompt!!
+        } else {
+            analysisType.userPrompt
+        }
+    }
+    
+    /**
+     * Check if custom prompts have security risks
+     */
+    fun hasSecurityFlags(): Boolean {
+        return securityFlags.isNotEmpty()
     }
 }
 

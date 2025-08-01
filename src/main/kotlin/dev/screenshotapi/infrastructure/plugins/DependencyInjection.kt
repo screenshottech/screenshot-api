@@ -6,6 +6,7 @@ import dev.screenshotapi.core.domain.services.RateLimitingService
 import dev.screenshotapi.core.domain.services.RetryPolicy
 import dev.screenshotapi.core.domain.services.ScreenshotService
 import dev.screenshotapi.core.domain.services.OcrService
+import dev.screenshotapi.core.domain.services.CustomPromptValidator
 import dev.screenshotapi.core.ports.output.*
 import dev.screenshotapi.core.usecases.admin.*
 import dev.screenshotapi.core.usecases.auth.*
@@ -339,8 +340,11 @@ fun useCaseModule() = module {
     single { ExtractTextUseCase(get<OcrService>(), get<UserRepository>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { ExtractPriceDataUseCase(get<ExtractTextUseCase>(), get<LogUsageUseCase>()) }
     
+    // Domain services
+    single { CustomPromptValidator() }
+    
     // Analysis use cases (NEW - Separate Flow)
-    single { CreateAnalysisUseCase(get<AnalysisJobRepository>(), get<AnalysisJobQueueRepository>(), get<ScreenshotRepository>(), get<ValidateApiKeyOwnershipUseCase>(), get<CheckCreditsUseCase>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
+    single { CreateAnalysisUseCase(get<AnalysisJobRepository>(), get<AnalysisJobQueueRepository>(), get<ScreenshotRepository>(), get<CustomPromptValidator>(), get<ValidateApiKeyOwnershipUseCase>(), get<CheckCreditsUseCase>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { GetAnalysisStatusUseCase(get<AnalysisJobRepository>()) }
     single { GetScreenshotAnalysesUseCase(get<AnalysisJobRepository>(), get<ScreenshotRepository>()) }
     single { ListAnalysesUseCase(get<AnalysisJobRepository>()) }

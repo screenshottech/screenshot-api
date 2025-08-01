@@ -114,6 +114,53 @@ class AnalysisController : KoinComponent {
                 }
             }
             
+            // Validate custom prompts if using CUSTOM analysis type
+            if (analysisType == AnalysisType.CUSTOM) {
+                if (dto.customSystemPrompt.isNullOrBlank() && dto.customUserPrompt.isNullOrBlank()) {
+                    return call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf(
+                            "error" to "Custom analysis requires at least one custom prompt",
+                            "requirement" to "Provide either customSystemPrompt or customUserPrompt"
+                        )
+                    )
+                }
+                
+                // Basic length validation (detailed validation happens in use case)
+                dto.customSystemPrompt?.let { prompt ->
+                    if (prompt.length > 1000) {
+                        return call.respond(
+                            HttpStatusCode.BadRequest,
+                            mapOf(
+                                "error" to "Custom system prompt exceeds maximum length of 1000 characters",
+                                "currentLength" to prompt.length
+                            )
+                        )
+                    }
+                }
+                
+                dto.customUserPrompt?.let { prompt ->
+                    if (prompt.length > 2000) {
+                        return call.respond(
+                            HttpStatusCode.BadRequest,
+                            mapOf(
+                                "error" to "Custom user prompt exceeds maximum length of 2000 characters",
+                                "currentLength" to prompt.length
+                            )
+                        )
+                    }
+                }
+            } else if (!dto.customSystemPrompt.isNullOrBlank() || !dto.customUserPrompt.isNullOrBlank()) {
+                // Custom prompts provided but not using CUSTOM analysis type
+                return call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf(
+                        "error" to "Custom prompts can only be used with CUSTOM analysis type",
+                        "currentAnalysisType" to dto.analysisType
+                    )
+                )
+            }
+            
             // Convert DTO to domain request
             val useCaseRequest = dto.toDomainRequest(
                 userId = userId,

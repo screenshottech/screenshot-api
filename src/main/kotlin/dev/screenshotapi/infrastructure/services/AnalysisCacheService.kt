@@ -177,6 +177,7 @@ class AnalysisCacheService(
             AnalysisType.UX_ANALYSIS -> 2.hours      // UX could change more frequently
             AnalysisType.CONTENT_SUMMARY -> 1.hours  // Content might update more often
             AnalysisType.GENERAL -> 4.hours          // General analysis moderate caching
+            AnalysisType.CUSTOM -> 30.minutes        // Custom analysis shorter cache due to variability
         }
     }
     
