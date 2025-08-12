@@ -17,7 +17,8 @@ data class CreateAnalysisRequestDto(
     val analysisType: String, // AnalysisType enum name
     val language: String = "en",
     val webhookUrl: String? = null,
-    val customUserPrompt: String? = null // For CUSTOM analysis type
+    val customUserPrompt: String? = null, // For CUSTOM analysis type
+    val customSystemPrompt: String? = null // For CUSTOM analysis type system prompt
 )
 
 // ==================== RESPONSE DTOs ====================
@@ -123,6 +124,20 @@ data class AnalysisStatsDto(
 // ==================== MAPPING FUNCTIONS ====================
 
 /**
+ * Combine system and user prompts into a single prompt for processing
+ */
+private fun buildCombinedPrompt(systemPrompt: String?, userPrompt: String?): String? {
+    return when {
+        !systemPrompt.isNullOrBlank() && !userPrompt.isNullOrBlank() -> {
+            "System Context: $systemPrompt\n\nUser Request: $userPrompt"
+        }
+        !systemPrompt.isNullOrBlank() -> systemPrompt
+        !userPrompt.isNullOrBlank() -> userPrompt
+        else -> null
+    }
+}
+
+/**
  * Convert DTO to domain request
  */
 fun CreateAnalysisRequestDto.toDomainRequest(
@@ -130,6 +145,9 @@ fun CreateAnalysisRequestDto.toDomainRequest(
     screenshotJobId: String,
     apiKeyId: String? = null
 ): CreateAnalysisUseCase.Request {
+    // Combine system and user prompts if provided
+    val combinedPrompt = buildCombinedPrompt(customSystemPrompt, customUserPrompt)
+    
     return CreateAnalysisUseCase.Request(
         userId = userId,
         screenshotJobId = screenshotJobId,
@@ -137,7 +155,7 @@ fun CreateAnalysisRequestDto.toDomainRequest(
         language = language,
         webhookUrl = webhookUrl,
         apiKeyId = apiKeyId,
-        customUserPrompt = customUserPrompt
+        customUserPrompt = combinedPrompt
     )
 }
 
