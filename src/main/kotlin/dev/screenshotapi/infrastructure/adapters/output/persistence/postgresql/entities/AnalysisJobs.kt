@@ -23,6 +23,7 @@ object AnalysisJobs : IdTable<String>("analysis_jobs") {
     val status = varchar("status", 50) // AnalysisStatus enum name
     val language = varchar("language", 10).default("en")
     val webhookUrl = text("webhook_url").nullable()
+    val customUserPrompt = text("custom_user_prompt").nullable() // For CUSTOM analysis type
     
     // Results
     val resultData = text("result_data").nullable() // JSON serialized analysis result

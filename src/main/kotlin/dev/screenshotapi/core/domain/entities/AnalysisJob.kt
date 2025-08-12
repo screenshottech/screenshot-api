@@ -18,6 +18,7 @@ data class AnalysisJob(
     val status: AnalysisStatus,
     val language: String = "en",
     val webhookUrl: String? = null,
+    val customUserPrompt: String? = null, // For CUSTOM analysis type
     
     // Results
     val resultData: String? = null,

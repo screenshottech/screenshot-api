@@ -6,8 +6,8 @@ import aws.sdk.kotlin.services.bedrockruntime.BedrockRuntimeClient
 import aws.sdk.kotlin.services.bedrockruntime.model.InvokeModelRequest
 import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.domain.exceptions.OcrException
-import dev.screenshotapi.core.domain.services.OcrService
 import dev.screenshotapi.core.domain.services.OcrEngineCapabilities
+import dev.screenshotapi.core.domain.services.OcrService
 import dev.screenshotapi.infrastructure.config.BedrockConfig
 import dev.screenshotapi.infrastructure.config.BedrockFeatureFlags
 import dev.screenshotapi.infrastructure.config.ValidationResult
@@ -16,21 +16,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonClassDiscriminator
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.util.*
@@ -46,7 +34,7 @@ import kotlin.random.Random
  * - Multiple analysis types (BASIC_OCR, UX_ANALYSIS, CONTENT_SUMMARY, GENERAL)
  * - Sophisticated retry logic with exponential backoff
  * - Cost tracking and token usage monitoring
- * 
+ *
  * Note: Fallback support removed - if Bedrock fails, clear error messages are returned.
  * PaddleOCR classes preserved for potential future microservice integration.
  */
@@ -70,7 +58,7 @@ class AwsBedrockOcrService(
         if (hasExplicitCredentials) {
             logger.info("🔑 Access Key ID: ${config.aws.accessKeyId?.take(8)}...")
         }
-        
+
         BedrockRuntimeClient {
             region = config.region
             credentialsProvider = if (hasExplicitCredentials) {
@@ -104,7 +92,7 @@ class AwsBedrockOcrService(
         logger.info("  - Temperature: ${config.models.claude3Haiku.temperature}")
         logger.info("Feature flags: bedrockEnabled=${featureFlags.enableBedrockOcr}, aiAnalysis=${featureFlags.enableAiAnalysis}")
         logger.info("Operating in Bedrock-only mode (fallback disabled for reliability)")
-        
+
         // Validate region-model compatibility
         val validationResult = validateRegionModelCompatibility(config.region, config.models.claude3Haiku.modelId)
         when (validationResult) {
@@ -159,14 +147,14 @@ class AwsBedrockOcrService(
                 analysisType = analysisType,
                 processingTime = (System.currentTimeMillis() - startTime)
             )
-            
+
             // Add screenshotJobId to metadata if present
             val updatedMetadata = if (request.screenshotJobId != null) {
                 mappedResult.metadata + ("screenshotJobId" to request.screenshotJobId)
             } else {
                 mappedResult.metadata
             }
-            
+
             val result = mappedResult.copy(
                 id = request.id,
                 userId = request.userId,
@@ -211,7 +199,7 @@ class AwsBedrockOcrService(
                     val requestBody = json.encodeToString(ClaudeRequest.serializer(), claudeRequest)
                     logger.debug("Request payload size: ${requestBody.length} chars, analysisType: ${analysisType.name}")
                     logger.debug("Request JSON payload: $requestBody")
-                    
+
                     val response = bedrockClient.invokeModel(
                         InvokeModelRequest {
                             modelId = selectedModelId
@@ -264,7 +252,7 @@ class AwsBedrockOcrService(
         // Encode image to base64
         val imageBytes = request.imageBytes ?: throw OcrException.InvalidImageException("No image data provided")
         val imageBase64 = Base64.getEncoder().encodeToString(imageBytes)
-        
+
         // Detect media type from image header
         val mediaType = detectImageType(imageBytes)
 
@@ -283,7 +271,10 @@ class AwsBedrockOcrService(
                     ),
                     ClaudeContent(
                         type = "text",
-                        text = buildLanguageAwarePrompt(analysisType.userPrompt, request.language)
+                        text = buildLanguageAwarePrompt(
+                            request.options.customPrompt ?: analysisType.userPrompt,
+                            request.language
+                        )
                     )
                 )
             )
@@ -392,12 +383,12 @@ class AwsBedrockOcrService(
         val inputTokens = response.usage.inputTokens
         val outputTokens = response.usage.outputTokens
         val totalTokens = inputTokens + outputTokens
-        
+
         // Calculate estimated cost
         val inputCost = inputTokens * 0.00025 / 1000.0
         val outputCost = outputTokens * 0.00125 / 1000.0
         val totalCost = inputCost + outputCost + 0.0004 // Base image cost
-        
+
         logger.info("💰 Token usage for request $requestId:")
         logger.info("  - Input tokens: $inputTokens (\$${String.format("%.6f", inputCost)})")
         logger.info("  - Output tokens: $outputTokens (\$${String.format("%.6f", outputCost)})")
@@ -477,22 +468,22 @@ class AwsBedrockOcrService(
      */
     private fun detectImageType(imageBytes: ByteArray): String {
         return when {
-            imageBytes.size >= 8 && 
-            imageBytes[0] == 0x89.toByte() && imageBytes[1] == 0x50.toByte() && 
+            imageBytes.size >= 8 &&
+            imageBytes[0] == 0x89.toByte() && imageBytes[1] == 0x50.toByte() &&
             imageBytes[2] == 0x4E.toByte() && imageBytes[3] == 0x47.toByte() -> "image/png"
-            
-            imageBytes.size >= 3 && 
-            imageBytes[0] == 0xFF.toByte() && imageBytes[1] == 0xD8.toByte() && 
+
+            imageBytes.size >= 3 &&
+            imageBytes[0] == 0xFF.toByte() && imageBytes[1] == 0xD8.toByte() &&
             imageBytes[2] == 0xFF.toByte() -> "image/jpeg"
-            
-            imageBytes.size >= 6 && 
-            imageBytes[0] == 0x47.toByte() && imageBytes[1] == 0x49.toByte() && 
+
+            imageBytes.size >= 6 &&
+            imageBytes[0] == 0x47.toByte() && imageBytes[1] == 0x49.toByte() &&
             imageBytes[2] == 0x46.toByte() -> "image/gif"
-            
-            imageBytes.size >= 12 && 
-            imageBytes[8] == 0x57.toByte() && imageBytes[9] == 0x45.toByte() && 
+
+            imageBytes.size >= 12 &&
+            imageBytes[8] == 0x57.toByte() && imageBytes[9] == 0x45.toByte() &&
             imageBytes[10] == 0x42.toByte() && imageBytes[11] == 0x50.toByte() -> "image/webp"
-            
+
             else -> "image/png" // Default to PNG
         }
     }

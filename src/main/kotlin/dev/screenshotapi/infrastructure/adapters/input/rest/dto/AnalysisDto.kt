@@ -1,6 +1,5 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest.dto
 
-import dev.screenshotapi.core.domain.entities.AnalysisStatus
 import dev.screenshotapi.core.domain.entities.AnalysisType
 import dev.screenshotapi.core.usecases.analysis.CreateAnalysisUseCase
 import dev.screenshotapi.core.usecases.analysis.GetAnalysisStatusUseCase
@@ -17,7 +16,8 @@ import kotlinx.serialization.Serializable
 data class CreateAnalysisRequestDto(
     val analysisType: String, // AnalysisType enum name
     val language: String = "en",
-    val webhookUrl: String? = null
+    val webhookUrl: String? = null,
+    val customUserPrompt: String? = null // For CUSTOM analysis type
 )
 
 // ==================== RESPONSE DTOs ====================
@@ -47,31 +47,31 @@ data class GetAnalysisStatusResponseDto(
     val screenshotUrl: String,
     val language: String,
     val webhookUrl: String?,
-    
+
     // Results (null until completed)
     val resultData: String?,
     val confidence: Double?,
-    
+
     // Processing info
     val processingTimeMs: Long?,
     val tokensUsed: Int?,
     val costUsd: Double?,
-    
+
     // Error info (null unless failed)
     val errorMessage: String?,
-    
+
     // Timestamps
     val createdAt: String,
     val startedAt: String?,
     val completedAt: String?,
-    
+
     // Status helpers
     val isProcessing: Boolean,
     val isCompleted: Boolean,
     val isFailed: Boolean,
     val statusDescription: String,
     val estimatedCompletion: String?,
-    
+
     // Metadata
     val metadata: Map<String, String>
 )
@@ -126,7 +126,7 @@ data class AnalysisStatsDto(
  * Convert DTO to domain request
  */
 fun CreateAnalysisRequestDto.toDomainRequest(
-    userId: String, 
+    userId: String,
     screenshotJobId: String,
     apiKeyId: String? = null
 ): CreateAnalysisUseCase.Request {
@@ -136,7 +136,8 @@ fun CreateAnalysisRequestDto.toDomainRequest(
         analysisType = AnalysisType.valueOf(analysisType),
         language = language,
         webhookUrl = webhookUrl,
-        apiKeyId = apiKeyId
+        apiKeyId = apiKeyId,
+        customUserPrompt = customUserPrompt
     )
 }
 
