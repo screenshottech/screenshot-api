@@ -1,6 +1,7 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest.dto
 
 import dev.screenshotapi.core.usecases.admin.*
+import dev.screenshotapi.infrastructure.adapters.input.rest.UserFeedbackDto
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -338,6 +339,23 @@ fun UpdateUserStatusResponse.toDto() = mapOf(
     "status" to status.name.lowercase(),
     "updatedAt" to updatedAt.toString(),
     "message" to "User status updated successfully"
+)
+
+@Serializable
+data class AdminFeedbackListResponseDto(
+    val feedback: List<UserFeedbackDto>,
+    val pagination: PaginationDto
+)
+
+@Serializable
+data class UpdateFeedbackStatusRequestDto(
+    val status: String,
+    val adminNotes: String? = null
+)
+
+@Serializable
+data class ResolveFeedbackRequestDto(
+    val resolutionNotes: String? = null
 )
 
 fun GetUserActivityResponse.toDto() = mapOf(

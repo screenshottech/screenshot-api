@@ -1,14 +1,11 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest
 
-import dev.screenshotapi.core.domain.entities.StatsBreakdown
-import dev.screenshotapi.core.domain.entities.StatsGroupBy
-import dev.screenshotapi.core.domain.entities.StatsPeriod
-import dev.screenshotapi.core.domain.entities.UserStatus
-import dev.screenshotapi.core.domain.entities.SubscriptionStatus
+import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.domain.exceptions.AuthorizationException
 import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
 import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.usecases.admin.*
+import dev.screenshotapi.core.usecases.feedback.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.dto.*
 import dev.screenshotapi.infrastructure.auth.UserPrincipal
 import dev.screenshotapi.infrastructure.auth.requireUserPrincipal
@@ -31,6 +28,11 @@ class AdminController : KoinComponent {
     private val synchronizeUserPlanAdminUseCase: SynchronizeUserPlanAdminUseCase by inject()
     private val listSubscriptionsUseCase: ListSubscriptionsUseCase by inject()
     private val getSubscriptionDetailsUseCase: GetSubscriptionDetailsUseCase by inject()
+
+    // Feedback admin use cases
+    private val getAllFeedbackUseCase: GetAllFeedbackUseCase by inject()
+    private val updateFeedbackStatusUseCase: UpdateFeedbackStatusUseCase by inject()
+    private val resolveFeedbackUseCase: ResolveFeedbackUseCase by inject()
 
     suspend fun listUsers(call: ApplicationCall) {
         try {
@@ -442,7 +444,7 @@ class AdminController : KoinComponent {
             page = page,
             limit = limit,
             searchQuery = search,
-            statusFilter = status?.let { 
+            statusFilter = status?.let {
                 try {
                     SubscriptionStatus.valueOf(it.uppercase())
                 } catch (e: IllegalArgumentException) {
@@ -562,6 +564,136 @@ class AdminController : KoinComponent {
         }
     }
 
+    // Feedback admin endpoints
+    suspend fun listAllFeedback(call: ApplicationCall) {
+        val principal = call.requireUserPrincipal()
+        if (!principal.canManageUsers()) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("error" to "Admin access required")
+            )
+            return
+        }
+
+        val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+        val size = call.request.queryParameters["size"]?.toIntOrNull() ?: 20
+        val status = call.request.queryParameters["status"]?.let {
+            FeedbackStatus.fromString(it)
+        }
+        val type = call.request.queryParameters["type"]?.let {
+            FeedbackType.fromString(it)
+        }
+        val priority = call.request.queryParameters["priority"]?.let { priorityParam ->
+            // Parse comma-separated priorities like "MEDIUM,HIGH"
+            priorityParam.split(",")
+                .map { it.trim().uppercase() }
+                .mapNotNull { priorityStr ->
+                    try {
+                        FeedbackPriority.valueOf(priorityStr)
+                    } catch (e: IllegalArgumentException) {
+                        null // Skip invalid priority values
+                    }
+                }
+                .takeIf { it.isNotEmpty() } // Return null if no valid priorities found
+        }
+        val critical = call.request.queryParameters["critical"]?.toBooleanStrictOrNull() ?: false
+
+        val request = GetAllFeedbackRequest(
+            status = status,
+            type = type,
+            priority = priority,
+            critical = critical,
+            page = page,
+            size = size
+        )
+
+        val response = getAllFeedbackUseCase.invoke(request)
+        val responseDto = AdminFeedbackListResponseDto(
+            feedback = response.feedback.map { it.toDto() },
+            pagination = PaginationDto(
+                page = response.page,
+                limit = response.size,
+                total = response.totalCount,
+                totalPages = ((response.totalCount + response.size - 1) / response.size).toInt(),
+                hasNext = response.hasMore,
+                hasPrevious = response.page > 1
+            )
+        )
+        call.respond(HttpStatusCode.OK, responseDto)
+    }
+
+    suspend fun updateFeedbackStatus(call: ApplicationCall) {
+        val principal = call.requireUserPrincipal()
+        if (!principal.canManageUsers()) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("error" to "Admin access required")
+            )
+            return
+        }
+
+        val feedbackId = call.parameters["id"]
+            ?: return call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("error" to "Feedback ID is required")
+            )
+
+        call.application.log.info("🔧 DEBUG: Updating feedback $feedbackId")
+
+        val body = call.receive<UpdateFeedbackStatusRequestDto>()
+        call.application.log.info("🔧 DEBUG: Received body - status: '${body.status}', adminNotes: '${body.adminNotes}'")
+
+        val status = FeedbackStatus.fromString(body.status)
+        call.application.log.info("🔧 DEBUG: Parsed status: $status")
+
+        if (status == null) {
+            call.application.log.warn("🔧 DEBUG: Invalid status '${body.status}'. Valid values: ${FeedbackStatus.values().map { it.name }}")
+            return call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("error" to "Invalid status: ${body.status}")
+            )
+        }
+
+        val request = UpdateFeedbackStatusRequest(
+            feedbackId = feedbackId,
+            status = status,
+            adminId = principal.userId,
+            adminNotes = body.adminNotes
+        )
+
+        val updatedFeedback = updateFeedbackStatusUseCase.invoke(request)
+        call.application.log.info("Feedback $feedbackId updated to $status by admin ${principal.userId}")
+        call.respond(HttpStatusCode.OK, updatedFeedback.toDto())
+    }
+
+    suspend fun resolveFeedback(call: ApplicationCall) {
+        val principal = call.requireUserPrincipal()
+        if (!principal.canManageUsers()) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("error" to "Admin access required")
+            )
+            return
+        }
+
+        val feedbackId = call.parameters["id"]
+            ?: return call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("error" to "Feedback ID is required")
+            )
+
+        val body = call.receive<ResolveFeedbackRequestDto>()
+
+        val request = ResolveFeedbackRequest(
+            feedbackId = feedbackId,
+            adminId = principal.userId,
+            resolutionNotes = body.resolutionNotes
+        )
+
+        val resolvedFeedback = resolveFeedbackUseCase.invoke(request)
+        call.application.log.info("Feedback $feedbackId resolved by admin ${principal.userId}")
+        call.respond(HttpStatusCode.OK, resolvedFeedback.toDto())
+    }
 
     private fun convertToScreenshotStatsDto(response: GetScreenshotStatsResponse): Map<String, Any> {
         return mapOf(
@@ -577,4 +709,21 @@ class AdminController : KoinComponent {
             }
         )
     }
+
+    private fun UserFeedback.toDto(): UserFeedbackDto = UserFeedbackDto(
+        id = this.id,
+        feedbackType = this.feedbackType.name,
+        rating = this.rating,
+        subject = this.subject,
+        message = this.message,
+        metadata = this.metadata,
+        status = this.status.name,
+        adminNotes = this.adminNotes,
+        resolvedBy = this.resolvedBy,
+        resolvedAt = this.resolvedAt?.toString(),
+        createdAt = this.createdAt.toString(),
+        updatedAt = this.updatedAt.toString(),
+        isCritical = this.isCritical(),
+        priority = this.getPriority().name
+    )
 }

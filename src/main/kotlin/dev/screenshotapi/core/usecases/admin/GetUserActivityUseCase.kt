@@ -1,11 +1,11 @@
 package dev.screenshotapi.core.usecases.admin
 
-import dev.screenshotapi.core.domain.repositories.UsageLogRepository
-import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.entities.UsageLog
 import dev.screenshotapi.core.domain.entities.UsageLogAction
 import dev.screenshotapi.core.domain.entities.UserActivityType
 import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
+import dev.screenshotapi.core.domain.repositories.UsageLogRepository
+import dev.screenshotapi.core.domain.repositories.UserRepository
 
 class GetUserActivityUseCase(
     private val usageLogRepository: UsageLogRepository,
@@ -62,12 +62,16 @@ class GetUserActivityUseCase(
             UsageLogAction.OCR_COMPLETED -> UserActivityType.SCREENSHOT_COMPLETED
             UsageLogAction.OCR_FAILED -> UserActivityType.SCREENSHOT_FAILED
             UsageLogAction.OCR_PRICE_EXTRACTION -> UserActivityType.SCREENSHOT_COMPLETED // Specialized OCR operation
-            
+
             // AI Analysis Actions (NEW - Separate Flow)
             UsageLogAction.AI_ANALYSIS_STARTED -> UserActivityType.SCREENSHOT_CREATED // Analysis start as creation activity
             UsageLogAction.AI_ANALYSIS_COMPLETED -> UserActivityType.SCREENSHOT_COMPLETED // Analysis completion
             UsageLogAction.AI_ANALYSIS_FAILED -> UserActivityType.SCREENSHOT_FAILED // Analysis failure
             UsageLogAction.AI_ANALYSIS_CREDITS_DEDUCTED -> UserActivityType.SCREENSHOT_CREATED // Credit usage implies analysis activity
+            // Feedback Actions
+            UsageLogAction.FEEDBACK_SUBMITTED -> UserActivityType.LOGIN // Feedback as user engagement
+            UsageLogAction.FEEDBACK_UPDATED -> UserActivityType.LOGIN // Feedback update as engagement
+            UsageLogAction.FEEDBACK_RESOLVED -> UserActivityType.LOGIN // Feedback resolution as activity
         }
     }
 
@@ -108,7 +112,7 @@ class GetUserActivityUseCase(
                 "OCR extraction failed"
             UsageLogAction.OCR_PRICE_EXTRACTION ->
                 "Performed price extraction analysis"
-                
+
             // AI Analysis Actions (NEW - Separate Flow)
             UsageLogAction.AI_ANALYSIS_STARTED ->
                 "Started AI analysis of screenshot"
@@ -118,6 +122,13 @@ class GetUserActivityUseCase(
                 "AI analysis failed"
             UsageLogAction.AI_ANALYSIS_CREDITS_DEDUCTED ->
                 "Used ${log.creditsUsed} credits for AI analysis"
+            // Feedback Actions
+            UsageLogAction.FEEDBACK_SUBMITTED ->
+                "Submitted feedback"
+            UsageLogAction.FEEDBACK_UPDATED ->
+                "Updated feedback"
+            UsageLogAction.FEEDBACK_RESOLVED ->
+                "Feedback resolved"
         }
     }
 }

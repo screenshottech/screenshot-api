@@ -1,7 +1,5 @@
 package dev.screenshotapi.infrastructure.config
 
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.*
 import dev.screenshotapi.infrastructure.exceptions.ConfigurationException
 import io.ktor.server.application.*
@@ -72,7 +70,8 @@ fun Application.initializeDatabase() {
                     WebhookConfigurations,
                     WebhookDeliveries,
                     OcrResults,
-                    AnalysisJobs  // NEW: Analysis jobs table for separate flow
+                    AnalysisJobs,  // Analysis jobs table for separate flow
+                    UserFeedbacks  // User feedback table
                 )
             }
 
