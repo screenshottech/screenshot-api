@@ -1,22 +1,23 @@
 package dev.screenshotapi.infrastructure.services
 
-import dev.screenshotapi.core.domain.entities.*
+import dev.screenshotapi.core.domain.entities.AnalysisData
+import dev.screenshotapi.core.domain.entities.AnalysisResult
+import dev.screenshotapi.core.domain.entities.AnalysisType
+import dev.screenshotapi.core.domain.entities.SentimentAnalysis
 import dev.screenshotapi.core.ports.output.CachePort
 import dev.screenshotapi.infrastructure.config.AnalysisConfig
-import dev.screenshotapi.infrastructure.config.ProcessingConfig
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.security.MessageDigest
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
 
 /**
  * Analysis Cache Service - Intelligent caching for analysis results
- * 
+ *
  * Features:
  * - Content-based cache keys (URL + analysis type + language)
  * - TTL-based expiration with type-specific durations
@@ -31,7 +32,7 @@ class AnalysisCacheService(
 ) {
     private val logger = LoggerFactory.getLogger(this::class.java)
     private val json = Json { ignoreUnknownKeys = true }
-    
+
     /**
      * Get cached analysis result if available
      */
@@ -39,33 +40,33 @@ class AnalysisCacheService(
         if (!analysisConfig.processing.enableResultCaching) {
             return null
         }
-        
+
         val cacheKey = generateCacheKey(request)
         val startTime = System.currentTimeMillis()
-        
+
         return try {
             val cachedData = cachePort.get(cacheKey, String::class)
             val lookupTime = System.currentTimeMillis() - startTime
-            
+
             if (cachedData != null) {
                 val cachedResult = json.decodeFromString<CachedAnalysisResult>(cachedData)
-                
+
                 // Check if cache entry is still valid
                 if (isCacheEntryValid(cachedResult, request.analysisType)) {
                     val analysisResult = cachedResult.toAnalysisResult()
-                    
+
                     // Record cache hit metrics
                     metricsService.incrementCounter("analysis_cache_hit", mapOf(
                         "type" to request.analysisType.name,
                         "language" to request.language
                     ))
                     metricsService.recordHistogram("analysis_cache_lookup_time", lookupTime)
-                    
+
                     logger.info(
                         "Cache HIT: key=$cacheKey, type=${request.analysisType}, " +
                         "age=${getCacheAge(cachedResult)}min, lookupTime=${lookupTime}ms"
                     )
-                    
+
                     return analysisResult
                 } else {
                     // Cache entry expired, remove it
@@ -73,7 +74,7 @@ class AnalysisCacheService(
                     logger.debug("Cache entry expired and removed: key=$cacheKey")
                 }
             }
-            
+
             // Record cache miss
             metricsService.incrementCounter("analysis_cache_miss", mapOf(
                 "type" to request.analysisType.name,
@@ -81,23 +82,23 @@ class AnalysisCacheService(
                 "reason" to if (cachedData == null) "not_found" else "expired"
             ))
             metricsService.recordHistogram("analysis_cache_lookup_time", lookupTime)
-            
+
             logger.debug("Cache MISS: key=$cacheKey, type=${request.analysisType}")
             null
-            
+
         } catch (e: Exception) {
             logger.error("Error retrieving from cache: key=$cacheKey", e)
-            
+
             metricsService.incrementCounter("analysis_cache_error", mapOf(
                 "type" to request.analysisType.name,
                 "operation" to "get",
                 "error" to e::class.simpleName.orEmpty()
             ))
-            
+
             null
         }
     }
-    
+
     /**
      * Store analysis result in cache
      */
@@ -105,25 +106,25 @@ class AnalysisCacheService(
         if (!analysisConfig.processing.enableResultCaching) {
             return
         }
-        
+
         // Only cache successful results
         if (result !is AnalysisResult.Success) {
             logger.debug("Not caching failed analysis result: ${result.jobId}")
             return
         }
-        
+
         val cacheKey = generateCacheKey(request)
         val ttl = getTtlForAnalysisType(request.analysisType)
         val startTime = System.currentTimeMillis()
-        
+
         try {
             val cachedResult = CachedAnalysisResult.fromAnalysisResult(result, request)
             val serializedData = json.encodeToString(CachedAnalysisResult.serializer(), cachedResult)
-            
+
             cachePort.put(cacheKey, serializedData, ttl)
-            
+
             val cacheTime = System.currentTimeMillis() - startTime
-            
+
             // Record cache set metrics
             metricsService.incrementCounter("analysis_cache_set", mapOf(
                 "type" to request.analysisType.name,
@@ -131,15 +132,15 @@ class AnalysisCacheService(
             ))
             metricsService.recordHistogram("analysis_cache_set_time", cacheTime)
             metricsService.recordHistogram("analysis_cache_data_size", serializedData.length.toLong())
-            
+
             logger.info(
                 "Cached analysis result: key=$cacheKey, type=${request.analysisType}, " +
                 "ttl=${ttl.inWholeMinutes}min, size=${serializedData.length}bytes, time=${cacheTime}ms"
             )
-            
+
         } catch (e: Exception) {
             logger.error("Error storing in cache: key=$cacheKey", e)
-            
+
             metricsService.incrementCounter("analysis_cache_error", mapOf(
                 "type" to request.analysisType.name,
                 "operation" to "set",
@@ -147,7 +148,7 @@ class AnalysisCacheService(
             ))
         }
     }
-    
+
     /**
      * Generate content-based cache key
      */
@@ -159,15 +160,15 @@ class AnalysisCacheService(
             request.language,
             request.options?.toString() ?: ""
         ).joinToString("|")
-        
+
         val hash = MessageDigest.getInstance("SHA-256")
             .digest(contentToHash.toByteArray())
             .joinToString("") { "%02x".format(it) }
             .take(16) // Use first 16 characters for shorter keys
-        
+
         return "analysis:${request.analysisType.name.lowercase()}:$hash"
     }
-    
+
     /**
      * Get TTL based on analysis type and configuration
      */
@@ -177,9 +178,10 @@ class AnalysisCacheService(
             AnalysisType.UX_ANALYSIS -> 2.hours      // UX could change more frequently
             AnalysisType.CONTENT_SUMMARY -> 1.hours  // Content might update more often
             AnalysisType.GENERAL -> 4.hours          // General analysis moderate caching
+            AnalysisType.CUSTOM -> 2.hours           // Custom analysis moderate caching
         }
     }
-    
+
     /**
      * Check if cache entry is still valid
      */
@@ -187,10 +189,10 @@ class AnalysisCacheService(
         val now = Clock.System.now()
         val age = now - cachedResult.cachedAt
         val maxAge = getTtlForAnalysisType(analysisType)
-        
+
         return age < maxAge
     }
-    
+
     /**
      * Get cache age in minutes
      */
@@ -198,7 +200,7 @@ class AnalysisCacheService(
         val now = Clock.System.now()
         return (now - cachedResult.cachedAt).inWholeMinutes
     }
-    
+
     /**
      * Invalidate cache entries for a specific screenshot URL
      */
@@ -206,14 +208,14 @@ class AnalysisCacheService(
         // Since we use content-based keys, we'd need to track reverse mappings
         // For now, log the invalidation request
         logger.info("Cache invalidation requested for screenshot: $screenshotUrl")
-        
+
         metricsService.incrementCounter("analysis_cache_invalidation_request", mapOf(
             "reason" to "screenshot_url_change"
         ))
-        
+
         // TODO: Implement reverse mapping if needed for more precise invalidation
     }
-    
+
     /**
      * Clear all cached analysis results (admin operation)
      */
@@ -222,14 +224,14 @@ class AnalysisCacheService(
             // This would require a way to enumerate all analysis cache keys
             // For now, log the clear request
             logger.warn("Analysis cache clear requested - this requires manual implementation")
-            
+
             metricsService.incrementCounter("analysis_cache_clear_all")
-            
+
         } catch (e: Exception) {
             logger.error("Error clearing analysis cache", e)
         }
     }
-    
+
     /**
      * Get cache statistics
      */
@@ -245,7 +247,7 @@ class AnalysisCacheService(
             cacheSize = 0L
         )
     }
-    
+
     /**
      * Check if caching is enabled for a specific analysis type
      */
@@ -300,7 +302,7 @@ data class CachedAnalysisResult(
             )
         }
     }
-    
+
     fun toAnalysisResult(): AnalysisResult.Success {
         return AnalysisResult.Success(
             jobId = jobId,
@@ -362,7 +364,7 @@ data class CachedAnalysisData(
             }
         }
     }
-    
+
     fun toAnalysisData(): AnalysisData {
         return when (type) {
             "ocr" -> AnalysisData.OcrData(

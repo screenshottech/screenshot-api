@@ -1,10 +1,12 @@
 package dev.screenshotapi.core.usecases.analysis
 
 import dev.screenshotapi.core.domain.entities.*
+import dev.screenshotapi.core.domain.exceptions.AnalysisException
+import dev.screenshotapi.core.domain.exceptions.OcrException
 import dev.screenshotapi.core.domain.repositories.AnalysisJobRepository
 import dev.screenshotapi.core.domain.repositories.OcrResultRepository
 import dev.screenshotapi.core.domain.services.OcrService
-import dev.screenshotapi.core.domain.exceptions.*
+import dev.screenshotapi.infrastructure.utils.JsonSerializationUtils
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -13,15 +15,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
-import dev.screenshotapi.infrastructure.utils.JsonSerializationUtils
 import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
  * Process Analysis Use Case - Executes AI analysis on screenshot images
- * 
+ *
  * This use case handles:
  * - Downloading screenshot images
  * - Processing with AWS Bedrock via OcrService
@@ -40,14 +40,14 @@ class ProcessAnalysisUseCase(
 
     suspend operator fun invoke(request: Request): Response {
         logger.info("Processing analysis job ${request.analysisJobId}")
-        
+
         // 1. Get analysis job
         val analysisJob = analysisJobRepository.findByIdAndUserId(request.analysisJobId, request.userId)
             ?: throw AnalysisException.JobNotFoundError(
                 "Analysis job not found: ${request.analysisJobId}",
                 request.analysisJobId
             )
-        
+
         if (analysisJob.status != AnalysisStatus.PROCESSING) {
             throw AnalysisException.InvalidJobStatusError(
                 "Analysis job must be in PROCESSING status",
@@ -57,28 +57,28 @@ class ProcessAnalysisUseCase(
                 AnalysisStatus.PROCESSING.name
             )
         }
-        
+
         try {
             // 2. Download image from screenshot URL
             logger.debug("Downloading image from ${analysisJob.screenshotUrl}")
             val imageBytes = downloadImage(analysisJob.screenshotUrl)
-            
+
             // 3. Create OCR request with analysis type configuration
             val ocrRequest = createOcrRequest(analysisJob, imageBytes)
-            
+
             // 4. Process with OCR service (AWS Bedrock)
             logger.info("Processing with OCR service: ${analysisJob.analysisType.displayName}")
             val ocrResult = ocrService.extractText(ocrRequest)
-            
+
             // 5. Save OCR result for audit trail
             val savedOcrResult = ocrResultRepository.save(ocrResult)
-            
+
             // 6. Parse and format results based on analysis type
             val formattedResults = formatAnalysisResults(analysisJob.analysisType, ocrResult)
-            
+
             // 7. Calculate costs
             val costUsd = calculateCost(ocrResult)
-            
+
             // 8. Update analysis job with results
             val completedJob = analysisJob.copy(
                 status = AnalysisStatus.COMPLETED,
@@ -95,18 +95,18 @@ class ProcessAnalysisUseCase(
                     "modelUsed" to (ocrResult.metadata["model"]?.toString() ?: "unknown")
                 )
             )
-            
+
             analysisJobRepository.save(completedJob)
-            
+
             logger.info(
                 "Analysis completed successfully: jobId=${analysisJob.id}, " +
                 "confidence=${ocrResult.confidence}, " +
                 "tokensUsed=${completedJob.tokensUsed}, " +
                 "costUsd=$costUsd"
             )
-            
+
             val analysisData = parseAnalysisData(completedJob.analysisType, completedJob.resultData!!)
-            
+
             return Response(
                 analysisJobId = completedJob.id,
                 result = AnalysisResult.Success(
@@ -121,11 +121,11 @@ class ProcessAnalysisUseCase(
                     metadata = completedJob.metadata
                 )
             )
-            
+
         } catch (e: AnalysisException) {
             logger.error("Analysis exception for job ${analysisJob.id}", e)
             val failedJob = handleAnalysisFailure(analysisJob, e.message ?: "Analysis failed")
-            
+
             return Response(
                 analysisJobId = failedJob.id,
                 result = AnalysisResult.Failure(
@@ -157,7 +157,7 @@ class ProcessAnalysisUseCase(
         } catch (e: OcrException) {
             logger.error("OCR processing failed for analysis ${analysisJob.id}", e)
             val failedJob = handleAnalysisFailure(analysisJob, "OCR processing failed: ${e.message}")
-            
+
             return Response(
                 analysisJobId = failedJob.id,
                 result = AnalysisResult.Failure(
@@ -179,7 +179,7 @@ class ProcessAnalysisUseCase(
         } catch (e: Exception) {
             logger.error("Unexpected error processing analysis ${analysisJob.id}", e)
             val failedJob = handleAnalysisFailure(analysisJob, "Analysis failed: ${e.message}")
-            
+
             return Response(
                 analysisJobId = failedJob.id,
                 result = AnalysisResult.Failure(
@@ -230,7 +230,8 @@ class ProcessAnalysisUseCase(
                 extractTables = false,
                 extractForms = false,
                 confidenceThreshold = 0.7,
-                enableStructuredData = false
+                enableStructuredData = false,
+                customPrompt = job.customUserPrompt
             )
         )
     }
@@ -241,6 +242,7 @@ class ProcessAnalysisUseCase(
             AnalysisType.UX_ANALYSIS -> OcrTier.AI_PREMIUM
             AnalysisType.CONTENT_SUMMARY -> OcrTier.AI_STANDARD
             AnalysisType.GENERAL -> OcrTier.AI_STANDARD
+            AnalysisType.CUSTOM -> OcrTier.AI_STANDARD
         }
     }
 
@@ -250,6 +252,7 @@ class ProcessAnalysisUseCase(
             AnalysisType.UX_ANALYSIS -> OcrUseCase.GENERAL
             AnalysisType.CONTENT_SUMMARY -> OcrUseCase.GENERAL
             AnalysisType.GENERAL -> OcrUseCase.GENERAL
+            AnalysisType.CUSTOM -> OcrUseCase.GENERAL
         }
     }
 
@@ -300,7 +303,7 @@ class ProcessAnalysisUseCase(
     private fun calculateCost(ocrResult: OcrResult): Double {
         // Extract cost from metadata if available
         ocrResult.metadata["costUsd"]?.toDoubleOrNull()?.let { return it }
-        
+
         // Otherwise estimate based on tokens
         val tokens = extractTokenCount(ocrResult)
         val costPerToken = 0.00025 // Default Claude 3 Haiku input cost
@@ -330,12 +333,12 @@ class ProcessAnalysisUseCase(
     private fun parseAnalysisData(analysisType: AnalysisType, resultData: String): AnalysisData {
         return try {
             val jsonResult = json.parseToJsonElement(resultData) as JsonObject
-            
+
             when (analysisType) {
                 AnalysisType.BASIC_OCR -> {
                     val extractedText = jsonResult["extractedText"]?.jsonPrimitive?.content ?: ""
                     val language = jsonResult["language"]?.jsonPrimitive?.content ?: "en"
-                    
+
                     AnalysisData.OcrData(
                         text = extractedText,
                         lines = emptyList(), // TODO: Parse lines from result
@@ -362,6 +365,11 @@ class ProcessAnalysisUseCase(
                     )
                 }
                 AnalysisType.GENERAL -> {
+                    AnalysisData.GeneralData(
+                        results = emptyMap()
+                    )
+                }
+                AnalysisType.CUSTOM -> {
                     AnalysisData.GeneralData(
                         results = emptyMap()
                     )

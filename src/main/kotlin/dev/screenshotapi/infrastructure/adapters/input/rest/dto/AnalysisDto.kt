@@ -1,6 +1,5 @@
 package dev.screenshotapi.infrastructure.adapters.input.rest.dto
 
-import dev.screenshotapi.core.domain.entities.AnalysisStatus
 import dev.screenshotapi.core.domain.entities.AnalysisType
 import dev.screenshotapi.core.usecases.analysis.CreateAnalysisUseCase
 import dev.screenshotapi.core.usecases.analysis.GetAnalysisStatusUseCase
@@ -17,7 +16,9 @@ import kotlinx.serialization.Serializable
 data class CreateAnalysisRequestDto(
     val analysisType: String, // AnalysisType enum name
     val language: String = "en",
-    val webhookUrl: String? = null
+    val webhookUrl: String? = null,
+    val customUserPrompt: String? = null, // For CUSTOM analysis type
+    val customSystemPrompt: String? = null // For CUSTOM analysis type system prompt
 )
 
 // ==================== RESPONSE DTOs ====================
@@ -47,31 +48,31 @@ data class GetAnalysisStatusResponseDto(
     val screenshotUrl: String,
     val language: String,
     val webhookUrl: String?,
-    
+
     // Results (null until completed)
     val resultData: String?,
     val confidence: Double?,
-    
+
     // Processing info
     val processingTimeMs: Long?,
     val tokensUsed: Int?,
     val costUsd: Double?,
-    
+
     // Error info (null unless failed)
     val errorMessage: String?,
-    
+
     // Timestamps
     val createdAt: String,
     val startedAt: String?,
     val completedAt: String?,
-    
+
     // Status helpers
     val isProcessing: Boolean,
     val isCompleted: Boolean,
     val isFailed: Boolean,
     val statusDescription: String,
     val estimatedCompletion: String?,
-    
+
     // Metadata
     val metadata: Map<String, String>
 )
@@ -123,20 +124,38 @@ data class AnalysisStatsDto(
 // ==================== MAPPING FUNCTIONS ====================
 
 /**
+ * Combine system and user prompts into a single prompt for processing
+ */
+private fun buildCombinedPrompt(systemPrompt: String?, userPrompt: String?): String? {
+    return when {
+        !systemPrompt.isNullOrBlank() && !userPrompt.isNullOrBlank() -> {
+            "System Context: $systemPrompt\n\nUser Request: $userPrompt"
+        }
+        !systemPrompt.isNullOrBlank() -> systemPrompt
+        !userPrompt.isNullOrBlank() -> userPrompt
+        else -> null
+    }
+}
+
+/**
  * Convert DTO to domain request
  */
 fun CreateAnalysisRequestDto.toDomainRequest(
-    userId: String, 
+    userId: String,
     screenshotJobId: String,
     apiKeyId: String? = null
 ): CreateAnalysisUseCase.Request {
+    // Combine system and user prompts if provided
+    val combinedPrompt = buildCombinedPrompt(customSystemPrompt, customUserPrompt)
+    
     return CreateAnalysisUseCase.Request(
         userId = userId,
         screenshotJobId = screenshotJobId,
         analysisType = AnalysisType.valueOf(analysisType),
         language = language,
         webhookUrl = webhookUrl,
-        apiKeyId = apiKeyId
+        apiKeyId = apiKeyId,
+        customUserPrompt = combinedPrompt
     )
 }
 

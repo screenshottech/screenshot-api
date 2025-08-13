@@ -1,23 +1,25 @@
 package dev.screenshotapi.core.usecases.analysis
 
 import dev.screenshotapi.core.domain.entities.*
-import dev.screenshotapi.core.domain.repositories.AnalysisJobRepository
+import dev.screenshotapi.core.domain.exceptions.InsufficientCreditsException
+import dev.screenshotapi.core.domain.exceptions.ResourceNotFoundException
+import dev.screenshotapi.core.domain.exceptions.ValidationException
 import dev.screenshotapi.core.domain.repositories.AnalysisJobQueueRepository
+import dev.screenshotapi.core.domain.repositories.AnalysisJobRepository
 import dev.screenshotapi.core.domain.repositories.ScreenshotRepository
 import dev.screenshotapi.core.usecases.auth.ValidateApiKeyOwnershipUseCase
-import dev.screenshotapi.core.usecases.billing.CheckCreditsUseCase
 import dev.screenshotapi.core.usecases.billing.CheckCreditsRequest
-import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
+import dev.screenshotapi.core.usecases.billing.CheckCreditsUseCase
 import dev.screenshotapi.core.usecases.billing.DeductCreditsRequest
+import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
-import dev.screenshotapi.core.domain.exceptions.*
 import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
  * Create Analysis Use Case - Initiates AI analysis for a completed screenshot
- * 
+ *
  * This use case handles:
  * - Validation of screenshot completion
  * - Credit checking and deduction
@@ -37,7 +39,7 @@ class CreateAnalysisUseCase(
 
     suspend operator fun invoke(request: Request): Response {
         logger.info("Creating analysis for screenshot ${request.screenshotJobId} with type ${request.analysisType}")
-        
+
         try {
             // 1. Validate API key ownership if provided
             request.apiKeyId?.let { apiKeyId ->
@@ -48,19 +50,19 @@ class CreateAnalysisUseCase(
                     )
                 )
             }
-            
+
             // 2. Validate screenshot exists and is completed
             val screenshot = screenshotRepository.findByIdAndUserId(request.screenshotJobId, request.userId)
                 ?: throw ValidationException.Custom("Screenshot not found or access denied")
-            
+
             if (screenshot.status != ScreenshotStatus.COMPLETED) {
                 throw ValidationException.InvalidState("Screenshot", screenshot.status.toString(), "COMPLETED")
             }
-            
+
             if (screenshot.resultUrl.isNullOrBlank()) {
                 throw ValidationException.Custom("Screenshot result URL is not available")
             }
-            
+
             // 3. Check if user has sufficient credits
             val requiredCredits = request.analysisType.credits
             val creditCheck = checkCreditsUseCase(
@@ -69,7 +71,7 @@ class CreateAnalysisUseCase(
                     requiredCredits = requiredCredits
                 )
             )
-            
+
             if (!creditCheck.hasEnoughCredits) {
                 throw InsufficientCreditsException(
                     userId = request.userId,
@@ -78,7 +80,7 @@ class CreateAnalysisUseCase(
                     message = "Insufficient credits for ${request.analysisType.displayName}. Required: $requiredCredits, Available: ${creditCheck.availableCredits}"
                 )
             }
-            
+
             // 4. Create analysis job
             val analysisJob = AnalysisJob(
                 id = UUID.randomUUID().toString(),
@@ -89,12 +91,13 @@ class CreateAnalysisUseCase(
                 status = AnalysisStatus.QUEUED,
                 language = request.language,
                 webhookUrl = request.webhookUrl,
+                customUserPrompt = request.customUserPrompt,
                 createdAt = Clock.System.now()
             )
-            
+
             // 5. Save analysis job
             val savedJob = analysisJobRepository.save(analysisJob)
-            
+
             // 6. Enqueue job for processing in Redis queue
             // This prevents race conditions that occur with database polling
             try {
@@ -104,7 +107,7 @@ class CreateAnalysisUseCase(
                 logger.error("Failed to enqueue analysis job ${savedJob.id} to Redis", e)
                 // Don't fail the whole operation, workers can still poll from DB as fallback
             }
-            
+
             // 7. Deduct credits immediately upon job creation
             deductCreditsUseCase(
                 DeductCreditsRequest(
@@ -114,7 +117,7 @@ class CreateAnalysisUseCase(
                     jobId = savedJob.id
                 )
             )
-            
+
             // 8. Log analysis creation
             logUsageUseCase(
                 LogUsageUseCase.Request(
@@ -132,7 +135,7 @@ class CreateAnalysisUseCase(
                     )
                 )
             )
-            
+
             logger.info(
                 "Analysis job created successfully. " +
                 "Job ID: ${savedJob.id}, " +
@@ -140,7 +143,7 @@ class CreateAnalysisUseCase(
                 "Credits deducted: $requiredCredits, " +
                 "User: ${request.userId}"
             )
-            
+
             return Response(
                 analysisJobId = savedJob.id,
                 status = savedJob.status,
@@ -149,10 +152,10 @@ class CreateAnalysisUseCase(
                 estimatedCompletion = calculateEstimatedCompletion(),
                 queuePosition = getQueuePosition()
             )
-            
+
         } catch (e: Exception) {
             logger.error("Failed to create analysis for screenshot ${request.screenshotJobId}", e)
-            
+
             // Log failed attempt
             logUsageUseCase(
                 LogUsageUseCase.Request(
@@ -167,7 +170,7 @@ class CreateAnalysisUseCase(
                     )
                 )
             )
-            
+
             throw e
         }
     }
@@ -178,7 +181,8 @@ class CreateAnalysisUseCase(
         val analysisType: AnalysisType,
         val language: String = "en",
         val webhookUrl: String? = null,
-        val apiKeyId: String? = null
+        val apiKeyId: String? = null,
+        val customUserPrompt: String? = null
     )
 
     data class Response(
@@ -189,7 +193,7 @@ class CreateAnalysisUseCase(
         val estimatedCompletion: String,
         val queuePosition: Int
     )
-    
+
     /**
      * Calculate estimated completion time based on queue depth
      */
@@ -200,7 +204,7 @@ class CreateAnalysisUseCase(
         val futureTime = Clock.System.now().plus(kotlin.time.Duration.parse("${estimatedSeconds}s"))
         return futureTime.toString()
     }
-    
+
     /**
      * Get current queue position
      */

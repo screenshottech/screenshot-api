@@ -210,6 +210,34 @@ class UpdateDailyStatsUseCase(
                         request.creditsUsed
                     )
                 }
+                
+                // Feedback Actions - count as user engagement activities
+                UsageLogAction.FEEDBACK_SUBMITTED -> {
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.API_CALLS_COUNT, // Count as engagement activity
+                        1
+                    )
+                }
+                
+                UsageLogAction.FEEDBACK_UPDATED -> {
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.API_CALLS_COUNT, // Count as engagement activity
+                        1
+                    )
+                }
+                
+                UsageLogAction.FEEDBACK_RESOLVED -> {
+                    dailyStatsRepository.atomicIncrement(
+                        request.userId, 
+                        request.date, 
+                        StatsField.API_CALLS_COUNT, // Count as engagement activity
+                        1
+                    )
+                }
             }
 
             // atomicIncrement already handles the database operations

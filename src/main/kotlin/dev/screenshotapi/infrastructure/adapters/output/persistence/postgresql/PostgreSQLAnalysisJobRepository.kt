@@ -6,13 +6,11 @@ import dev.screenshotapi.core.domain.entities.AnalysisType
 import dev.screenshotapi.core.domain.repositories.AnalysisJobRepository
 import dev.screenshotapi.core.domain.repositories.AnalysisStats
 import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.entities.AnalysisJobs
-import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.dbQuery
 import dev.screenshotapi.infrastructure.exceptions.DatabaseException
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.statements.UpdateBuilder
 import org.slf4j.LoggerFactory
 
@@ -128,10 +126,10 @@ class PostgreSQLAnalysisJobRepository(
                 .limit(1)
                 .singleOrNull()
                 ?.let { mapToAnalysisJob(it) }
-            
+
             if (job != null) {
                 val now = Clock.System.now()
-                
+
                 // Atomic update: only succeeds if status is still QUEUED
                 val updatedRows = AnalysisJobs.update({
                     (AnalysisJobs.id eq job.id) and (AnalysisJobs.status eq AnalysisStatus.QUEUED.name)
@@ -140,7 +138,7 @@ class PostgreSQLAnalysisJobRepository(
                     stmt[startedAt] = now
                     stmt[updatedAt] = now
                 }
-                
+
                 if (updatedRows > 0) {
                     // Successfully claimed the job
                     logger.debug("Successfully claimed analysis job: ${job.id}")
@@ -224,7 +222,7 @@ class PostgreSQLAnalysisJobRepository(
                 stmt[startedAt] = now
                 stmt[updatedAt] = now
             }
-            
+
             val success = updatedRows > 0
             if (success) {
                 logger.debug("Successfully claimed job: $id")
@@ -308,6 +306,7 @@ class PostgreSQLAnalysisJobRepository(
         stmt[AnalysisJobs.status] = job.status.name
         stmt[AnalysisJobs.language] = job.language
         stmt[AnalysisJobs.webhookUrl] = job.webhookUrl
+        stmt[AnalysisJobs.customUserPrompt] = job.customUserPrompt
         stmt[AnalysisJobs.resultData] = job.resultData
         stmt[AnalysisJobs.confidence] = job.confidence
         stmt[AnalysisJobs.metadata] = job.metadata.takeIf { it.isNotEmpty() }?.let { Json.encodeToString(it) }
@@ -334,6 +333,7 @@ class PostgreSQLAnalysisJobRepository(
             status = AnalysisStatus.valueOf(row[AnalysisJobs.status]),
             language = row[AnalysisJobs.language],
             webhookUrl = row[AnalysisJobs.webhookUrl],
+            customUserPrompt = row[AnalysisJobs.customUserPrompt],
             resultData = row[AnalysisJobs.resultData],
             confidence = row[AnalysisJobs.confidence],
             metadata = row[AnalysisJobs.metadata]?.let {

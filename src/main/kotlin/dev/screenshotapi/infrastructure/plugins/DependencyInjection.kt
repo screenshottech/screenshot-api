@@ -1,67 +1,51 @@
 package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.core.domain.repositories.*
-import dev.screenshotapi.core.domain.services.EmailProvider
-import dev.screenshotapi.core.domain.services.RateLimitingService
-import dev.screenshotapi.core.domain.services.RetryPolicy
-import dev.screenshotapi.core.domain.services.ScreenshotService
-import dev.screenshotapi.core.domain.services.OcrService
+import dev.screenshotapi.core.domain.services.*
 import dev.screenshotapi.core.ports.output.*
+import dev.screenshotapi.core.services.AnalysisResultFormatter
 import dev.screenshotapi.core.usecases.admin.*
+import dev.screenshotapi.core.usecases.analysis.*
 import dev.screenshotapi.core.usecases.auth.*
 import dev.screenshotapi.core.usecases.billing.*
+import dev.screenshotapi.core.usecases.email.GetEmailLogsByUserUseCase
+import dev.screenshotapi.core.usecases.email.SendCreditAlertUseCase
+import dev.screenshotapi.core.usecases.email.SendWelcomeEmailUseCase
+import dev.screenshotapi.core.usecases.feedback.*
 import dev.screenshotapi.core.usecases.logging.GetUsageLogsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
+import dev.screenshotapi.core.usecases.ocr.*
 import dev.screenshotapi.core.usecases.screenshot.*
 import dev.screenshotapi.core.usecases.stats.AggregateStatsUseCase
 import dev.screenshotapi.core.usecases.stats.UpdateDailyStatsUseCase
 import dev.screenshotapi.core.usecases.webhook.*
-import dev.screenshotapi.core.usecases.email.*
-import dev.screenshotapi.core.usecases.ocr.*
-import dev.screenshotapi.core.usecases.analysis.*
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.adapters.output.TokenGenerationAdapter
 import dev.screenshotapi.infrastructure.adapters.output.cache.CacheFactory
-import dev.screenshotapi.infrastructure.adapters.output.payment.StripePaymentGatewayAdapter
-import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.*
-import dev.screenshotapi.infrastructure.adapters.output.email.MockEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.email.AwsSesEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.email.GmailEmailProvider
-import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.*
-import dev.screenshotapi.infrastructure.adapters.output.ocr.PaddleOcrService
+import dev.screenshotapi.infrastructure.adapters.output.email.MockEmailProvider
 import dev.screenshotapi.infrastructure.adapters.output.ocr.AwsBedrockOcrService
-import dev.screenshotapi.core.services.AnalysisResultFormatter
-import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
+import dev.screenshotapi.infrastructure.adapters.output.payment.StripePaymentGatewayAdapter
+import dev.screenshotapi.infrastructure.adapters.output.persistence.InMemoryUserFeedbackRepository
+import dev.screenshotapi.infrastructure.adapters.output.persistence.inmemory.*
+import dev.screenshotapi.infrastructure.adapters.output.persistence.postgresql.*
 import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryAnalysisJobQueueAdapter
-import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
+import dev.screenshotapi.infrastructure.adapters.output.queue.inmemory.InMemoryQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisAnalysisJobQueueAdapter
+import dev.screenshotapi.infrastructure.adapters.output.queue.redis.RedisQueueAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.BCryptHashingAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.HmacAdapter
 import dev.screenshotapi.infrastructure.adapters.output.security.UrlSecurityAdapter
 import dev.screenshotapi.infrastructure.adapters.output.storage.StorageFactory
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.auth.JwtAuthProvider
-import dev.screenshotapi.infrastructure.config.AppConfig
-import dev.screenshotapi.infrastructure.config.AuthConfig
-import dev.screenshotapi.infrastructure.config.ScreenshotConfig
-import dev.screenshotapi.infrastructure.config.StripeConfig
-import dev.screenshotapi.infrastructure.config.WebhookConfig
-import dev.screenshotapi.infrastructure.config.OcrConfig
-import dev.screenshotapi.infrastructure.config.BedrockConfig
-import dev.screenshotapi.infrastructure.config.BedrockFeatureFlags
-import dev.screenshotapi.infrastructure.config.loadBedrockConfig
-import dev.screenshotapi.infrastructure.config.loadBedrockFeatureFlags
-import dev.screenshotapi.infrastructure.config.AnalysisConfig
-import dev.screenshotapi.infrastructure.config.AnalysisTypeConfig
-import dev.screenshotapi.infrastructure.config.loadAnalysisConfig
-import dev.screenshotapi.infrastructure.config.loadAnalysisTypeConfig
+import dev.screenshotapi.infrastructure.config.*
 import dev.screenshotapi.infrastructure.services.*
-import dev.screenshotapi.infrastructure.config.EmailConfig
+import dev.screenshotapi.workers.AnalysisWorkerManager
 import dev.screenshotapi.workers.JobRetryScheduler
-import org.slf4j.LoggerFactory
 import dev.screenshotapi.workers.WebhookRetryWorker
 import dev.screenshotapi.workers.WorkerManager
-import dev.screenshotapi.workers.AnalysisWorkerManager
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -74,6 +58,7 @@ import org.jetbrains.exposed.sql.Database
 import org.koin.dsl.module
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
+import org.slf4j.LoggerFactory
 
 fun Application.configureDependencyInjection() {
     val appConfig = AppConfig.load()
@@ -129,6 +114,7 @@ fun repositoryModule(config: AppConfig) = module {
     single<OcrResultRepository> { createOcrResultRepository(config, getOrNull()) }
     single<AnalysisJobRepository> { createAnalysisJobRepository(config, getOrNull()) }
     single<AnalysisJobQueueRepository> { createAnalysisJobQueueRepository(config, getOrNull<StatefulRedisConnection<String, String>>()) }
+    single<UserFeedbackRepository> { createUserFeedbackRepository(config, getOrNull()) }
     single<StorageOutputPort> { StorageFactory.create(config.storage) }
     single<HashingPort> { BCryptHashingAdapter() }
     single<HmacPort> { HmacAdapter(get()) }
@@ -223,13 +209,13 @@ private fun createOcrService(
     val logger = LoggerFactory.getLogger("DependencyInjection")
     logger.info("Creating Bedrock-only OCR service (PaddleOCR fallback disabled for reliability)")
     logger.info("Bedrock enabled: ${bedrockConfig.enabled}, OCR enabled: ${featureFlags.enableBedrockOcr}")
-    
+
     // Create Bedrock service as primary and only OCR engine
     return AwsBedrockOcrService(
         config = bedrockConfig,
         featureFlags = featureFlags
     )
-    
+
     // Note: PaddleOCR service creation preserved for future microservice use:
     /*
     val paddleOcrService = PaddleOcrService(
@@ -338,7 +324,7 @@ fun useCaseModule() = module {
     single { GetOcrAnalyticsUseCase(get<OcrResultRepository>()) }
     single { ExtractTextUseCase(get<OcrService>(), get<UserRepository>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { ExtractPriceDataUseCase(get<ExtractTextUseCase>(), get<LogUsageUseCase>()) }
-    
+
     // Analysis use cases (NEW - Separate Flow)
     single { CreateAnalysisUseCase(get<AnalysisJobRepository>(), get<AnalysisJobQueueRepository>(), get<ScreenshotRepository>(), get<ValidateApiKeyOwnershipUseCase>(), get<CheckCreditsUseCase>(), get<DeductCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { GetAnalysisStatusUseCase(get<AnalysisJobRepository>()) }
@@ -347,6 +333,16 @@ fun useCaseModule() = module {
     single { ProcessAnalysisUseCase(get<AnalysisJobRepository>(), get<OcrResultRepository>(), get<OcrService>(), get<HttpClient>()) }
     single { ProvisionSubscriptionCreditsUseCase(get<SubscriptionRepository>(), get<UserRepository>(), get<PlanRepository>(), get<AddCreditsUseCase>(), get<LogUsageUseCase>()) }
     single { HandleSubscriptionWebhookUseCase(get<PaymentGatewayPort>(), get<SubscriptionRepository>(), get<UserRepository>(), get<ProvisionSubscriptionCreditsUseCase>()) }
+
+    // Feedback use cases
+    single { CreateFeedbackUseCase(get<UserFeedbackRepository>(), get<LogUsageUseCase>()) }
+    single { GetUserFeedbackUseCase(get<UserFeedbackRepository>()) }
+    single { GetFeedbackAnalyticsUseCase(get<UserFeedbackRepository>()) }
+
+    // Admin feedback use cases
+    single { GetAllFeedbackUseCase(get<UserFeedbackRepository>()) }
+    single { UpdateFeedbackStatusUseCase(get<UserFeedbackRepository>()) }
+    single { ResolveFeedbackUseCase(get<UserFeedbackRepository>()) }
 
     // Admin use cases - mixed injection patterns
     single { ListUsersUseCase(get<UserRepository>(), get<ScreenshotRepository>(), get<PlanRepository>()) }
@@ -461,10 +457,14 @@ private fun createAnalysisJobQueueRepository(config: AppConfig, redisConnection:
         RedisAnalysisJobQueueAdapter(redisConnection!!)
     }
 
+private fun createUserFeedbackRepository(config: AppConfig, database: Database?): UserFeedbackRepository =
+    if (config.database.useInMemory) InMemoryUserFeedbackRepository() else PostgreSQLUserFeedbackRepository(database!!)
+
 fun controllerModule() = module {
     single { ScreenshotController() }
     single { AnalysisController() }
     single { AuthController() }
+    single { FeedbackController() }
     single { BillingController() }
     single { AdminController() }
     single { HealthController() }

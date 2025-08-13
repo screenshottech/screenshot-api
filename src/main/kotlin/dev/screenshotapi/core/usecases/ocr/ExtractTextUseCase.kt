@@ -4,12 +4,10 @@ import dev.screenshotapi.core.domain.entities.*
 import dev.screenshotapi.core.domain.exceptions.OcrException
 import dev.screenshotapi.core.domain.repositories.UserRepository
 import dev.screenshotapi.core.domain.services.OcrService
-import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.billing.DeductCreditsRequest
+import dev.screenshotapi.core.usecases.billing.DeductCreditsUseCase
 import dev.screenshotapi.core.usecases.logging.LogUsageUseCase
-import kotlinx.datetime.Clock
 import org.slf4j.LoggerFactory
-import java.util.*
 
 /**
  * Extract Text Use Case - Core OCR text extraction business logic
@@ -25,16 +23,16 @@ class ExtractTextUseCase(
 
     suspend fun invoke(request: OcrRequest): OcrResult {
         val startTime = System.currentTimeMillis()
-        
+
         try {
             logger.info("Starting OCR extraction for user ${request.userId}, tier: ${request.tier}, analysisType: ${request.analysisType}")
-            
+
             // Validate user and credits
             val user = userRepository.findById(request.userId)
                 ?: throw OcrException.ConfigurationException("User not found: ${request.userId}")
-            
+
             val requiredCredits = calculateRequiredCredits(request.tier, request.analysisType)
-            
+
             // Check and deduct credits upfront
             val analysisType = request.analysisType ?: AnalysisType.BASIC_OCR
             try {
@@ -55,7 +53,7 @@ class ExtractTextUseCase(
                     availableCredits = user.creditsRemaining
                 )
             }
-            
+
             // Log OCR initiation
             logUsageUseCase(
                 LogUsageUseCase.Request(
@@ -74,12 +72,12 @@ class ExtractTextUseCase(
                     )
                 )
             )
-            
+
             // Perform OCR extraction
             val result = ocrService.extractText(request)
-            
+
             val processingTime = (System.currentTimeMillis() - startTime) / 1000.0
-            
+
             // Log successful completion
             logUsageUseCase(
                 LogUsageUseCase.Request(
@@ -97,13 +95,13 @@ class ExtractTextUseCase(
                     )
                 )
             )
-            
+
             logger.info("OCR extraction completed for user ${request.userId} in ${processingTime}s")
             return result
-            
+
         } catch (e: OcrException) {
             val processingTime = (System.currentTimeMillis() - startTime) / 1000.0
-            
+
             // Log failure
             logUsageUseCase(
                 LogUsageUseCase.Request(
@@ -118,13 +116,13 @@ class ExtractTextUseCase(
                     )
                 )
             )
-            
+
             logger.error("OCR extraction failed for user ${request.userId}", e)
             throw e
-            
+
         } catch (e: Exception) {
             val processingTime = (System.currentTimeMillis() - startTime) / 1000.0
-            
+
             // Log unexpected failure
             logUsageUseCase(
                 LogUsageUseCase.Request(
@@ -139,7 +137,7 @@ class ExtractTextUseCase(
                     )
                 )
             )
-            
+
             logger.error("Unexpected error during OCR extraction for user ${request.userId}", e)
             throw OcrException.ProcessingException(
                 engine = request.engine?.name ?: "UNKNOWN",
@@ -148,7 +146,7 @@ class ExtractTextUseCase(
             )
         }
     }
-    
+
     /**
      * Calculate required credits based on analysis type and tier
      * Analysis type takes precedence over tier for credit calculation
@@ -168,14 +166,14 @@ class ExtractTextUseCase(
             }
         }
     }
-    
+
     /**
      * Get credit deduction reason based on analysis type
      */
     private fun getDeductionReason(analysisType: AnalysisType): CreditDeductionReason {
         return when (analysisType) {
             AnalysisType.BASIC_OCR -> CreditDeductionReason.OCR
-            AnalysisType.UX_ANALYSIS, AnalysisType.CONTENT_SUMMARY, AnalysisType.GENERAL -> CreditDeductionReason.AI_ANALYSIS
+            AnalysisType.UX_ANALYSIS, AnalysisType.CONTENT_SUMMARY, AnalysisType.GENERAL, AnalysisType.CUSTOM -> CreditDeductionReason.AI_ANALYSIS
         }
     }
 }

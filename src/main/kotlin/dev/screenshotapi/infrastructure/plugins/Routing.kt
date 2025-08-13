@@ -2,9 +2,6 @@ package dev.screenshotapi.infrastructure.plugins
 
 import dev.screenshotapi.infrastructure.adapters.input.rest.*
 import dev.screenshotapi.infrastructure.auth.AuthCombinations
-import dev.screenshotapi.infrastructure.adapters.input.rest.BillingController
-import dev.screenshotapi.infrastructure.adapters.input.rest.webhookRoutes
-import dev.screenshotapi.infrastructure.adapters.input.rest.configureOcrRoutes
 import dev.screenshotapi.infrastructure.auth.AuthProviderFactory
 import dev.screenshotapi.infrastructure.config.AppConfig
 import io.ktor.server.application.*
@@ -22,6 +19,7 @@ fun Application.configureRouting() {
     val billingController by inject<BillingController>()
     val adminController by inject<AdminController>()
     val healthController by inject<HealthController>()
+    val feedbackController by inject<FeedbackController>()
     val authProviderFactory by inject<AuthProviderFactory>()
     val appConfig by inject<AppConfig>()
 
@@ -81,21 +79,21 @@ fun Application.configureRouting() {
 
                 // Bulk screenshot status endpoint for efficient polling
                 post("/screenshots/status/bulk") { screenshotController.getBulkScreenshotStatus(call) }
-                
+
                 // Analysis endpoint uses dedicated analysis rate limiting (AI operations are more resource intensive)
                 rateLimit(RateLimitName("analysis")) {
                     post("/screenshots/{jobId}/analyze") { analysisController.createAnalysis(call) }
                 }
-                
+
                 get("/screenshots/{jobId}/analyses") { analysisController.getScreenshotAnalyses(call) }
             }
-            
+
             // Analysis operations - Hybrid authentication (JWT OR API Key OR X-API-Key)
             authenticate(*AuthCombinations.OPERATIONS) {
                 route("/analysis") {
                     // Get analysis status and results
                     get("/{analysisJobId}") { analysisController.getAnalysisStatus(call) }
-                    
+
                     // List user's analyses with pagination and filtering
                     get { analysisController.listAnalyses(call) }
                 }
@@ -121,6 +119,13 @@ fun Application.configureRouting() {
                 }
             }
 
+            // Feedback routes - JWT authentication required
+            authenticate(*AuthCombinations.USER_MANAGEMENT) {
+                with(feedbackController) {
+                    feedbackRoutes()
+                }
+            }
+
             // Webhook management - Hybrid authentication (JWT OR API Key OR X-API-Key)
             authenticate(*AuthCombinations.OPERATIONS) {
                 webhookRoutes()
@@ -138,6 +143,11 @@ fun Application.configureRouting() {
                     get("/subscriptions/{subscriptionId}") { adminController.getSubscriptionDetails(call) }
                     post("/subscriptions/{subscriptionId}/provision-credits") { adminController.provisionSubscriptionCredits(call) }
                     post("/users/{userId}/synchronize-plan") { adminController.synchronizeUserPlan(call) }
+
+                    // Feedback management
+                    get("/feedback") { adminController.listAllFeedback(call) }
+                    patch("/feedback/{id}") { adminController.updateFeedbackStatus(call) }
+                    post("/feedback/{id}/resolve") { adminController.resolveFeedback(call) }
                 }
             }
         }

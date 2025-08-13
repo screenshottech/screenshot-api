@@ -363,12 +363,12 @@ create trigger update_subscriptions_updated_at
     execute procedure public.update_updated_at_column();
 
 
-INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_starter_annual', 'Starter Annual', '12% cheaper + OCR included + 10% annual savings', 2000, 1499, 16200, 'annual', 'USD', '["All Free features", "15 req/min, 400/hour", "8 concurrent requests", "Usage analytics", "Priority support", "OCR text extraction (coming soon)", "Webhooks (coming soon)", "10% savings (2 months free)"]', true, 'prod_starter', 'price_starter_monthly', 'price_starter_annual', null, 2, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
-INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_pro_monthly', 'Professional Monthly', '13% cheaper + batch processing + analytics dashboard', 10000, 6900, null, 'monthly', 'USD', '["All Starter features", "25 req/min, 1500/hour", "20 concurrent requests", "Advanced analytics", "Batch processing (coming soon)", "Mobile simulation (coming soon)", "SLA guarantee"]', true, 'prod_professional', 'price_pro_monthly', 'price_pro_annual', null, 3, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
-INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_pro_annual', 'Professional Annual', '13% cheaper + batch processing + analytics + 10% annual savings', 10000, 6900, 74520, 'annual', 'USD', '["All Starter features", "25 req/min, 1500/hour", "20 concurrent requests", "Advanced analytics", "Batch processing (coming soon)", "Mobile simulation (coming soon)", "SLA guarantee", "10% savings (2 months free)"]', true, 'prod_professional', 'price_pro_monthly', 'price_pro_annual', null, 3, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
+INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_starter_annual', 'Starter Annual', '12% cheaper + OCR included + 10% annual savings', 2000, 1499, 16200, 'annual', 'USD', '["All Free features", "15 req/min, 400/hour", "8 concurrent requests", "Usage analytics", "Priority support", "OCR text extraction", "Webhooks", "10% savings (2 months free)"]', true, 'prod_starter', 'price_starter_monthly', 'price_starter_annual', null, 2, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
+INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_pro_monthly', 'Professional Monthly', '13% cheaper + batch processing + analytics dashboard', 10000, 6900, null, 'monthly', 'USD', '["All Starter features", "25 req/min, 1500/hour", "20 concurrent requests", "Advanced analytics", "Batch processing", "Mobile simulation (coming soon)", "SLA guarantee"]', true, 'prod_professional', 'price_pro_monthly', 'price_pro_annual', null, 3, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
+INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_pro_annual', 'Professional Annual', '13% cheaper + batch processing + analytics + 10% annual savings', 10000, 6900, 74520, 'annual', 'USD', '["All Starter features", "25 req/min, 1500/hour", "20 concurrent requests", "Advanced analytics", "Batch processing", "Mobile simulation (coming soon)", "SLA guarantee", "10% savings (2 months free)"]', true, 'prod_professional', 'price_pro_monthly', 'price_pro_annual', null, 3, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
 INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_enterprise_monthly', 'Enterprise Monthly', '12% cheaper + unlimited requests + white-label + on-premise', 50000, 22900, null, 'monthly', 'USD', '["All Professional features", "100 req/min, 6000/hour", "Unlimited concurrent requests", "Video capture (coming soon)", "Custom CSS injection (coming soon)", "Scheduled screenshots (coming soon)", "Dedicated support"]', true, 'prod_enterprise', 'price_enterprise_monthly', 'price_enterprise_annual', null, 4, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
 INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_free', 'Free Forever', '3x more generous than competitors - perfect for developers', 300, 0, null, 'monthly', 'USD', '["High-quality screenshots", "PNG, JPEG, WEBP, PDF formats", "Full page capture", "Custom dimensions", "10 req/min, 300/hour", "5 concurrent requests", "API access"]', true, null, null, null, null, 1, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
-INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_starter_monthly', 'Starter Monthly', '12% cheaper than competitors + OCR included', 2000, 1499, null, 'monthly', 'USD', '["All Free features", "15 req/min, 400/hour", "8 concurrent requests", "Usage analytics", "Priority support", "OCR text extraction (coming soon)", "Webhooks (coming soon)"]', true, 'prod_starter', 'price_starter_monthly', 'price_starter_annual', null, 2, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
+INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_starter_monthly', 'Starter Monthly', '12% cheaper than competitors + OCR included', 2000, 1499, null, 'monthly', 'USD', '["All Free features", "15 req/min, 400/hour", "8 concurrent requests", "Usage analytics", "Priority support", "OCR text extraction", "Webhooks"]', true, 'prod_starter', 'price_starter_monthly', 'price_starter_annual', null, 2, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
 INSERT INTO public.plans (id, name, description, credits_per_month, price_cents_monthly, price_cents_annual, billing_cycle, currency, features, is_active, stripe_product_id, stripe_price_id_monthly, stripe_price_id_annual, stripe_metadata, sort_order, created_at, updated_at) VALUES ('plan_enterprise_annual', 'Enterprise Annual', '12% cheaper + unlimited + white-label + on-premise + 10% annual savings', 50000, 22900, 247320, 'annual', 'USD', '["All Professional features", "100 req/min, 6000/hour", "Unlimited concurrent requests", "Video capture (coming soon)", "Custom CSS injection (coming soon)", "Scheduled screenshots (coming soon)", "Dedicated support", "10% savings (2 months free)"]', true, 'prod_enterprise', 'price_enterprise_monthly', 'price_enterprise_annual', null, 4, '2025-06-14 04:29:16.816972', '2025-06-17 04:31:23.891211');
 
 -- ============================================================================
@@ -693,5 +693,86 @@ comment on column public.ocr_results.structured_data
 
 comment on column public.ocr_results.metadata
     is 'JSON metadata with processing parameters, image info, tier settings, etc.';
+
+-- ==========================================
+-- USER FEEDBACK TABLE
+-- ==========================================
+
+-- Table for storing user feedback and insights
+create table public.user_feedback (
+    id                  varchar(255)                                 not null
+        primary key,
+    user_id             varchar(255)                                 not null
+        constraint fk_user_feedback_user_id__id
+            references public.users
+            on update restrict on delete restrict,
+    feedback_type       varchar(50)                                  not null,
+    rating              integer,                                               -- 1-5 star rating, nullable
+    subject             varchar(255),                                          -- Optional subject line
+    message             text                                         not null, -- Main feedback content
+    metadata            text                                         not null default '{}', -- JSON context
+    status              varchar(50)                                  not null default 'PENDING',
+    user_agent          text,                                                  -- Browser/client info
+    ip_address          varchar(45),                                           -- For abuse prevention
+    admin_notes         text,                                                  -- Internal notes
+    resolved_by         varchar(255),                                          -- Admin who resolved
+    resolved_at         timestamp,                                             -- Resolution timestamp
+    created_at          timestamp                                    not null,
+    updated_at          timestamp                                    not null
+);
+
+alter table public.user_feedback
+    owner to screenshotuser;
+
+-- Performance indexes for feedback queries
+create index idx_user_feedback_user_id on public.user_feedback (user_id);
+create index idx_user_feedback_type on public.user_feedback (feedback_type);
+create index idx_user_feedback_status on public.user_feedback (status);
+create index idx_user_feedback_created_at on public.user_feedback (created_at);
+create index idx_user_feedback_rating on public.user_feedback (rating);
+create index idx_user_feedback_resolved_at on public.user_feedback (resolved_at);
+
+-- Composite indexes for common queries
+create index idx_user_feedback_user_status on public.user_feedback (user_id, status);
+create index idx_user_feedback_type_status on public.user_feedback (feedback_type, status);
+create index idx_user_feedback_priority on public.user_feedback (feedback_type, rating, status);
+
+-- Create trigger for updated_at
+create trigger update_user_feedback_updated_at
+    before update
+    on public.user_feedback
+    for each row
+    execute procedure public.update_updated_at_column();
+
+-- Comments for documentation
+comment on table public.user_feedback
+    is 'Stores user feedback and insights for product improvement and analytics';
+
+comment on column public.user_feedback.feedback_type
+    is 'Type of feedback: GENERAL, FEATURE_REQUEST, BUG_REPORT, SATISFACTION, CONVERSION_EXPERIENCE, etc.';
+
+comment on column public.user_feedback.rating
+    is '1-5 star rating for satisfaction feedback, nullable for non-rating feedback types';
+
+comment on column public.user_feedback.metadata
+    is 'JSON metadata with context like page visited, feature used, conversion stage, etc.';
+
+comment on column public.user_feedback.status
+    is 'Status: PENDING, REVIEWED, IN_PROGRESS, RESOLVED, CLOSED, ACKNOWLEDGED';
+
+-- Check constraints for data integrity
+alter table public.user_feedback
+    add constraint chk_feedback_rating check (rating is null or (rating >= 1 and rating <= 5));
+
+alter table public.user_feedback
+    add constraint chk_feedback_type check (feedback_type in (
+        'GENERAL', 'FEATURE_REQUEST', 'BUG_REPORT', 'SATISFACTION', 
+        'CONVERSION_EXPERIENCE', 'UX_IMPROVEMENT', 'API_FEEDBACK', 'PERFORMANCE'
+    ));
+
+alter table public.user_feedback
+    add constraint chk_feedback_status check (status in (
+        'PENDING', 'REVIEWED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'ACKNOWLEDGED'
+    ));
 
 
